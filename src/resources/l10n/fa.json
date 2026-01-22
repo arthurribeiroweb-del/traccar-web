@@ -625,6 +625,8 @@
     "categoryTruck": "تریلی",
     "categoryVan": "ون",
     "categoryScooter": "اسکوتر",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "شروع",
     "maintenancePeriod": "بازه"
 }

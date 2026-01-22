@@ -625,6 +625,8 @@
     "categoryTruck": "Բեռնատար մեքենա",
     "categoryVan": "Վան",
     "categoryScooter": "Սկուտեր",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Ստարտ",
     "maintenancePeriod": "Ժամանակաշրջան"
 }

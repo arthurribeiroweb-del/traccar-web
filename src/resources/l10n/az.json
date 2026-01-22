@@ -625,6 +625,8 @@
     "categoryTruck": "Yük maşını",
     "categoryVan": "Furqon",
     "categoryScooter": "Scooter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Başlamaq",
     "maintenancePeriod": "Dövr"
 }

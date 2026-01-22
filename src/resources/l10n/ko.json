@@ -625,6 +625,8 @@
     "categoryTruck": "트럭",
     "categoryVan": "밴",
     "categoryScooter": "오토바이",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "시작",
     "maintenancePeriod": "주기"
 }

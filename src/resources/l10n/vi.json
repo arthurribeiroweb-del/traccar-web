@@ -625,6 +625,8 @@
     "categoryTruck": "Xe tải",
     "categoryVan": "Xe thùng",
     "categoryScooter": "Scooter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Start",
     "maintenancePeriod": "Period"
 }

@@ -625,6 +625,8 @@
     "categoryTruck": "Lori",
     "categoryVan": "Gari",
     "categoryScooter": "Pikipiki",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Anza",
     "maintenancePeriod": "Kipindi"
 }
