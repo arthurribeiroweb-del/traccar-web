@@ -625,8 +625,6 @@
     "categoryTruck": "Kamion",
     "categoryVan": "Teherkocsi",
     "categoryScooter": "Roller",
-    "categoryPickup": "Pickup",
-    "categoryJetski": "Jet ski",
     "maintenanceStart": "Start",
     "maintenancePeriod": "Periódus"
 }

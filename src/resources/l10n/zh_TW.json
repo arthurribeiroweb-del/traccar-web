@@ -625,8 +625,6 @@
     "categoryTruck": "貨車",
     "categoryVan": "箱型車",
     "categoryScooter": "小型摩拖車",
-    "categoryPickup": "Pickup",
-    "categoryJetski": "Jet ski",
     "maintenanceStart": "起始值",
     "maintenancePeriod": "期間"
 }

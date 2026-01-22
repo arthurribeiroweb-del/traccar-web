@@ -57,8 +57,6 @@ export const mapIconKey = (category) => {
     case 'offroad':
     case 'pickup':
       return 'car';
-    case 'jetski':
-      return 'boat';
     case 'trolleybus':
       return 'bus';
     default:

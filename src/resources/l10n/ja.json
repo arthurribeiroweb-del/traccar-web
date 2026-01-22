@@ -625,8 +625,6 @@
     "categoryTruck": "トラック",
     "categoryVan": "バン",
     "categoryScooter": "スクーター",
-    "categoryPickup": "Pickup",
-    "categoryJetski": "Jet ski",
     "maintenanceStart": "メンテナンス開始",
     "maintenancePeriod": "メンテナンス終了"
 }
