@@ -625,6 +625,8 @@
     "categoryTruck": "Vilkikas",
     "categoryVan": "Autobusiuskas",
     "categoryScooter": "Mopedas",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Pradėti",
     "maintenancePeriod": "Periodas"
 }

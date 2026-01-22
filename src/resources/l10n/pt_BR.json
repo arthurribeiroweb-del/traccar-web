@@ -625,6 +625,8 @@
     "categoryTruck": "Caminhão",
     "categoryVan": "Van",
     "categoryScooter": "Patinete Elétrico",
+    "categoryPickup": "Caminhonete",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Começar",
     "maintenancePeriod": "Período"
 }

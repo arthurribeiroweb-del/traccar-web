@@ -625,6 +625,8 @@
     "categoryTruck": "Φορτηγό",
     "categoryVan": "Κλειστό Φορτηγό",
     "categoryScooter": "Σκούτερ",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Εκκίνηση",
     "maintenancePeriod": "Περίοδος"
 }

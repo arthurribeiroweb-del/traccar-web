@@ -625,6 +625,8 @@
     "categoryTruck": "Nákladné auto",
     "categoryVan": "Dodávka",
     "categoryScooter": "Skúter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Štart",
     "maintenancePeriod": "Obdobie"
 }

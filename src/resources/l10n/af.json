@@ -625,6 +625,8 @@
     "categoryTruck": "Trok",
     "categoryVan": "Paneelwa",
     "categoryScooter": "Moffiebike",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Aan",
     "maintenancePeriod": "Periode"
 }

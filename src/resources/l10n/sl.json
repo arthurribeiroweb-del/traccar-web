@@ -625,6 +625,8 @@
     "categoryTruck": "Tovornjak",
     "categoryVan": "Kombi",
     "categoryScooter": "Skuter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Začetek",
     "maintenancePeriod": "Obdobje"
 }

@@ -625,6 +625,8 @@
     "categoryTruck": "Lastebil",
     "categoryVan": "Varebil",
     "categoryScooter": "Scooter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Start",
     "maintenancePeriod": "Periode"
 }

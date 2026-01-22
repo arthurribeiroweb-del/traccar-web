@@ -625,6 +625,8 @@
     "categoryTruck": "სატვირთო",
     "categoryVan": "ფურგონი",
     "categoryScooter": "სკუტერი",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "დაწყება",
     "maintenancePeriod": "პერიოდი"
 }

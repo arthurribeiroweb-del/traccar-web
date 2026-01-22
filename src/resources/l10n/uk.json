@@ -625,6 +625,8 @@
     "categoryTruck": "Вантажний автомобіль",
     "categoryVan": "Фургон",
     "categoryScooter": "Скутер",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Початок",
     "maintenancePeriod": "Період"
 }

@@ -625,6 +625,8 @@
     "categoryTruck": "Smagā mašīna",
     "categoryVan": "Busiņš",
     "categoryScooter": "Skrejritenis",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Sākt",
     "maintenancePeriod": "Periods"
 }

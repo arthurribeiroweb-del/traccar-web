@@ -625,6 +625,8 @@
     "categoryTruck": "Kamyon",
     "categoryVan": "Van",
     "categoryScooter": "Mobilet",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Başlat",
     "maintenancePeriod": "Dönem"
 }

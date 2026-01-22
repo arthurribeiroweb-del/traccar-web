@@ -625,6 +625,8 @@
     "categoryTruck": "ট্রাক",
     "categoryVan": "ভ্যান",
     "categoryScooter": "Scooter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Start",
     "maintenancePeriod": "Period"
 }

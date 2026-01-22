@@ -625,6 +625,8 @@
     "categoryTruck": "Камион",
     "categoryVan": "Ван",
     "categoryScooter": "Скутер",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Старт",
     "maintenancePeriod": "Период"
 }

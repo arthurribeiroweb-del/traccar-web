@@ -625,6 +625,8 @@
     "categoryTruck": "Ciężarówka",
     "categoryVan": "Van",
     "categoryScooter": "Skuter",
+    "categoryPickup": "Pickup",
+    "categoryJetski": "Jet ski",
     "maintenanceStart": "Start",
     "maintenancePeriod": "Okres"
 }

@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { makeStyles } from 'tss-react/mui';
 import {
   IconButton, Tooltip, Avatar, ListItemAvatar, ListItemText, ListItemButton,
-  Typography,
+  Typography, Menu, MenuItem, ListItemIcon,
 } from '@mui/material';
 import BatteryFullIcon from '@mui/icons-material/BatteryFull';
 import BatteryChargingFullIcon from '@mui/icons-material/BatteryChargingFull';
@@ -11,6 +12,7 @@ import BatteryCharging60Icon from '@mui/icons-material/BatteryCharging60';
 import Battery20Icon from '@mui/icons-material/Battery20';
 import BatteryCharging20Icon from '@mui/icons-material/BatteryCharging20';
 import ErrorIcon from '@mui/icons-material/Error';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { devicesActions } from '../store';
@@ -24,6 +26,9 @@ import EngineIcon from '../resources/images/data/engine.svg?react';
 import { useAttributePreference } from '../common/util/preferences';
 import GeofencesValue from '../common/components/GeofencesValue';
 import DriverValue from '../common/components/DriverValue';
+import deviceCategories from '../common/util/deviceCategories';
+import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useCatch } from '../reactHelper';
 
 dayjs.extend(relativeTime);
 
@@ -32,6 +37,10 @@ const useStyles = makeStyles()((theme) => ({
     width: '25px',
     height: '25px',
     filter: 'brightness(0) invert(1)',
+  },
+  menuIcon: {
+    width: '20px',
+    height: '20px',
   },
   batteryText: {
     fontSize: '0.75rem',
@@ -65,6 +74,7 @@ const DeviceRow = ({ devices, index, style }) => {
 
   const item = devices[index];
   const position = useSelector((state) => state.session.positions[item.id]);
+  const [categoryAnchorEl, setCategoryAnchorEl] = useState(null);
 
   const devicePrimary = useAttributePreference('devicePrimary', 'name');
   const deviceSecondary = useAttributePreference('deviceSecondary', '');
@@ -83,6 +93,8 @@ const DeviceRow = ({ devices, index, style }) => {
 
   const primaryValue = resolveFieldValue(devicePrimary);
   const secondaryValue = resolveFieldValue(deviceSecondary);
+  const categoryMenuOpen = Boolean(categoryAnchorEl);
+  const categoryLabel = (category) => t(`category${category.replace(/^\w/, (c) => c.toUpperCase())}`);
 
   const secondaryText = () => {
     let status;
@@ -98,6 +110,31 @@ const DeviceRow = ({ devices, index, style }) => {
       </>
     );
   };
+
+  const handleCategoryOpen = (event) => {
+    event.stopPropagation();
+    setCategoryAnchorEl(event.currentTarget);
+  };
+
+  const handleCategoryClose = (event) => {
+    event?.stopPropagation();
+    setCategoryAnchorEl(null);
+  };
+
+  const handleCategorySelect = useCatch(async (event) => {
+    event.stopPropagation();
+    const { value } = event.currentTarget.dataset;
+    handleCategoryClose(event);
+    if (value === item.category) {
+      return;
+    }
+    const response = await fetchOrThrow(`/api/devices/${item.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...item, category: value }),
+    });
+    dispatch(devicesActions.update([await response.json()]));
+  });
 
   return (
     <div style={style}>
@@ -125,6 +162,35 @@ const DeviceRow = ({ devices, index, style }) => {
             secondary: { noWrap: true },
           }}
         />
+        {admin && (
+          <>
+            <Tooltip title={t('deviceCategory')}>
+              <IconButton size="small" onClick={handleCategoryOpen} onMouseDown={(event) => event.stopPropagation()}>
+                <DirectionsCarIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={categoryAnchorEl}
+              open={categoryMenuOpen}
+              onClose={handleCategoryClose}
+              onClick={(event) => event.stopPropagation()}
+            >
+              {deviceCategories.map((category) => (
+                <MenuItem
+                  key={category}
+                  data-value={category}
+                  selected={category === item.category}
+                  onClick={handleCategorySelect}
+                >
+                  <ListItemIcon>
+                    <img className={classes.menuIcon} src={mapIcons[mapIconKey(category)]} alt="" />
+                  </ListItemIcon>
+                  {categoryLabel(category)}
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        )}
         {position && (
           <>
             {position.attributes.hasOwnProperty('alarm') && (
