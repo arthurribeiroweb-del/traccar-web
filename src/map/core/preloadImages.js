@@ -70,6 +70,13 @@ const deviceIconMap = {
   arrow: 'arrow',
   car: 'car',
   moto: 'motorcycle',
+  truck: 'truck',
+  bus: 'bus',
+  van: 'van',
+  tractor: 'tractor',
+  trailer: 'trailer',
+  boat: 'boat',
+  jetski: 'boat',
 };
 
 export const mapDeviceIconKey = (device) => {

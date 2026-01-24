@@ -40,6 +40,13 @@ const DevicePage = () => {
     { id: 'arrow', name: t('deviceIconArrow') },
     { id: 'car', name: t('deviceIconCar') },
     { id: 'moto', name: t('deviceIconMoto') },
+    { id: 'truck', name: t('deviceIconTruck') },
+    { id: 'bus', name: t('deviceIconBus') },
+    { id: 'van', name: t('deviceIconVan') },
+    { id: 'tractor', name: t('deviceIconTractor') },
+    { id: 'trailer', name: t('deviceIconTrailer') },
+    { id: 'boat', name: t('deviceIconBoat') },
+    { id: 'jetski', name: t('deviceIconJetski') },
   ];
 
   const [searchParams] = useSearchParams();

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
@@ -18,6 +18,9 @@ import {
   TableFooter,
   Link,
   Tooltip,
+  Button,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import CloseIcon from '@mui/icons-material/Close';
@@ -26,6 +29,8 @@ import SendIcon from '@mui/icons-material/Send';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PendingIcon from '@mui/icons-material/Pending';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 
 import { useTranslation } from './LocalizationProvider';
 import RemoveDialog from './RemoveDialog';
@@ -36,6 +41,7 @@ import { devicesActions } from '../../store';
 import { useCatch, useCatchCallback } from '../../reactHelper';
 import { useAttributePreference } from '../util/preferences';
 import fetchOrThrow from '../util/fetchOrThrow';
+import { snackBarDurationShortMs } from '../util/duration';
 
 const useStyles = makeStyles()((theme, { desktopPadding }) => ({
   card: {
@@ -123,6 +129,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const t = useTranslation();
 
   const readonly = useRestriction('readonly');
+  const limitCommands = useRestriction('limitCommands');
   const deviceReadonly = useDeviceReadonly();
 
   const shareDisabled = useSelector((state) => state.session.server.attributes.disableShare);
@@ -130,6 +137,8 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const device = useSelector((state) => state.devices.items[deviceId]);
 
   const deviceImage = device?.attributes?.deviceImage;
+  const deviceOnline = device?.status === 'online';
+  const positionBlocked = Boolean(position?.attributes?.blocked ?? position?.attributes?.lock);
 
   const positionAttributes = usePositionAttributes(t);
   const positionItems = useAttributePreference('positionItems', 'fixTime,address,speed,totalDistance');
@@ -140,6 +149,9 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const [anchorEl, setAnchorEl] = useState(null);
 
   const [removing, setRemoving] = useState(false);
+  const [holdState, setHoldState] = useState('idle');
+  const [commandToast, setCommandToast] = useState(false);
+  const holdTimerRef = useRef(null);
 
   const handleRemove = useCatch(async (removed) => {
     if (removed) {
@@ -167,6 +179,54 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
     });
     navigate(`/settings/geofence/${item.id}`);
   }, [navigate, position]);
+
+  const handleCommandSend = useCatch(async () => {
+    try {
+      const command = {
+        deviceId,
+        type: positionBlocked ? 'engineResume' : 'engineStop',
+      };
+      await fetchOrThrow('/api/commands/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(command),
+      });
+      setCommandToast(true);
+    } finally {
+      setHoldState('idle');
+    }
+  });
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  const commandDisabled = disableActions || readonly || deviceReadonly || limitCommands || !deviceOnline;
+
+  const handleHoldStart = (event) => {
+    if (commandDisabled || holdState === 'sending') {
+      return;
+    }
+    event.preventDefault();
+    clearHoldTimer();
+    setHoldState('holding');
+    holdTimerRef.current = setTimeout(() => {
+      setHoldState('sending');
+      handleCommandSend();
+    }, 1500);
+  };
+
+  const handleHoldEnd = () => {
+    if (holdState === 'holding') {
+      clearHoldTimer();
+      setHoldState('idle');
+    }
+  };
+
+  useEffect(() => () => clearHoldTimer(), []);
 
   return (
     <>
@@ -247,6 +307,36 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     <PendingIcon />
                   </IconButton>
                 </Tooltip>
+                <Tooltip title={
+                  !deviceOnline
+                    ? t('deviceOffline')
+                    : limitCommands
+                      ? t('commandRestricted')
+                      : positionBlocked
+                        ? t('deviceUnlock')
+                        : t('deviceLock')
+                }
+                >
+                  <span>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color={positionBlocked ? 'success' : 'warning'}
+                      startIcon={positionBlocked ? <LockOpenIcon /> : <LockIcon />}
+                      disabled={commandDisabled || holdState === 'sending'}
+                      onPointerDown={handleHoldStart}
+                      onPointerUp={handleHoldEnd}
+                      onPointerLeave={handleHoldEnd}
+                      onPointerCancel={handleHoldEnd}
+                    >
+                      {holdState === 'holding'
+                        ? t('deviceHoldToConfirm')
+                        : positionBlocked
+                          ? t('deviceUnlock')
+                          : t('deviceLock')}
+                    </Button>
+                  </span>
+                </Tooltip>
                 <Tooltip title={t('reportReplay')}>
                   <IconButton
                     onClick={() => navigate(`/replay?deviceId=${deviceId}`)}
@@ -303,6 +393,15 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
         itemId={deviceId}
         onResult={(removed) => handleRemove(removed)}
       />
+      <Snackbar
+        open={commandToast}
+        autoHideDuration={snackBarDurationShortMs}
+        onClose={() => setCommandToast(false)}
+      >
+        <Alert severity="success" variant="filled">
+          {t('commandSent')}
+        </Alert>
+      </Snackbar>
     </>
   );
 };
