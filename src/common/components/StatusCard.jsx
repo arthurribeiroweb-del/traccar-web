@@ -35,6 +35,7 @@ import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { useTranslation } from './LocalizationProvider';
 import RemoveDialog from './RemoveDialog';
 import PositionValue from './PositionValue';
+import DeviceQuickStats from './DeviceQuickStats';
 import { useDeviceReadonly, useRestriction } from '../util/permissions';
 import usePositionAttributes from '../attributes/usePositionAttributes';
 import { devicesActions } from '../../store';
@@ -266,6 +267,7 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                   </IconButton>
                 </div>
               )}
+              <DeviceQuickStats device={device} position={position} />
               {position && (
                 <CardContent className={classes.content}>
                   <Table size="small" classes={{ root: classes.table }}>
