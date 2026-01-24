@@ -6,7 +6,6 @@ export default [
   'bus',
   'car',
   'crane',
-  'helicopter',
   'motorcycle',
   'tractor',
   'trailer',
