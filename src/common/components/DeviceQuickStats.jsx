@@ -6,14 +6,28 @@ import RouteIcon from '@mui/icons-material/Route';
 import { useTranslation } from './LocalizationProvider';
 import { useAttributePreference } from '../util/preferences';
 import { formatDistance, formatSpeed } from '../util/formatter';
+import DeviceAlertCount from './DeviceAlertCount';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
     display: 'flex',
     alignItems: 'center',
-    gap: theme.spacing(1.5),
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
     padding: theme.spacing(0.5, 2, 1),
+    flexWrap: 'nowrap',
+  },
+  left: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1.5),
     flexWrap: 'wrap',
+    flex: 1,
+    minWidth: 0,
+  },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
   },
   item: {
     display: 'inline-flex',
@@ -72,43 +86,48 @@ const DeviceQuickStats = ({ device, position }) => {
 
   return (
     <div className={classes.root}>
-      {offline && (
-        <Typography className={classes.item}>
-          {t('deviceOffline')}
-        </Typography>
-      )}
-      {!offline && (
-        <>
-          <span className={classes.item}>
-            <SpeedIcon fontSize="inherit" />
-            <span className={classes.value}>{speedText}</span>
-          </span>
-          <span className={`${classes.item} ${ignition ? classes.accOn : ''}`}>
-            <KeyIcon fontSize="inherit" />
-            <span className={classes.value}>{accText}</span>
-          </span>
-          <span className={classes.item}>
-            <RouteIcon fontSize="inherit" />
-            <span className={classes.value}>{distanceText}</span>
-          </span>
-        </>
-      )}
-      {offline && (
-        <>
-          <span className={classes.item}>
-            <SpeedIcon fontSize="inherit" />
-            <span className={classes.value}>--</span>
-          </span>
-          <span className={classes.item}>
-            <KeyIcon fontSize="inherit" />
-            <span className={classes.value}>--</span>
-          </span>
-          <span className={classes.item}>
-            <RouteIcon fontSize="inherit" />
-            <span className={classes.value}>--</span>
-          </span>
-        </>
-      )}
+      <div className={classes.left}>
+        {offline && (
+          <Typography className={classes.item}>
+            {t('deviceOffline')}
+          </Typography>
+        )}
+        {!offline && (
+          <>
+            <span className={classes.item}>
+              <SpeedIcon fontSize="inherit" />
+              <span className={classes.value}>{speedText}</span>
+            </span>
+            <span className={`${classes.item} ${ignition ? classes.accOn : ''}`}>
+              <KeyIcon fontSize="inherit" />
+              <span className={classes.value}>{accText}</span>
+            </span>
+            <span className={classes.item}>
+              <RouteIcon fontSize="inherit" />
+              <span className={classes.value}>{distanceText}</span>
+            </span>
+          </>
+        )}
+        {offline && (
+          <>
+            <span className={classes.item}>
+              <SpeedIcon fontSize="inherit" />
+              <span className={classes.value}>--</span>
+            </span>
+            <span className={classes.item}>
+              <KeyIcon fontSize="inherit" />
+              <span className={classes.value}>--</span>
+            </span>
+            <span className={classes.item}>
+              <RouteIcon fontSize="inherit" />
+              <span className={classes.value}>--</span>
+            </span>
+          </>
+        )}
+      </div>
+      <div className={classes.right}>
+        <DeviceAlertCount deviceId={device?.id} />
+      </div>
     </div>
   );
 };

@@ -503,6 +503,7 @@
     "eventDeviceMoving": "Device moving",
     "eventDeviceStopped": "Device stopped",
     "eventDeviceOverspeed": "Speed limit exceeded",
+    "alertsToday": "Alerts today",
     "eventDeviceFuelDrop": "Fuel drop",
     "eventDeviceFuelIncrease": "Fuel increase",
     "eventCommandResult": "Command result",
