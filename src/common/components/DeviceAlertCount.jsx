@@ -5,7 +5,6 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import dayjs from 'dayjs';
 import { useTranslation } from './LocalizationProvider';
 import { useEffectAsync } from '../../reactHelper';
-import fetchOrThrow from '../util/fetchOrThrow';
 import useFeatures from '../util/useFeatures';
 
 const useStyles = makeStyles()((theme) => ({
@@ -50,15 +49,23 @@ const DeviceAlertCount = ({ deviceId }) => {
       setCount(null);
       return;
     }
-    const query = new URLSearchParams({
-      deviceId: String(deviceId),
-      from,
-      to,
-    });
-    const response = await fetchOrThrow(`/api/events?${query.toString()}`);
-    const events = await response.json();
-    const alarmCount = events.filter((event) => event.type === 'alarm' || event.attributes?.alarm).length;
-    setCount(alarmCount);
+    try {
+      const query = new URLSearchParams({
+        deviceId: String(deviceId),
+        from,
+        to,
+      });
+      const response = await fetch(`/api/events?${query.toString()}`);
+      if (!response.ok) {
+        setCount(null);
+        return;
+      }
+      const events = await response.json();
+      const alarmCount = events.filter((event) => event.type === 'alarm' || event.attributes?.alarm).length;
+      setCount(alarmCount);
+    } catch (error) {
+      setCount(null);
+    }
   }, [deviceId, dayKey, disableEvents]);
 
   const displayValue = count == null ? '--' : formatCount(count);
