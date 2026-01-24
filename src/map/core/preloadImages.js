@@ -28,6 +28,7 @@ import truckSvg from '../../resources/images/icon/truck.svg';
 import vanSvg from '../../resources/images/icon/van.svg';
 
 export const mapIcons = {
+  arrow: directionSvg,
   animal: animalSvg,
   bicycle: bicycleSvg,
   boat: boatSvg,
@@ -62,6 +63,21 @@ export const mapIconKey = (category) => {
     default:
       return mapIcons.hasOwnProperty(category) ? category : 'default';
   }
+};
+
+const deviceIconMap = {
+  pin: 'default',
+  arrow: 'arrow',
+  car: 'car',
+  moto: 'motorcycle',
+};
+
+export const mapDeviceIconKey = (device) => {
+  const icon = device?.attributes?.deviceIcon;
+  if (icon && deviceIconMap.hasOwnProperty(icon)) {
+    return deviceIconMap[icon];
+  }
+  return mapIconKey(device?.category);
 };
 
 export const mapImages = {};

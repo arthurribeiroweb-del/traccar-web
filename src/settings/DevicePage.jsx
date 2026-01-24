@@ -35,6 +35,13 @@ const DevicePage = () => {
   const commonDeviceAttributes = useCommonDeviceAttributes(t);
   const deviceAttributes = useDeviceAttributes(t);
 
+  const deviceIconOptions = [
+    { id: 'pin', name: t('deviceIconPin') },
+    { id: 'arrow', name: t('deviceIconArrow') },
+    { id: 'car', name: t('deviceIconCar') },
+    { id: 'moto', name: t('deviceIconMoto') },
+  ];
+
   const [searchParams] = useSearchParams();
   const uniqueId = searchParams.get('uniqueId');
 
@@ -127,6 +134,18 @@ const DevicePage = () => {
                   name: t(`category${category.replace(/^\w/, (c) => c.toUpperCase())}`),
                 })).sort((a, b) => a.name.localeCompare(b.name))}
                 label={t('deviceCategory')}
+              />
+              <SelectField
+                value={item.attributes?.deviceIcon || 'pin'}
+                onChange={(event) => setItem({
+                  ...item,
+                  attributes: {
+                    ...item.attributes,
+                    deviceIcon: event.target.value,
+                  },
+                })}
+                data={deviceIconOptions}
+                label={t('attributeDeviceIcon')}
               />
               <SelectField
                 value={item.calendarId}

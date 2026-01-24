@@ -18,7 +18,7 @@ import {
   formatAlarm, formatBoolean, formatPercentage, formatStatus, getStatusColor,
 } from '../common/util/formatter';
 import { useTranslation } from '../common/components/LocalizationProvider';
-import { mapIconKey, mapIcons } from '../map/core/preloadImages';
+import { mapDeviceIconKey, mapIcons } from '../map/core/preloadImages';
 import { useAdministrator } from '../common/util/permissions';
 import EngineIcon from '../resources/images/data/engine.svg?react';
 import { useAttributePreference } from '../common/util/preferences';
@@ -110,7 +110,7 @@ const DeviceRow = ({ devices, index, style }) => {
       >
         <ListItemAvatar>
           <Avatar>
-            <img className={classes.icon} src={mapIcons[mapIconKey(item.category)]} alt="" />
+            <img className={classes.icon} src={mapIcons[mapDeviceIconKey(item)]} alt="" />
           </Avatar>
         </ListItemAvatar>
         <ListItemText

@@ -18,6 +18,10 @@ export default (t) => useMemo(() => ({
     name: t('attributeDeviceImage'),
     type: 'string',
   },
+  deviceIcon: {
+    name: t('attributeDeviceIcon'),
+    type: 'string',
+  },
   'processing.copyAttributes': {
     name: t('attributeProcessingCopyAttributes'),
     type: 'string',
