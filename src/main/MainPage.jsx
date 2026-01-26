@@ -76,10 +76,13 @@ const MainPage = () => {
 
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
   const positions = useSelector((state) => state.session.positions);
+  const devices = useSelector((state) => state.devices.items);
   const [filteredPositions, setFilteredPositions] = useState([]);
   const selectedPosition = filteredPositions.find((position) => selectedDeviceId && position.deviceId === selectedDeviceId);
 
   const [filteredDevices, setFilteredDevices] = useState([]);
+  const totalDevices = Object.keys(devices).length;
+  const hasDevices = totalDevices > 0;
 
   const [keyword, setKeyword] = useState('');
   const [filter, setFilter] = usePersistedState('filter', {
@@ -137,8 +140,8 @@ const MainPage = () => {
               />
             </div>
           )}
-          <Paper square className={classes.contentList} style={devicesOpen ? {} : { visibility: 'hidden' }}>
-            <DeviceList devices={filteredDevices} />
+          <Paper square className={classes.contentList} style={devicesOpen || !hasDevices ? {} : { visibility: 'hidden' }}>
+            <DeviceList devices={filteredDevices} totalDevices={totalDevices} />
           </Paper>
         </div>
         {desktop && (

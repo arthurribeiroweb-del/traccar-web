@@ -3,6 +3,13 @@ import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { usePreference } from '../../common/util/preferences';
 import { map } from '../core/MapView';
+import {
+  DEFAULT_SCALE_METERS,
+  getStoredZoom,
+  markDefaultZoomApplied,
+  shouldApplyDefaultZoom,
+  zoomForScale,
+} from './mapZoomDefaults';
 
 const MapDefaultCamera = ({ mapReady }) => {
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
@@ -16,21 +23,40 @@ const MapDefaultCamera = ({ mapReady }) => {
 
   useEffect(() => {
     if (!mapReady || initialized) return;
+    const storedZoom = getStoredZoom();
+    const applyDefault = shouldApplyDefaultZoom();
+
+    const resolveZoom = (latitude) => {
+      if (storedZoom != null) {
+        return storedZoom;
+      }
+      if (applyDefault && Number.isFinite(latitude)) {
+        return Math.min(map.getMaxZoom(), zoomForScale(DEFAULT_SCALE_METERS, latitude));
+      }
+      return Math.max(defaultZoom > 0 ? defaultZoom : map.getZoom(), 10);
+    };
+
     if (selectedDeviceId) {
       const position = positions[selectedDeviceId];
       if (position) {
         map.jumpTo({
           center: [position.longitude, position.latitude],
-          zoom: Math.max(defaultZoom > 0 ? defaultZoom : map.getZoom(), 10),
+          zoom: resolveZoom(position.latitude),
         });
+        if (applyDefault && storedZoom == null) {
+          markDefaultZoomApplied();
+        }
         setInitialized(true);
       }
     } else {
       if (defaultLatitude && defaultLongitude) {
         map.jumpTo({
           center: [defaultLongitude, defaultLatitude],
-          zoom: defaultZoom,
+          zoom: resolveZoom(defaultLatitude),
         });
+        if (applyDefault && storedZoom == null) {
+          markDefaultZoomApplied();
+        }
         setInitialized(true);
       } else {
         const coordinates = Object.values(positions).map((item) => [item.longitude, item.latitude]);
@@ -46,8 +72,11 @@ const MapDefaultCamera = ({ mapReady }) => {
           const [individual] = coordinates;
           map.jumpTo({
             center: individual,
-            zoom: Math.max(defaultZoom > 0 ? defaultZoom : map.getZoom(), 10),
+            zoom: resolveZoom(individual[1]),
           });
+          if (applyDefault && storedZoom == null) {
+            markDefaultZoomApplied();
+          }
           setInitialized(true);
         }
       }

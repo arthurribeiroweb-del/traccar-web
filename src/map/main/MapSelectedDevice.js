@@ -1,9 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import dimensions from '../../common/theme/dimensions';
 import { map } from '../core/MapView';
 import { usePrevious } from '../../reactHelper';
 import { useAttributePreference } from '../../common/util/preferences';
+import {
+  DEFAULT_SCALE_METERS,
+  getStoredZoom,
+  hasUserZoomed,
+  markDefaultZoomApplied,
+  markUserZoomed,
+  shouldApplyDefaultZoom,
+  zoomForScale,
+} from './mapZoomDefaults';
 
 const MapSelectedDevice = ({ mapReady }) => {
   const currentTime = useSelector((state) => state.devices.selectTime);
@@ -13,18 +22,34 @@ const MapSelectedDevice = ({ mapReady }) => {
 
   const selectZoom = useAttributePreference('web.selectZoom', 0);
   const mapFollow = useAttributePreference('mapFollow', false);
-  const selectZoomMeters = 30;
-  const scaleWidthPixels = 100;
-
-  const zoomForScale = (meters, latitude) => {
-    const metersPerPixel = meters / scaleWidthPixels;
-    const metersPerPixelAtZoom0 = 156543.03392 * Math.cos((latitude * Math.PI) / 180);
-    return Math.log2(metersPerPixelAtZoom0 / metersPerPixel);
-  };
+  const userZoomingRef = useRef(false);
 
   const position = useSelector((state) => state.session.positions[currentId]);
 
   const previousPosition = usePrevious(position);
+
+  useEffect(() => {
+    if (!mapReady) return;
+
+    const handleZoomStart = (event) => {
+      if (event.originalEvent) {
+        userZoomingRef.current = true;
+      }
+    };
+    const handleZoomEnd = () => {
+      if (userZoomingRef.current) {
+        userZoomingRef.current = false;
+        markUserZoomed(map.getZoom());
+      }
+    };
+
+    map.on('zoomstart', handleZoomStart);
+    map.on('zoomend', handleZoomEnd);
+    return () => {
+      map.off('zoomstart', handleZoomStart);
+      map.off('zoomend', handleZoomEnd);
+    };
+  }, [mapReady]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -34,15 +59,25 @@ const MapSelectedDevice = ({ mapReady }) => {
     const selectionChanged = currentId !== previousId || currentTime !== previousTime;
 
     if ((selectionChanged || (mapFollow && positionChanged)) && position) {
+      const storedZoom = getStoredZoom();
+      const userHasZoomed = hasUserZoomed();
+      const applyDefault = selectionChanged && shouldApplyDefaultZoom();
+      const defaultZoom = Math.min(map.getMaxZoom(), zoomForScale(DEFAULT_SCALE_METERS, position.latitude));
       const targetZoom = selectZoom > 0
         ? selectZoom
-        : Math.min(map.getMaxZoom(), zoomForScale(selectZoomMeters, position.latitude));
+        : (storedZoom ?? defaultZoom);
+
+      const shouldApplyZoom = selectionChanged && !userHasZoomed && applyDefault;
 
       map.easeTo({
         center: [position.longitude, position.latitude],
-        zoom: selectionChanged ? targetZoom : map.getZoom(),
+        zoom: shouldApplyZoom ? targetZoom : map.getZoom(),
         offset: [0, -dimensions.popupMapOffset / 2],
       });
+
+      if (shouldApplyZoom) {
+        markDefaultZoomApplied();
+      }
     }
   }, [currentId, previousId, currentTime, previousTime, mapFollow, position, selectZoom, mapReady]);
 
