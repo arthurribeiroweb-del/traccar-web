@@ -1,5 +1,6 @@
 import { Snackbar, IconButton } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
@@ -40,6 +41,14 @@ const UpdateController = () => {
       }
     },
   });
+
+  useEffect(() => {
+    if (needRefresh) {
+      const timer = setTimeout(() => updateServiceWorker(true), 1000);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [needRefresh, updateServiceWorker]);
 
   return (
     <Snackbar

@@ -3,6 +3,18 @@ import react from '@vitejs/plugin-react-swc';
 import svgr from 'vite-plugin-svgr';
 import { VitePWA } from 'vite-plugin-pwa';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { execSync } from 'node:child_process';
+
+const resolveAppVersion = () => {
+  if (process.env.VITE_APP_VERSION) {
+    return process.env.VITE_APP_VERSION;
+  }
+  try {
+    return execSync('git rev-parse --short HEAD').toString().trim();
+  } catch (error) {
+    return 'unknown';
+  }
+};
 
 export default defineConfig(() => ({
   server: {
@@ -15,15 +27,22 @@ export default defineConfig(() => ({
   build: {
     outDir: 'build',
   },
+  define: {
+    __APP_VERSION__: JSON.stringify(resolveAppVersion()),
+  },
   plugins: [
     svgr(),
     react(),
     VitePWA({
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
+      registerType: 'autoUpdate',
       workbox: {
         navigateFallbackDenylist: [/^\/api/],
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,woff,woff2,mp3}'],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
       manifest: {
         short_name: '${title}',
