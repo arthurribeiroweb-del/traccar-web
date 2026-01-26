@@ -5,11 +5,14 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   IconButton,
   Paper,
   Slider,
   Toolbar,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import TuneIcon from '@mui/icons-material/Tune';
@@ -42,7 +45,12 @@ import { speedFromKnots } from '../common/util/converter';
 import { useAttributePreference } from '../common/util/preferences';
 import MapReplayMarkers from '../map/MapReplayMarkers';
 
-const useStyles = makeStyles()((theme) => ({
+const useStyles = makeStyles()((theme) => {
+  const toolbarMinHeight = typeof theme.mixins.toolbar.minHeight === 'number'
+    ? theme.mixins.toolbar.minHeight
+    : 56;
+
+  return ({
   root: {
     height: '100%',
   },
@@ -85,6 +93,10 @@ const useStyles = makeStyles()((theme) => ({
     gap: theme.spacing(1.5),
     [theme.breakpoints.down('md')]: {
       margin: theme.spacing(1),
+      padding: theme.spacing(1.5),
+      gap: theme.spacing(1),
+      maxHeight: `calc(35vh - ${toolbarMinHeight}px)`,
+      overflowY: 'auto',
     },
     [theme.breakpoints.up('md')]: {
       marginTop: theme.spacing(1),
@@ -125,7 +137,26 @@ const useStyles = makeStyles()((theme) => ({
     gap: theme.spacing(1),
     zIndex: 2,
   },
-}));
+  detailsToggle: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+  },
+  controlsCompact: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1),
+  },
+  sliderCompact: {
+    flex: 1,
+    minWidth: 0,
+  },
+  timeCompact: {
+    fontSize: '0.75rem',
+    color: theme.palette.text.secondary,
+    whiteSpace: 'nowrap',
+  },
+});
+});
 
 const STOP_MINUTES = 5;
 const STOP_SPEED_KMH = 1;
@@ -171,6 +202,8 @@ const haversineMeters = (a, b) => {
 const ReplayPage = () => {
   const t = useTranslation();
   const { classes } = useStyles();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const timerRef = useRef();
 
@@ -191,6 +224,7 @@ const ReplayPage = () => {
   const [hasAppliedInitialZoom, setHasAppliedInitialZoom] = useState(false);
   const [showAllStops, setShowAllStops] = useState(false);
   const [selectedStopId, setSelectedStopId] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const loaded = Boolean(from && to && !loading && positions.length);
   const speedUnit = useAttributePreference('speedUnit');
@@ -211,6 +245,12 @@ const ReplayPage = () => {
       setPositions([]);
     }
   }, [from, to, setPositions]);
+
+  useEffect(() => {
+    if (!loaded) {
+      setDetailsOpen(false);
+    }
+  }, [loaded]);
 
   useEffect(() => {
     if (playing && positions.length > 0) {
@@ -416,47 +456,61 @@ const ReplayPage = () => {
     if (positions[0]) {
       const startPosition = positions[0];
       const startSpeed = Number.isFinite(startPosition.speed) ? speedFromKnots(startPosition.speed, speedUnit) : null;
-      const startLocation = startPosition.address
-        || `${startPosition.latitude.toFixed(5)}, ${startPosition.longitude.toFixed(5)}`;
+      const startLocation = startPosition.address || null;
+      const startDetails = [
+        `${t('replaySpeed')}: ${startSpeed != null ? startSpeed.toFixed(1) : '—'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`,
+      ];
+      if (startLocation) {
+        startDetails.push(`${t('replayLocation')}: ${startLocation}`);
+      }
       markers.push({
         id: 'start',
         latitude: startPosition.latitude,
         longitude: startPosition.longitude,
+        type: 'start',
         label: 'A',
         color: '#4caf50',
         title: t('replayStart'),
         subtitle: `${t('replayTime')}: ${formatClock(startPosition.fixTime)}`,
-        details: `${t('replaySpeed')}: ${startSpeed != null ? startSpeed.toFixed(1) : '—'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}\n${t('replayLocation')}: ${startLocation}`,
+        details: startDetails.join('\n'),
       });
     }
     if (positions[positions.length - 1]) {
       const endPosition = positions[positions.length - 1];
       const endSpeed = Number.isFinite(endPosition.speed) ? speedFromKnots(endPosition.speed, speedUnit) : null;
-      const endLocation = endPosition.address
-        || `${endPosition.latitude.toFixed(5)}, ${endPosition.longitude.toFixed(5)}`;
+      const endLocation = endPosition.address || null;
+      const endDetails = [
+        `${t('replaySpeed')}: ${endSpeed != null ? endSpeed.toFixed(1) : '—'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`,
+      ];
+      if (endLocation) {
+        endDetails.push(`${t('replayLocation')}: ${endLocation}`);
+      }
       markers.push({
         id: 'end',
         latitude: endPosition.latitude,
         longitude: endPosition.longitude,
+        type: 'end',
         label: 'B',
         color: '#f44336',
         title: t('replayEnd'),
         subtitle: `${t('replayTime')}: ${formatClock(endPosition.fixTime)}`,
-        details: `${t('replaySpeed')}: ${endSpeed != null ? endSpeed.toFixed(1) : '—'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}\n${t('replayLocation')}: ${endLocation}`,
+        details: endDetails.join('\n'),
       });
     }
-    stops.forEach((stop, idx) => {
-      const interval = `${formatClock(stop.start)}–${formatClock(stop.end)}`;
-      const stopLocation = stop.address || `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`;
+    stops.forEach((stop) => {
+      const interval = `${formatClock(stop.start)}-${formatClock(stop.end)}`;
       markers.push({
         id: stop.id,
         latitude: stop.latitude,
         longitude: stop.longitude,
-        label: `P${idx + 1}`,
+        type: 'stop',
+        label: 'P',
         color: '#ff9800',
-        title: `${t('replayStop')} P${idx + 1}`,
-        subtitle: `${t('replayInterval')}: ${interval} • ${formatDuration(stop.durationSec)}`,
-        details: `${t('replaySpeed')}: ${t('replayStoppedLabel')}\n${t('replayLocation')}: ${stopLocation}`,
+        textColor: '#ffffff',
+        badgeColor: '#ff9800',
+        title: t('replayStop'),
+        subtitle: `${formatDuration(stop.durationSec)} ${interval}`,
+        details: null,
       });
     });
 
@@ -487,6 +541,55 @@ const ReplayPage = () => {
     const sorted = [...summary.stops].sort((a, b) => b.durationSec - a.durationSec);
     return showAllStops ? sorted : sorted.slice(0, 10);
   }, [summary, showAllStops]);
+
+  const highlights = summary ? (
+    <Typography variant="caption" color="textSecondary">
+      {t('replayHighlights')}
+      {summary.highlights?.maxSpeedTime && ` • ${t('replayMaxSpeedAt')} ${formatTime(summary.highlights.maxSpeedTime, 'seconds')}`}
+      {summary.highlights?.longestStop && ` • ${t('replayLongestStop')} ${formatDuration(summary.highlights.longestStop.durationSec)}`}
+      {summary.startTime && ` • ${t('replayFirstPoint')} ${formatTime(summary.startTime, 'seconds')}`}
+      {summary.endTime && ` • ${t('replayLastPoint')} ${formatTime(summary.endTime, 'seconds')}`}
+    </Typography>
+  ) : null;
+
+  const stopsSection = summary?.stops?.length > 0 ? (
+    <Box className={classes.stopList}>
+      <Typography variant="subtitle2">{t('replayStopsTitle')}</Typography>
+      {displayedStops.map((stop) => (
+        <div key={stop.id} className={classes.stopItem}>
+          <Typography variant="body2">
+            {`${t('replayStop')} - ${formatDuration(stop.durationSec)} - ${formatClock(stop.start)}-${formatClock(stop.end)}`}
+          </Typography>
+          {stop.address && (
+            <Typography variant="caption" color="textSecondary">
+              {stop.address}
+            </Typography>
+          )}
+          <Box>
+            <Button
+              size="small"
+              onClick={() => {
+                setSelectedStopId(stop.id);
+                setFollowMode(false);
+                map.easeTo({
+                  center: [stop.longitude, stop.latitude],
+                  zoom: currentZoom ?? Math.max(map.getZoom(), 15),
+                  duration: 450,
+                });
+              }}
+            >
+              {t('replayViewOnMap')}
+            </Button>
+          </Box>
+        </div>
+      ))}
+      {summary.stops.length > 10 && (
+        <Button size="small" onClick={() => setShowAllStops(!showAllStops)}>
+          {showAllStops ? t('replayViewLess') : t('replayViewAll')}
+        </Button>
+      )}
+    </Box>
+  ) : null;
 
   return (
     <div className={classes.root}>
@@ -582,92 +685,102 @@ const ReplayPage = () => {
                       size="small"
                     />
                   </Box>
-                  <Typography variant="caption" color="textSecondary">
-                    {t('replayHighlights')}
-                    {summary.highlights?.maxSpeedTime && ` • ${t('replayMaxSpeedAt')} ${formatTime(summary.highlights.maxSpeedTime, 'seconds')}`}
-                    {summary.highlights?.longestStop && ` • ${t('replayLongestStop')} ${formatDuration(summary.highlights.longestStop.durationSec)}`}
-                    {summary.startTime && ` • ${t('replayFirstPoint')} ${formatTime(summary.startTime, 'seconds')}`}
-                    {summary.endTime && ` • ${t('replayLastPoint')} ${formatTime(summary.endTime, 'seconds')}`}
-                  </Typography>
+                  {!isMobile && highlights}
+                  {isMobile && (
+                    <>
+                      <div className={classes.detailsToggle}>
+                        <Button size="small" onClick={() => setDetailsOpen((open) => !open)}>
+                          {detailsOpen ? t('replayViewLess') : t('sharedShowDetails')}
+                        </Button>
+                      </div>
+                      <Collapse in={detailsOpen} timeout="auto" unmountOnExit>
+                        {highlights}
+                        {stopsSection}
+                      </Collapse>
+                    </>
+                  )}
                 </>
               ) : (
                 <Typography variant="caption" color="textSecondary">
                   {t('replayInsufficientData')}
                 </Typography>
               )}
-              <Slider
-                className={classes.slider}
-                max={positions.length - 1}
-                step={null}
-                marks={positions.map((_, index) => ({ value: index }))}
-                value={index}
-                onChange={(_, index) => setIndex(index)}
-              />
-              <div className={classes.controls}>
-                {`${index + 1}/${positions.length}`}
-                <IconButton onClick={() => setIndex((index) => index - 1)} disabled={playing || index <= 0}>
-                  <FastRewindIcon />
-                </IconButton>
-                <IconButton
-                  onClick={() => {
-                    if (!playing) {
-                      setFollowMode(true);
-                      if (!hasAppliedInitialZoom) {
-                        const zoom = currentZoom ?? Math.max(map.getZoom(), 15);
-                        setCurrentZoom(zoom);
-                        setHasAppliedInitialZoom(true);
-                        centerOnCurrent(zoom);
-                      } else {
-                        centerOnCurrent();
+              {isMobile ? (
+                <div className={classes.controlsCompact}>
+                  <IconButton
+                    onClick={() => {
+                      if (!playing) {
+                        setFollowMode(true);
+                        if (!hasAppliedInitialZoom) {
+                          const zoom = currentZoom ?? Math.max(map.getZoom(), 15);
+                          setCurrentZoom(zoom);
+                          setHasAppliedInitialZoom(true);
+                          centerOnCurrent(zoom);
+                        } else {
+                          centerOnCurrent();
+                        }
                       }
-                    }
-                    setPlaying(!playing);
-                  }}
-                  disabled={index >= positions.length - 1}
-                >
-                  {playing ? <PauseIcon /> : <PlayArrowIcon /> }
-                </IconButton>
-                <IconButton onClick={() => setIndex((index) => index + 1)} disabled={playing || index >= positions.length - 1}>
-                  <FastForwardIcon />
-                </IconButton>
-                {formatTime(positions[index].fixTime, 'seconds')}
-              </div>
-              {summary?.stops?.length > 0 && (
-                <Box className={classes.stopList}>
-                  <Typography variant="subtitle2">{t('replayStopsTitle')}</Typography>
-                  {displayedStops.map((stop, idx) => (
-                    <div key={stop.id} className={classes.stopItem}>
-                      <Typography variant="body2">
-                        {`P${idx + 1} • ${formatDuration(stop.durationSec)} • ${formatTime(stop.start, 'seconds')} → ${formatTime(stop.end, 'seconds')}`}
-                      </Typography>
-                      <Typography variant="caption" color="textSecondary">
-                        {stop.address || `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`}
-                      </Typography>
-                      <Box>
-                        <Button
-                          size="small"
-                          onClick={() => {
-                            setSelectedStopId(stop.id);
-                            setFollowMode(false);
-                            map.easeTo({
-                              center: [stop.longitude, stop.latitude],
-                              zoom: currentZoom ?? Math.max(map.getZoom(), 15),
-                              duration: 450,
-                            });
-                          }}
-                        >
-                          {t('replayViewOnMap')}
-                        </Button>
-                      </Box>
-                    </div>
-                  ))}
-                  {summary.stops.length > 10 && (
-                    <Button size="small" onClick={() => setShowAllStops(!showAllStops)}>
-                      {showAllStops ? t('replayViewLess') : t('replayViewAll')}
-                    </Button>
-                  )}
-                </Box>
+                      setPlaying(!playing);
+                    }}
+                    disabled={index >= positions.length - 1}
+                  >
+                    {playing ? <PauseIcon /> : <PlayArrowIcon /> }
+                  </IconButton>
+                  <Slider
+                    className={classes.sliderCompact}
+                    max={positions.length - 1}
+                    step={null}
+                    marks={positions.map((_, index) => ({ value: index }))}
+                    value={index}
+                    onChange={(_, index) => setIndex(index)}
+                    size="small"
+                  />
+                  <Typography className={classes.timeCompact}>
+                    {formatClock(positions[index].fixTime)}
+                  </Typography>
+                </div>
+              ) : (
+                <>
+                  <Slider
+                    className={classes.slider}
+                    max={positions.length - 1}
+                    step={null}
+                    marks={positions.map((_, index) => ({ value: index }))}
+                    value={index}
+                    onChange={(_, index) => setIndex(index)}
+                  />
+                  <div className={classes.controls}>
+                    {`${index + 1}/${positions.length}`}
+                    <IconButton onClick={() => setIndex((index) => index - 1)} disabled={playing || index <= 0}>
+                      <FastRewindIcon />
+                    </IconButton>
+                    <IconButton
+                      onClick={() => {
+                        if (!playing) {
+                          setFollowMode(true);
+                          if (!hasAppliedInitialZoom) {
+                            const zoom = currentZoom ?? Math.max(map.getZoom(), 15);
+                            setCurrentZoom(zoom);
+                            setHasAppliedInitialZoom(true);
+                            centerOnCurrent(zoom);
+                          } else {
+                            centerOnCurrent();
+                          }
+                        }
+                        setPlaying(!playing);
+                      }}
+                      disabled={index >= positions.length - 1}
+                    >
+                      {playing ? <PauseIcon /> : <PlayArrowIcon /> }
+                    </IconButton>
+                    <IconButton onClick={() => setIndex((index) => index + 1)} disabled={playing || index >= positions.length - 1}>
+                      <FastForwardIcon />
+                    </IconButton>
+                    {formatTime(positions[index].fixTime, 'seconds')}
+                  </div>
+                </>
               )}
+              {!isMobile && stopsSection}
             </>
           ) : (
             <ReportFilter onShow={onShow} deviceType="single" loading={loading} />

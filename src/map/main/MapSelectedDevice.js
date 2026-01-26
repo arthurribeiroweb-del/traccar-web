@@ -13,12 +13,11 @@ const MapSelectedDevice = ({ mapReady }) => {
 
   const selectZoom = useAttributePreference('web.selectZoom', 0);
   const mapFollow = useAttributePreference('mapFollow', false);
-  const selectZoomMeters = 200;
+  const selectZoomMeters = 30;
+  const scaleWidthPixels = 100;
 
-  const zoomForMeters = (meters, latitude) => {
-    const canvas = map.getCanvas();
-    const minDimension = Math.max(Math.min(canvas.width, canvas.height), 1);
-    const metersPerPixel = meters / minDimension;
+  const zoomForScale = (meters, latitude) => {
+    const metersPerPixel = meters / scaleWidthPixels;
     const metersPerPixelAtZoom0 = 156543.03392 * Math.cos((latitude * Math.PI) / 180);
     return Math.log2(metersPerPixelAtZoom0 / metersPerPixel);
   };
@@ -32,14 +31,16 @@ const MapSelectedDevice = ({ mapReady }) => {
 
     const positionChanged = position && (!previousPosition || position.latitude !== previousPosition.latitude || position.longitude !== previousPosition.longitude);
 
-    if ((currentId !== previousId || currentTime !== previousTime || (mapFollow && positionChanged)) && position) {
+    const selectionChanged = currentId !== previousId || currentTime !== previousTime;
+
+    if ((selectionChanged || (mapFollow && positionChanged)) && position) {
       const targetZoom = selectZoom > 0
         ? selectZoom
-        : Math.min(map.getMaxZoom(), zoomForMeters(selectZoomMeters, position.latitude));
+        : Math.min(map.getMaxZoom(), zoomForScale(selectZoomMeters, position.latitude));
 
       map.easeTo({
         center: [position.longitude, position.latitude],
-        zoom: Math.max(map.getZoom(), targetZoom),
+        zoom: selectionChanged ? targetZoom : map.getZoom(),
         offset: [0, -dimensions.popupMapOffset / 2],
       });
     }
