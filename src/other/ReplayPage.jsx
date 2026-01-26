@@ -43,6 +43,7 @@ import BackIcon from '../common/components/BackIcon';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import { speedFromKnots } from '../common/util/converter';
 import { useAttributePreference } from '../common/util/preferences';
+import usePersistedState from '../common/util/usePersistedState';
 import MapReplayMarkers from '../map/MapReplayMarkers';
 
 const useStyles = makeStyles()((theme) => {
@@ -94,6 +95,7 @@ const useStyles = makeStyles()((theme) => {
     [theme.breakpoints.down('md')]: {
       margin: theme.spacing(1),
       padding: theme.spacing(1.5),
+      paddingBottom: `calc(${theme.spacing(1.5)} + env(safe-area-inset-bottom))`,
       gap: theme.spacing(1),
       maxHeight: `calc(35vh - ${toolbarMinHeight}px)`,
       overflowY: 'auto',
@@ -145,10 +147,19 @@ const useStyles = makeStyles()((theme) => {
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(1),
+    paddingBottom: 'env(safe-area-inset-bottom)',
+    minHeight: theme.spacing(5),
   },
   sliderCompact: {
     flex: 1,
     minWidth: 0,
+  },
+  speedButton: {
+    minWidth: theme.spacing(5),
+    padding: theme.spacing(0.25, 1),
+    textTransform: 'none',
+    fontWeight: 600,
+    fontSize: '0.75rem',
   },
   timeCompact: {
     fontSize: '0.75rem',
@@ -160,6 +171,8 @@ const useStyles = makeStyles()((theme) => {
 
 const STOP_MINUTES = 5;
 const STOP_SPEED_KMH = 1;
+const SPEED_OPTIONS = [1, 1.5, 2];
+const DEFAULT_PLAYBACK_SPEED = 1;
 
 const formatDuration = (seconds) => {
   if (!Number.isFinite(seconds)) {
@@ -225,6 +238,7 @@ const ReplayPage = () => {
   const [showAllStops, setShowAllStops] = useState(false);
   const [selectedStopId, setSelectedStopId] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = usePersistedState('replayPlaybackSpeed', DEFAULT_PLAYBACK_SPEED);
 
   const loaded = Boolean(from && to && !loading && positions.length);
   const speedUnit = useAttributePreference('speedUnit');
@@ -254,15 +268,16 @@ const ReplayPage = () => {
 
   useEffect(() => {
     if (playing && positions.length > 0) {
+      const interval = 500 / playbackSpeed;
       timerRef.current = setInterval(() => {
-        setIndex((index) => index + 1);
-      }, 500);
+        setIndex((index) => Math.min(index + 1, positions.length - 1));
+      }, interval);
     } else {
       clearInterval(timerRef.current);
     }
 
     return () => clearInterval(timerRef.current);
-  }, [playing, positions]);
+  }, [playing, positions.length, playbackSpeed]);
 
   useEffect(() => {
     if (index >= positions.length - 1) {
@@ -292,6 +307,16 @@ const ReplayPage = () => {
   const onMarkerClick = useCallback((positionId) => {
     setShowCard(!!positionId);
   }, [setShowCard]);
+
+  const togglePlaybackSpeed = useCallback(() => {
+    setPlaybackSpeed((current) => {
+      const currentIndex = SPEED_OPTIONS.indexOf(current);
+      if (currentIndex === -1) {
+        return DEFAULT_PLAYBACK_SPEED;
+      }
+      return SPEED_OPTIONS[(currentIndex + 1) % SPEED_OPTIONS.length];
+    });
+  }, [setPlaybackSpeed]);
 
   const fitRoute = useCallback((positions) => {
     if (!positions.length) {
@@ -735,6 +760,15 @@ const ReplayPage = () => {
                     onChange={(_, index) => setIndex(index)}
                     size="small"
                   />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    className={classes.speedButton}
+                    onClick={togglePlaybackSpeed}
+                    aria-label={`${t('replaySpeed')} ${playbackSpeed}x`}
+                  >
+                    {`${playbackSpeed}x`}
+                  </Button>
                   <Typography className={classes.timeCompact}>
                     {formatClock(positions[index].fixTime)}
                   </Typography>
@@ -776,6 +810,15 @@ const ReplayPage = () => {
                     <IconButton onClick={() => setIndex((index) => index + 1)} disabled={playing || index >= positions.length - 1}>
                       <FastForwardIcon />
                     </IconButton>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      className={classes.speedButton}
+                      onClick={togglePlaybackSpeed}
+                      aria-label={`${t('replaySpeed')} ${playbackSpeed}x`}
+                    >
+                      {`${playbackSpeed}x`}
+                    </Button>
                     {formatTime(positions[index].fixTime, 'seconds')}
                   </div>
                 </>
