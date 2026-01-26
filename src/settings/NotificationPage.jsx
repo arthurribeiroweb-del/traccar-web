@@ -10,6 +10,7 @@ import {
   FormGroup,
   Button,
   TextField,
+  Alert,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useTranslation, useTranslationKeys } from '../common/components/LocalizationProvider';
@@ -17,7 +18,7 @@ import EditItemView from './components/EditItemView';
 import { prefixString, unprefixString } from '../common/util/stringUtils';
 import SelectField from '../common/components/SelectField';
 import SettingsMenu from './components/SettingsMenu';
-import { useCatch } from '../reactHelper';
+import { useCatch, useEffectAsync } from '../reactHelper';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 
@@ -26,6 +27,12 @@ const NotificationPage = () => {
   const t = useTranslation();
 
   const [item, setItem] = useState();
+  const [notificators, setNotificators] = useState();
+
+  useEffectAsync(async () => {
+    const response = await fetchOrThrow('/api/notifications/notificators');
+    setNotificators(await response.json());
+  }, []);
 
   const alarms = useTranslationKeys((it) => it.startsWith('alarm')).map((it) => ({
     key: unprefixString('alarm', it),
@@ -43,6 +50,8 @@ const NotificationPage = () => {
   });
 
   const validate = () => item && item.type && item.notificators && (!item.notificators?.includes('command') || item.commandId);
+  const hasTraccarNotificator = notificators?.some((notificator) => notificator.type === 'traccar');
+  const missingTraccarMessage = t('notificationTraccarMissing');
 
   return (
     <EditItemView
@@ -90,6 +99,18 @@ const NotificationPage = () => {
                 titleGetter={(it) => t(prefixString('notificator', it.type))}
                 label={t('notificationNotificators')}
               />
+              {notificators && !hasTraccarNotificator && (
+                <Alert severity="info">
+                  {missingTraccarMessage || (
+                    <>
+                      To enable push notifications in Traccar Manager, add <code>traccar</code> to
+                      {' '}
+                      <code>notificator.types</code> and set <code>notificator.traccar.key</code> in the server config,
+                      then restart the service.
+                    </>
+                  )}
+                </Alert>
+              )}
               {item.notificators?.includes('command') && (
                 <SelectField
                   value={item.commandId}

@@ -28,6 +28,7 @@ import { prefixString } from '../common/util/stringUtils';
 import MapMarkers from '../map/MapMarkers';
 import MapRouteCoordinates from '../map/MapRouteCoordinates';
 import MapScale from '../map/MapScale';
+import MapReplayMarkers from '../map/MapReplayMarkers';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import { speedFromKnots } from '../common/util/converter';
 import { useAttributePreference } from '../common/util/preferences';
@@ -162,9 +163,10 @@ const computeSummary = (items) => {
   let distanceMeters = 0;
   let movingTimeSec = 0;
   let stoppedTimeSec = 0;
-  let maxSpeedKnots = 0;
+  let maxSpeedKnots = null;
   let stopsCount = 0;
   let tripsCount = 0;
+  const stops = [];
   const stopThresholdSec = STOP_MINUTES * 60;
 
   items.forEach((item) => {
@@ -205,13 +207,23 @@ const computeSummary = (items) => {
           if (durationSec >= stopThresholdSec) {
             stopsCount += 1;
             tripsCount += 1;
+            stops.push({
+              id: `${item.deviceId}-${stopStart}-${stopEnd}`,
+              deviceId: item.deviceId,
+              start: stopStart,
+              end: stopEnd,
+              durationSec,
+              latitude: stopStartPosition.latitude,
+              longitude: stopStartPosition.longitude,
+              address: stopStartPosition.address,
+            });
           }
           stopStart = null;
           stopStartPosition = null;
         }
       }
 
-      if (Number.isFinite(curr.speed) && curr.speed > maxSpeedKnots) {
+      if (Number.isFinite(curr.speed) && (maxSpeedKnots == null || curr.speed > maxSpeedKnots)) {
         maxSpeedKnots = curr.speed;
       }
     }
@@ -221,6 +233,16 @@ const computeSummary = (items) => {
       const durationSec = (new Date(lastFix).getTime() - new Date(stopStart).getTime()) / 1000;
       if (durationSec >= stopThresholdSec) {
         stopsCount += 1;
+        stops.push({
+          id: `${item.deviceId}-${stopStart}-${lastFix}`,
+          deviceId: item.deviceId,
+          start: stopStart,
+          end: lastFix,
+          durationSec,
+          latitude: stopStartPosition.latitude,
+          longitude: stopStartPosition.longitude,
+          address: stopStartPosition.address,
+        });
       }
     }
   });
@@ -237,6 +259,7 @@ const computeSummary = (items) => {
     stopsCount,
     tripsCount,
     averageSpeedKnots,
+    stops,
   };
 };
 
@@ -261,8 +284,32 @@ const CombinedReportPage = () => {
 
   const itemsCoordinates = useMemo(() => items.flatMap((item) => item.route || []), [items]);
 
-  const eventItems = useMemo(() => items.flatMap((item) => (item.events || []).map((event) => {
-    const position = (item.positions || []).find((p) => event.positionId === p.id);
+  const eventItems = useMemo(() => items.flatMap((item) => {
+    const positionsById = new Map((item.positions || []).map((position) => [position.id, position]));
+    return (item.events || []).map((event) => {
+      const position = positionsById.get(event.positionId);
+      return {
+        event,
+        position,
+        deviceId: item.deviceId,
+        deviceName: devices[item.deviceId]?.name,
+      };
+    });
+  }), [items, devices]);
+
+  const stopMarkers = useMemo(() => (summary?.stops || []).map((stop) => ({
+    id: stop.id,
+    latitude: stop.latitude,
+    longitude: stop.longitude,
+    type: 'stop',
+    label: 'P',
+    color: '#ff9800',
+    textColor: '#ffffff',
+    badgeColor: '#ff9800',
+    title: t('replayStop'),
+    subtitle: `${formatClock(stop.start)}-${formatClock(stop.end)} | ${formatDuration(stop.durationSec)}`,
+    details: stop.address || `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`,
+  })), [summary, t]);
     return {
       event,
       position,
@@ -330,6 +377,7 @@ const CombinedReportPage = () => {
                 />
               ))}
               <MapMarkers markers={markers} />
+              <MapReplayMarkers markers={stopMarkers} selectedStopId={null} />
             </MapView>
             <MapScale />
             {selectedEventPosition ? (
