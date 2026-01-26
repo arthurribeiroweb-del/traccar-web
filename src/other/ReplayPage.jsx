@@ -23,6 +23,8 @@ import FastForwardIcon from '@mui/icons-material/FastForward';
 import FastRewindIcon from '@mui/icons-material/FastRewind';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import CropFreeIcon from '@mui/icons-material/CropFree';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import dayjs from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -98,11 +100,41 @@ const useStyles = makeStyles()((theme) => {
       paddingBottom: `calc(${theme.spacing(1.5)} + env(safe-area-inset-bottom))`,
       gap: theme.spacing(1),
       maxHeight: `calc(35vh - ${toolbarMinHeight}px)`,
-      overflowY: 'auto',
+      minHeight: 0,
+      overflow: 'hidden',
+      '@supports (height: 100dvh)': {
+        maxHeight: `calc(35dvh - ${toolbarMinHeight}px)`,
+      },
     },
     [theme.breakpoints.up('md')]: {
       marginTop: theme.spacing(1),
     },
+  },
+  summaryArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(1),
+    minHeight: 0,
+    flex: 1,
+    overflowY: 'auto',
+  },
+  summaryHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing(1),
+  },
+  summaryCompactLine: {
+    fontSize: '0.8rem',
+    color: theme.palette.text.secondary,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  summaryToggle: {
+    minWidth: 'auto',
+    padding: theme.spacing(0.25, 0.5),
+    textTransform: 'none',
   },
   summaryGrid: {
     display: 'grid',
@@ -110,6 +142,7 @@ const useStyles = makeStyles()((theme) => {
     gap: theme.spacing(1),
     [theme.breakpoints.down('md')]: {
       gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      gap: theme.spacing(0.75),
     },
   },
   chipsRow: {
@@ -149,6 +182,11 @@ const useStyles = makeStyles()((theme) => {
     gap: theme.spacing(1),
     paddingBottom: 'env(safe-area-inset-bottom)',
     minHeight: theme.spacing(5),
+  },
+  controlsArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(1),
   },
   sliderCompact: {
     flex: 1,
@@ -681,113 +719,99 @@ const ReplayPage = () => {
           {loaded ? (
             <>
               <Typography variant="subtitle1" align="center">{deviceName}</Typography>
-              {summary ? (
-                <>
-                  <Typography variant="subtitle2">{t('replaySummary')}</Typography>
-                  <Box className={classes.summaryGrid}>
-                    <Chip
-                      label={`${t('replayDistance')}: ${formatDistance(summary.distanceMeters, distanceUnit, t)}`}
-                      size="small"
-                    />
-                    <Chip
-                      label={`${t('replayMovingTime')}: ${formatDuration(summary.movingTimeSec)}`}
-                      size="small"
-                    />
-                    <Chip
-                      label={`${t('replayStoppedTime')}: ${formatDuration(summary.stoppedTimeSec)}`}
-                      size="small"
-                    />
-                    <Chip
-                      label={`${t('replayMaxSpeed')}: ${summary.maxSpeedKnots ? speedFromKnots(summary.maxSpeedKnots, speedUnit).toFixed(1) : '—'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`}
-                      size="small"
-                    />
-                    <Chip
-                      label={`${t('replayStops')}: ${summary.stopsCount ?? '—'}`}
-                      size="small"
-                    />
-                    <Chip
-                      label={`${t('replayTrips')}: ${summary.tripsCount ?? '—'}`}
-                      size="small"
-                    />
-                  </Box>
-                  {!isMobile && highlights}
-                  {isMobile && (
-                    <>
-                      <div className={classes.detailsToggle}>
-                        <Button size="small" onClick={() => setDetailsOpen((open) => !open)}>
+              <div className={classes.summaryArea}>
+                {summary ? (
+                  <>
+                    <div className={classes.summaryHeader}>
+                      <Typography variant="subtitle2">{t('replaySummary')}</Typography>
+                      {isMobile && (
+                        <Button
+                          size="small"
+                          className={classes.summaryToggle}
+                          onClick={() => setDetailsOpen((open) => !open)}
+                          endIcon={detailsOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        >
                           {detailsOpen ? t('replayViewLess') : t('sharedShowDetails')}
                         </Button>
-                      </div>
-                      <Collapse in={detailsOpen} timeout="auto" unmountOnExit>
+                      )}
+                    </div>
+                    {isMobile ? (
+                      <>
+                        <Typography className={classes.summaryCompactLine}>
+                          {`${t('replayDistance')}: ${formatDistance(summary.distanceMeters, distanceUnit, t)} | ${t('replayMovingTime')}: ${formatDuration(summary.movingTimeSec)} | ${t('replayStoppedTime')}: ${formatDuration(summary.stoppedTimeSec)} | ${t('replayMaxSpeed')}: ${summary.maxSpeedKnots ? speedFromKnots(summary.maxSpeedKnots, speedUnit).toFixed(1) : '--'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`}
+                        </Typography>
+                        <Collapse in={detailsOpen} timeout="auto" unmountOnExit>
+                          <Box className={classes.summaryGrid}>
+                            <Chip
+                              label={`${t('replayDistance')}: ${formatDistance(summary.distanceMeters, distanceUnit, t)}`}
+                              size="small"
+                            />
+                            <Chip
+                              label={`${t('replayMovingTime')}: ${formatDuration(summary.movingTimeSec)}`}
+                              size="small"
+                            />
+                            <Chip
+                              label={`${t('replayStoppedTime')}: ${formatDuration(summary.stoppedTimeSec)}`}
+                              size="small"
+                            />
+                            <Chip
+                              label={`${t('replayMaxSpeed')}: ${summary.maxSpeedKnots ? speedFromKnots(summary.maxSpeedKnots, speedUnit).toFixed(1) : '--'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`}
+                              size="small"
+                            />
+                            <Chip
+                              label={`${t('replayStops')}: ${summary.stopsCount ?? '--'}`}
+                              size="small"
+                            />
+                            <Chip
+                              label={`${t('replayTrips')}: ${summary.tripsCount ?? '--'}`}
+                              size="small"
+                            />
+                          </Box>
+                          {highlights}
+                          {stopsSection}
+                        </Collapse>
+                      </>
+                    ) : (
+                      <>
+                        <Box className={classes.summaryGrid}>
+                          <Chip
+                            label={`${t('replayDistance')}: ${formatDistance(summary.distanceMeters, distanceUnit, t)}`}
+                            size="small"
+                          />
+                          <Chip
+                            label={`${t('replayMovingTime')}: ${formatDuration(summary.movingTimeSec)}`}
+                            size="small"
+                          />
+                          <Chip
+                            label={`${t('replayStoppedTime')}: ${formatDuration(summary.stoppedTimeSec)}`}
+                            size="small"
+                          />
+                          <Chip
+                            label={`${t('replayMaxSpeed')}: ${summary.maxSpeedKnots ? speedFromKnots(summary.maxSpeedKnots, speedUnit).toFixed(1) : '--'} ${t(speedUnit === 'mph' ? 'sharedMph' : speedUnit === 'kmh' ? 'sharedKmh' : 'sharedKn')}`}
+                            size="small"
+                          />
+                          <Chip
+                            label={`${t('replayStops')}: ${summary.stopsCount ?? '--'}`}
+                            size="small"
+                          />
+                          <Chip
+                            label={`${t('replayTrips')}: ${summary.tripsCount ?? '--'}`}
+                            size="small"
+                          />
+                        </Box>
                         {highlights}
-                        {stopsSection}
-                      </Collapse>
-                    </>
-                  )}
-                </>
-              ) : (
-                <Typography variant="caption" color="textSecondary">
-                  {t('replayInsufficientData')}
-                </Typography>
-              )}
-              {isMobile ? (
-                <div className={classes.controlsCompact}>
-                  <IconButton
-                    onClick={() => {
-                      if (!playing) {
-                        setFollowMode(true);
-                        if (!hasAppliedInitialZoom) {
-                          const zoom = currentZoom ?? Math.max(map.getZoom(), 15);
-                          setCurrentZoom(zoom);
-                          setHasAppliedInitialZoom(true);
-                          centerOnCurrent(zoom);
-                        } else {
-                          centerOnCurrent();
-                        }
-                      }
-                      setPlaying(!playing);
-                    }}
-                    disabled={index >= positions.length - 1}
-                  >
-                    {playing ? <PauseIcon /> : <PlayArrowIcon /> }
-                  </IconButton>
-                  <Slider
-                    className={classes.sliderCompact}
-                    max={positions.length - 1}
-                    step={null}
-                    marks={positions.map((_, index) => ({ value: index }))}
-                    value={index}
-                    onChange={(_, index) => setIndex(index)}
-                    size="small"
-                  />
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    className={classes.speedButton}
-                    onClick={togglePlaybackSpeed}
-                    aria-label={`${t('replaySpeed')} ${playbackSpeed}x`}
-                  >
-                    {`${playbackSpeed}x`}
-                  </Button>
-                  <Typography className={classes.timeCompact}>
-                    {formatClock(positions[index].fixTime)}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <Typography variant="caption" color="textSecondary">
+                    {t('replayInsufficientData')}
                   </Typography>
-                </div>
-              ) : (
-                <>
-                  <Slider
-                    className={classes.slider}
-                    max={positions.length - 1}
-                    step={null}
-                    marks={positions.map((_, index) => ({ value: index }))}
-                    value={index}
-                    onChange={(_, index) => setIndex(index)}
-                  />
-                  <div className={classes.controls}>
-                    {`${index + 1}/${positions.length}`}
-                    <IconButton onClick={() => setIndex((index) => index - 1)} disabled={playing || index <= 0}>
-                      <FastRewindIcon />
-                    </IconButton>
+                )}
+              </div>
+              <div className={classes.controlsArea}>
+                {isMobile ? (
+                  <div className={classes.controlsCompact}>
                     <IconButton
                       onClick={() => {
                         if (!playing) {
@@ -807,9 +831,15 @@ const ReplayPage = () => {
                     >
                       {playing ? <PauseIcon /> : <PlayArrowIcon /> }
                     </IconButton>
-                    <IconButton onClick={() => setIndex((index) => index + 1)} disabled={playing || index >= positions.length - 1}>
-                      <FastForwardIcon />
-                    </IconButton>
+                    <Slider
+                      className={classes.sliderCompact}
+                      max={positions.length - 1}
+                      step={null}
+                      marks={positions.map((_, index) => ({ value: index }))}
+                      value={index}
+                      onChange={(_, index) => setIndex(index)}
+                      size="small"
+                    />
                     <Button
                       size="small"
                       variant="outlined"
@@ -819,10 +849,61 @@ const ReplayPage = () => {
                     >
                       {`${playbackSpeed}x`}
                     </Button>
-                    {formatTime(positions[index].fixTime, 'seconds')}
+                    <Typography className={classes.timeCompact}>
+                      {formatClock(positions[index].fixTime)}
+                    </Typography>
                   </div>
-                </>
-              )}
+                ) : (
+                  <>
+                    <Slider
+                      className={classes.slider}
+                      max={positions.length - 1}
+                      step={null}
+                      marks={positions.map((_, index) => ({ value: index }))}
+                      value={index}
+                      onChange={(_, index) => setIndex(index)}
+                    />
+                    <div className={classes.controls}>
+                      {`${index + 1}/${positions.length}`}
+                      <IconButton onClick={() => setIndex((index) => index - 1)} disabled={playing || index <= 0}>
+                        <FastRewindIcon />
+                      </IconButton>
+                      <IconButton
+                        onClick={() => {
+                          if (!playing) {
+                            setFollowMode(true);
+                            if (!hasAppliedInitialZoom) {
+                              const zoom = currentZoom ?? Math.max(map.getZoom(), 15);
+                              setCurrentZoom(zoom);
+                              setHasAppliedInitialZoom(true);
+                              centerOnCurrent(zoom);
+                            } else {
+                              centerOnCurrent();
+                            }
+                          }
+                          setPlaying(!playing);
+                        }}
+                        disabled={index >= positions.length - 1}
+                      >
+                        {playing ? <PauseIcon /> : <PlayArrowIcon /> }
+                      </IconButton>
+                      <IconButton onClick={() => setIndex((index) => index + 1)} disabled={playing || index >= positions.length - 1}>
+                        <FastForwardIcon />
+                      </IconButton>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        className={classes.speedButton}
+                        onClick={togglePlaybackSpeed}
+                        aria-label={`${t('replaySpeed')} ${playbackSpeed}x`}
+                      >
+                        {`${playbackSpeed}x`}
+                      </Button>
+                      {formatTime(positions[index].fixTime, 'seconds')}
+                    </div>
+                  </>
+                )}
+              </div>
               {!isMobile && stopsSection}
             </>
           ) : (
