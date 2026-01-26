@@ -297,6 +297,13 @@ const CombinedReportPage = () => {
     });
   }), [items, devices]);
 
+  const summary = useMemo(() => {
+    if (!items.length) {
+      return null;
+    }
+    return computeSummary(items);
+  }, [items]);
+
   const stopMarkers = useMemo(() => (summary?.stops || []).map((stop) => ({
     id: stop.id,
     latitude: stop.latitude,
@@ -310,13 +317,6 @@ const CombinedReportPage = () => {
     subtitle: `${formatClock(stop.start)}-${formatClock(stop.end)} | ${formatDuration(stop.durationSec)}`,
     details: stop.address || `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`,
   })), [summary, t]);
-    return {
-      event,
-      position,
-      deviceId: item.deviceId,
-      deviceName: devices[item.deviceId]?.name,
-    };
-  })), [items, devices]);
 
   const markers = useMemo(() => eventItems
     .map((item) => item.position)
@@ -325,13 +325,6 @@ const CombinedReportPage = () => {
       latitude: position.latitude,
       longitude: position.longitude,
     })), [eventItems]);
-
-  const summary = useMemo(() => {
-    if (!items.length) {
-      return null;
-    }
-    return computeSummary(items);
-  }, [items]);
 
   const deviceCount = useMemo(() => new Set(items.map((item) => item.deviceId)).size, [items]);
   const showDevice = deviceCount > 1;
