@@ -519,6 +519,7 @@
     "eventDeviceStopped": "Device stopped",
     "eventDeviceOverspeed": "Speed limit exceeded",
     "alertsToday": "Alerts today",
+    "distanceToday": "Distance today",
     "eventDeviceFuelDrop": "Fuel drop",
     "eventDeviceFuelIncrease": "Fuel increase",
     "eventCommandResult": "Command result",

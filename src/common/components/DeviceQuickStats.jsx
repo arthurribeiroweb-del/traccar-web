@@ -1,12 +1,16 @@
-import { Typography } from '@mui/material';
+import { useState } from 'react';
+import { Tooltip, Typography } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import SpeedIcon from '@mui/icons-material/Speed';
 import KeyIcon from '@mui/icons-material/VpnKey';
 import RouteIcon from '@mui/icons-material/Route';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import dayjs from 'dayjs';
 import { useTranslation } from './LocalizationProvider';
 import { useAttributePreference } from '../util/preferences';
 import { formatDistance, formatSpeed } from '../util/formatter';
-import DeviceAlertCount from './DeviceAlertCount';
+import { useRestriction } from '../util/permissions';
+import { useEffectAsync } from '../../reactHelper';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -37,6 +41,10 @@ const useStyles = makeStyles()((theme) => ({
     fontSize: '0.8rem',
     lineHeight: 1,
   },
+  label: {
+    fontSize: '0.72rem',
+    opacity: 0.85,
+  },
   value: {
     fontWeight: 500,
   },
@@ -45,32 +53,54 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const resolveTodayDistance = (position) => {
-  if (!position?.attributes) {
-    return null;
+const formatCount = (count) => {
+  if (count > 999) {
+    const value = (count / 1000).toFixed(count < 10000 ? 1 : 0);
+    return `${value}k`;
   }
-  if (position.attributes.hasOwnProperty('dailyDistance')) {
-    return position.attributes.dailyDistance;
+  if (count > 99) {
+    return '99+';
   }
-  if (position.attributes.hasOwnProperty('todayDistance')) {
-    return position.attributes.todayDistance;
-  }
-  if (position.attributes.hasOwnProperty('distance')) {
-    return position.attributes.distance;
-  }
-  return null;
+  return String(count);
 };
 
 const DeviceQuickStats = ({ device, position }) => {
   const { classes } = useStyles();
   const t = useTranslation();
+  const disableReports = useRestriction('disableReports');
 
   const speedUnit = useAttributePreference('speedUnit');
   const distanceUnit = useAttributePreference('distanceUnit');
 
+  const [dailySummary, setDailySummary] = useState({ distance: null, alerts: null });
+
+  const dayKey = dayjs().format('YYYY-MM-DD');
+
+  useEffectAsync(async () => {
+    if (!device?.id || disableReports) {
+      setDailySummary({ distance: null, alerts: null });
+      return;
+    }
+    try {
+      const query = new URLSearchParams({ deviceId: String(device.id) });
+      const response = await fetch(`/api/reports/daily?${query.toString()}`);
+      if (!response.ok) {
+        setDailySummary({ distance: null, alerts: null });
+        return;
+      }
+      const summaries = await response.json();
+      const summary = summaries.find((item) => item.deviceId === device.id) || summaries[0];
+      setDailySummary({
+        distance: summary?.distance ?? null,
+        alerts: summary?.alerts ?? null,
+      });
+    } catch (error) {
+      setDailySummary({ distance: null, alerts: null });
+    }
+  }, [device?.id, dayKey, disableReports]);
+
   const offline = !device || device.status !== 'online';
   const ignition = position?.attributes?.ignition;
-  const todayDistance = resolveTodayDistance(position);
 
   const speedText = offline || position?.speed == null
     ? '--'
@@ -80,9 +110,12 @@ const DeviceQuickStats = ({ device, position }) => {
     ? '--'
     : ignition ? 'ON' : 'OFF';
 
-  const distanceText = offline || todayDistance == null
+  const distanceText = dailySummary.distance == null
     ? '--'
-    : formatDistance(todayDistance, distanceUnit, t);
+    : formatDistance(dailySummary.distance, distanceUnit, t);
+
+  const alertsValue = dailySummary.alerts == null ? '--' : formatCount(dailySummary.alerts);
+  const alertsTooltip = dailySummary.alerts == null ? '--' : dailySummary.alerts;
 
   return (
     <div className={classes.root}>
@@ -92,41 +125,28 @@ const DeviceQuickStats = ({ device, position }) => {
             {t('deviceOffline')}
           </Typography>
         )}
-        {!offline && (
-          <>
-            <span className={classes.item}>
-              <SpeedIcon fontSize="inherit" />
-              <span className={classes.value}>{speedText}</span>
-            </span>
-            <span className={`${classes.item} ${ignition ? classes.accOn : ''}`}>
-              <KeyIcon fontSize="inherit" />
-              <span className={classes.value}>{accText}</span>
-            </span>
-            <span className={classes.item}>
-              <RouteIcon fontSize="inherit" />
-              <span className={classes.value}>{distanceText}</span>
-            </span>
-          </>
-        )}
-        {offline && (
-          <>
-            <span className={classes.item}>
-              <SpeedIcon fontSize="inherit" />
-              <span className={classes.value}>--</span>
-            </span>
-            <span className={classes.item}>
-              <KeyIcon fontSize="inherit" />
-              <span className={classes.value}>--</span>
-            </span>
-            <span className={classes.item}>
-              <RouteIcon fontSize="inherit" />
-              <span className={classes.value}>--</span>
-            </span>
-          </>
-        )}
+        <span className={classes.item}>
+          <SpeedIcon fontSize="inherit" />
+          <span className={classes.value}>{speedText}</span>
+        </span>
+        <span className={`${classes.item} ${ignition ? classes.accOn : ''}`}>
+          <KeyIcon fontSize="inherit" />
+          <span className={classes.value}>{accText}</span>
+        </span>
+        <span className={classes.item}>
+          <RouteIcon fontSize="inherit" />
+          <span className={classes.label}>{t('distanceToday')}</span>
+          <span className={classes.value}>{distanceText}</span>
+        </span>
       </div>
       <div className={classes.right}>
-        <DeviceAlertCount deviceId={device?.id} />
+        <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
+          <Typography className={classes.item} component="span">
+            <NotificationsIcon fontSize="inherit" />
+            <span className={classes.label}>{t('alertsToday')}:</span>
+            <span className={classes.value}>{alertsValue}</span>
+          </Typography>
+        </Tooltip>
       </div>
     </div>
   );
