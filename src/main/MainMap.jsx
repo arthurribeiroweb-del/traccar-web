@@ -21,6 +21,7 @@ import MapFollow from '../map/main/MapFollow';
 import useFeatures from '../common/util/useFeatures';
 import { useTranslation } from '../common/components/LocalizationProvider';
 
+// Custom UI: hide follow/search/notifications shortcuts on map sidebar (keep GPS button).
 const HIDDEN_MAP_BUTTONS = new Set(['follow', 'search', 'notifications']);
 
 const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
