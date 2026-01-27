@@ -9,7 +9,7 @@ import { useTranslation } from '../../common/components/LocalizationProvider';
 import useReportStyles from '../common/useReportStyles';
 import SplitButton from '../../common/components/SplitButton';
 import SelectField from '../../common/components/SelectField';
-import { useRestriction } from '../../common/util/permissions';
+import { useReportsAccess, useRestriction } from '../../common/util/permissions';
 
 export const updateReportParams = (searchParams, setSearchParams, key, values) => {
   const newParams = new URLSearchParams(searchParams);
@@ -29,6 +29,7 @@ const ReportFilter = ({
   const [searchParams, setSearchParams] = useSearchParams();
 
   const readonly = useRestriction('readonly');
+  const reportsAccess = useReportsAccess();
 
   const devices = useSelector((state) => state.devices.items);
   const groups = useSelector((state) => state.groups.items);
@@ -65,7 +66,7 @@ const ReportFilter = ({
       result.export = t('reportExport');
       result.print = t('reportPrint');
     }
-    if (onSchedule && !readonly) {
+    if (onSchedule && !readonly && reportsAccess) {
       result.schedule = t('reportSchedule');
     }
     return result;

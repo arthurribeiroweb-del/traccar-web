@@ -13,7 +13,7 @@ import NotesIcon from '@mui/icons-material/Notes';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from '../../common/components/LocalizationProvider';
-import { useAdministrator, useRestriction } from '../../common/util/permissions';
+import { useAdministrator, useReportsAccess, useRestriction } from '../../common/util/permissions';
 import MenuItem from '../../common/components/MenuItem';
 
 const ReportsMenu = () => {
@@ -21,7 +21,9 @@ const ReportsMenu = () => {
   const location = useLocation();
 
   const admin = useAdministrator();
+  const reportsAccess = useReportsAccess();
   const readonly = useRestriction('readonly');
+  const showSecondarySection = reportsAccess || admin;
 
   const buildLink = (path) => {
     const sourceParams = new URLSearchParams(location.search);
@@ -65,69 +67,81 @@ const ReportsMenu = () => {
           icon={<PlayCircleFilledIcon />}
           selected={location.pathname === '/reports/trips'}
         />
-        <MenuItem
-          title={t('reportStops')}
-          link={buildLink('/reports/stops')}
-          icon={<PauseCircleFilledIcon />}
-          selected={location.pathname === '/reports/stops'}
-        />
+        {reportsAccess && (
+          <MenuItem
+            title={t('reportStops')}
+            link={buildLink('/reports/stops')}
+            icon={<PauseCircleFilledIcon />}
+            selected={location.pathname === '/reports/stops'}
+          />
+        )}
         <MenuItem
           title={t('reportSummary')}
           link={buildLink('/reports/summary')}
           icon={<FormatListBulletedIcon />}
           selected={location.pathname === '/reports/summary'}
         />
-        <MenuItem
-          title={t('reportChart')}
-          link={buildLink('/reports/chart')}
-          icon={<TrendingUpIcon />}
-          selected={location.pathname === '/reports/chart'}
-        />
+        {reportsAccess && (
+          <MenuItem
+            title={t('reportChart')}
+            link={buildLink('/reports/chart')}
+            icon={<TrendingUpIcon />}
+            selected={location.pathname === '/reports/chart'}
+          />
+        )}
         <MenuItem
           title={t('reportReplay')}
           link={buildLink('/replay')}
           icon={<RouteIcon />}
         />
-        <MenuItem
-          title={t('reportPositions')}
-          link={buildLink('/reports/route')}
-          icon={<TimelineIcon />}
-          selected={location.pathname === '/reports/route'}
-        />
-      </List>
-      <Divider />
-      <List>
-        <MenuItem
-          title={t('sharedLogs')}
-          link="/reports/logs"
-          icon={<NotesIcon />}
-          selected={location.pathname === '/reports/logs'}
-        />
-        {!readonly && (
+        {reportsAccess && (
           <MenuItem
-            title={t('reportScheduled')}
-            link="/reports/scheduled"
-            icon={<EventRepeatIcon />}
-            selected={location.pathname === '/reports/scheduled'}
-          />
-        )}
-        {admin && (
-          <MenuItem
-            title={t('statisticsTitle')}
-            link="/reports/statistics"
-            icon={<BarChartIcon />}
-            selected={location.pathname === '/reports/statistics'}
-          />
-        )}
-        {admin && (
-          <MenuItem
-            title={t('reportAudit')}
-            link="/reports/audit"
-            icon={<VerifiedUserIcon />}
-            selected={location.pathname === '/reports/audit'}
+            title={t('reportPositions')}
+            link={buildLink('/reports/route')}
+            icon={<TimelineIcon />}
+            selected={location.pathname === '/reports/route'}
           />
         )}
       </List>
+      {showSecondarySection && (
+        <>
+          <Divider />
+          <List>
+            {reportsAccess && (
+              <MenuItem
+                title={t('sharedLogs')}
+                link="/reports/logs"
+                icon={<NotesIcon />}
+                selected={location.pathname === '/reports/logs'}
+              />
+            )}
+            {reportsAccess && !readonly && (
+              <MenuItem
+                title={t('reportScheduled')}
+                link="/reports/scheduled"
+                icon={<EventRepeatIcon />}
+                selected={location.pathname === '/reports/scheduled'}
+              />
+            )}
+            {admin && (
+              <MenuItem
+                title={t('statisticsTitle')}
+                link="/reports/statistics"
+                icon={<BarChartIcon />}
+                selected={location.pathname === '/reports/statistics'}
+              />
+            )}
+            {admin && (
+              <MenuItem
+                title={t('reportAudit')}
+                link="/reports/audit"
+                icon={<VerifiedUserIcon />}
+                selected={location.pathname === '/reports/audit'}
+              />
+            )}
+          </List>
+        </>
+      )}
     </>
   );
 };

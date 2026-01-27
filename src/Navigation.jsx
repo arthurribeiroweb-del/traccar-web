@@ -1,5 +1,6 @@
 import {
   Route, Routes,
+  Navigate,
   useSearchParams,
 } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
@@ -62,6 +63,12 @@ import { generateLoginToken } from './common/components/NativeInterface';
 import { useLocalization } from './common/components/LocalizationProvider';
 import fetchOrThrow from './common/util/fetchOrThrow';
 import AuditPage from './reports/AuditPage';
+import { useReportsAccess } from './common/util/permissions';
+
+const RestrictedReportRoute = ({ children }) => {
+  const reportsAccess = useReportsAccess();
+  return reportsAccess ? children : <Navigate to="/" replace />;
+};
 
 const Navigation = () => {
   const dispatch = useDispatch();
@@ -172,16 +179,51 @@ const Navigation = () => {
 
         <Route path="reports">
           <Route path="combined" element={<CombinedReportPage />} />
-          <Route path="chart" element={<ChartReportPage />} />
+          <Route
+            path="chart"
+            element={(
+              <RestrictedReportRoute>
+                <ChartReportPage />
+              </RestrictedReportRoute>
+            )}
+          />
           <Route path="events" element={<EventReportPage />} />
-          <Route path="route" element={<PositionsReportPage />} />
-          <Route path="stops" element={<StopReportPage />} />
+          <Route
+            path="route"
+            element={(
+              <RestrictedReportRoute>
+                <PositionsReportPage />
+              </RestrictedReportRoute>
+            )}
+          />
+          <Route
+            path="stops"
+            element={(
+              <RestrictedReportRoute>
+                <StopReportPage />
+              </RestrictedReportRoute>
+            )}
+          />
           <Route path="summary" element={<SummaryReportPage />} />
           <Route path="trips" element={<TripReportPage />} />
-          <Route path="scheduled" element={<ScheduledPage />} />
+          <Route
+            path="scheduled"
+            element={(
+              <RestrictedReportRoute>
+                <ScheduledPage />
+              </RestrictedReportRoute>
+            )}
+          />
           <Route path="statistics" element={<StatisticsPage />} />
           <Route path="audit" element={<AuditPage />} />
-          <Route path="logs" element={<LogsPage />} />
+          <Route
+            path="logs"
+            element={(
+              <RestrictedReportRoute>
+                <LogsPage />
+              </RestrictedReportRoute>
+            )}
+          />
         </Route>
       </Route>
     </Routes>

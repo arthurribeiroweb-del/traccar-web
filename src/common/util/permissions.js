@@ -26,3 +26,9 @@ export const useRestriction = (key) => useSelector((state) => {
   const userValue = state.session.user[key];
   return !admin && (serverValue || userValue);
 });
+
+export const useReportsAccess = () => useSelector((state) => {
+  const admin = state.session.user.administrator;
+  const manager = (state.session.user.userLimit || 0) !== 0;
+  return admin || manager;
+});
