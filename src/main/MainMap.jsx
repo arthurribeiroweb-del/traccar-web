@@ -21,6 +21,8 @@ import MapFollow from '../map/main/MapFollow';
 import useFeatures from '../common/util/useFeatures';
 import { useTranslation } from '../common/components/LocalizationProvider';
 
+const HIDDEN_MAP_BUTTONS = new Set(['follow', 'search', 'notifications']);
+
 const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
   const theme = useTheme();
   const dispatch = useDispatch();
@@ -48,6 +50,10 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
     dispatch(devicesActions.selectId(deviceId));
   }, [dispatch]);
 
+  const showFollow = Boolean(selectedId) && !HIDDEN_MAP_BUTTONS.has('follow');
+  const showSearch = !HIDDEN_MAP_BUTTONS.has('search');
+  const showNotifications = !HIDDEN_MAP_BUTTONS.has('notifications') && !features.disableEvents;
+
   const handleFollowToggle = useCallback(() => {
     if (!selectedId) {
       return;
@@ -74,15 +80,17 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
       </MapView>
       <MapScale />
       <MapCurrentLocation />
-      <MapFollow
-        enabled={followEnabled}
-        visible={Boolean(selectedId)}
-        onToggle={handleFollowToggle}
-        titleOn={t('deviceFollow')}
-        titleOff={t('mapRecenter')}
-      />
-      <MapGeocoder />
-      {!features.disableEvents && (
+      {showFollow && (
+        <MapFollow
+          enabled={followEnabled}
+          visible={Boolean(selectedId)}
+          onToggle={handleFollowToggle}
+          titleOn={t('deviceFollow')}
+          titleOff={t('mapRecenter')}
+        />
+      )}
+      {showSearch && <MapGeocoder />}
+      {showNotifications && (
         <MapNotification enabled={eventsAvailable} onClick={onEventsClick} />
       )}
       {desktop && (
