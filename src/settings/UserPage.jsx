@@ -52,6 +52,8 @@ const UserPage = () => {
   const fixedEmail = useRestriction('fixedEmail');
 
   const currentUser = useSelector((state) => state.session.user);
+  const server = useSelector((state) => state.session.server);
+  const forceSettings = useSelector((state) => state.session.server?.forceSettings);
   const registrationEnabled = useSelector((state) => state.session.server.registration);
   const openIdForced = useSelector((state) => state.session.server.openIdForce);
   const totpEnable = useSelector((state) => state.session.server.attributes.totpEnable);
@@ -63,6 +65,60 @@ const UserPage = () => {
 
   const { id } = useParams();
   const [item, setItem] = useState(id === currentUser.id.toString() ? currentUser : null);
+
+  const isBlank = (value) => value === null || value === undefined || value === '';
+
+  const applyServerDefaults = (current) => {
+    if (!server) {
+      return current;
+    }
+    let updated = current;
+    let attributes = current.attributes;
+    let attributesUpdated = false;
+
+    const applyField = (key, value) => {
+      if (isBlank(current[key]) && !isBlank(value)) {
+        if (updated === current) {
+          updated = { ...current };
+        }
+        updated[key] = value;
+      }
+    };
+
+    const applyAttribute = (key, value) => {
+      if (isBlank(value)) {
+        return;
+      }
+      const currentValue = attributes ? attributes[key] : undefined;
+      if (isBlank(currentValue)) {
+        if (!attributesUpdated) {
+          attributes = { ...(attributes || {}) };
+          attributesUpdated = true;
+        }
+        attributes[key] = value;
+      }
+    };
+
+    applyField('map', server.map);
+    applyField('coordinateFormat', server.coordinateFormat);
+    applyField('poiLayer', server.poiLayer);
+
+    const serverAttributes = server.attributes || {};
+    applyAttribute('speedUnit', serverAttributes.speedUnit);
+    applyAttribute('distanceUnit', serverAttributes.distanceUnit);
+    applyAttribute('altitudeUnit', serverAttributes.altitudeUnit);
+    applyAttribute('volumeUnit', serverAttributes.volumeUnit);
+    applyAttribute('timezone', serverAttributes.timezone);
+
+    if (attributesUpdated) {
+      if (updated === current) {
+        updated = { ...current };
+      }
+      updated.attributes = attributes;
+    }
+
+    return updated;
+  };
 
   const [deleteEmail, setDeleteEmail] = useState();
   const [deleteFailed, setDeleteFailed] = useState(false);
@@ -114,6 +170,15 @@ const UserPage = () => {
     }
   }, [item, searchParams, setSearchParams, attribute]);
 
+  useEffect(() => {
+    if (!id && item && server) {
+      const updated = applyServerDefaults(item);
+      if (updated !== item) {
+        setItem(updated);
+      }
+    }
+  }, [id, item, server]);
+
   const onItemSaved = (result) => {
     if (result.id === currentUser.id) {
       dispatch(sessionActions.updateUser(result));
@@ -127,7 +192,7 @@ const UserPage = () => {
       endpoint="users"
       item={item}
       setItem={setItem}
-      defaultItem={admin ? { deviceLimit: -1 } : {}}
+      defaultItem={applyServerDefaults(admin ? { deviceLimit: -1 } : {})}
       validate={validate}
       onItemSaved={onItemSaved}
       menu={<SettingsMenu />}
@@ -200,6 +265,7 @@ const UserPage = () => {
                   label={t('mapDefault')}
                   value={item.map || 'locationIqStreets'}
                   onChange={(e) => setItem({ ...item, map: e.target.value })}
+                  disabled={forceSettings}
                 >
                   {mapStyles.filter((style) => style.available).map((style) => (
                     <MenuItem key={style.id} value={style.id}>
@@ -214,6 +280,7 @@ const UserPage = () => {
                   label={t('settingsCoordinateFormat')}
                   value={item.coordinateFormat || 'dd'}
                   onChange={(e) => setItem({ ...item, coordinateFormat: e.target.value })}
+                  disabled={forceSettings}
                 >
                   <MenuItem value="dd">{t('sharedDecimalDegrees')}</MenuItem>
                   <MenuItem value="ddm">{t('sharedDegreesDecimalMinutes')}</MenuItem>
@@ -226,6 +293,7 @@ const UserPage = () => {
                   label={t('settingsSpeedUnit')}
                   value={(item.attributes && item.attributes.speedUnit) || 'kn'}
                   onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, speedUnit: e.target.value } })}
+                  disabled={forceSettings}
                 >
                   <MenuItem value="kn">{t('sharedKn')}</MenuItem>
                   <MenuItem value="kmh">{t('sharedKmh')}</MenuItem>
@@ -238,6 +306,7 @@ const UserPage = () => {
                   label={t('settingsDistanceUnit')}
                   value={(item.attributes && item.attributes.distanceUnit) || 'km'}
                   onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, distanceUnit: e.target.value } })}
+                  disabled={forceSettings}
                 >
                   <MenuItem value="km">{t('sharedKm')}</MenuItem>
                   <MenuItem value="mi">{t('sharedMi')}</MenuItem>
@@ -250,6 +319,7 @@ const UserPage = () => {
                   label={t('settingsAltitudeUnit')}
                   value={(item.attributes && item.attributes.altitudeUnit) || 'm'}
                   onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, altitudeUnit: e.target.value } })}
+                  disabled={forceSettings}
                 >
                   <MenuItem value="m">{t('sharedMeters')}</MenuItem>
                   <MenuItem value="ft">{t('sharedFeet')}</MenuItem>
@@ -261,6 +331,7 @@ const UserPage = () => {
                   label={t('settingsVolumeUnit')}
                   value={(item.attributes && item.attributes.volumeUnit) || 'ltr'}
                   onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, volumeUnit: e.target.value } })}
+                  disabled={forceSettings}
                 >
                   <MenuItem value="ltr">{t('sharedLiter')}</MenuItem>
                   <MenuItem value="usGal">{t('sharedUsGallon')}</MenuItem>
@@ -274,11 +345,13 @@ const UserPage = () => {
                 keyGetter={(it) => it}
                 titleGetter={(it) => it}
                 label={t('sharedTimezone')}
+                disabled={forceSettings}
               />
               <TextField
                 value={item.poiLayer || ''}
                 onChange={(e) => setItem({ ...item, poiLayer: e.target.value })}
                 label={t('mapPoiLayer')}
+                disabled={forceSettings}
               />
             </AccordionDetails>
           </Accordion>
