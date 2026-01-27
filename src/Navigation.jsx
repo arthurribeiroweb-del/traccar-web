@@ -63,11 +63,16 @@ import { generateLoginToken } from './common/components/NativeInterface';
 import { useLocalization } from './common/components/LocalizationProvider';
 import fetchOrThrow from './common/util/fetchOrThrow';
 import AuditPage from './reports/AuditPage';
-import { useReportsAccess } from './common/util/permissions';
+import { useReportsAccess, useSettingsAccess } from './common/util/permissions';
 
 const RestrictedReportRoute = ({ children }) => {
   const reportsAccess = useReportsAccess();
   return reportsAccess ? children : <Navigate to="/" replace />;
+};
+
+const RestrictedSettingsRoute = ({ children }) => {
+  const settingsAccess = useSettingsAccess();
+  return settingsAccess ? children : <Navigate to="/" replace />;
 };
 
 const Navigation = () => {
@@ -135,34 +140,151 @@ const Navigation = () => {
         <Route path="emulator" element={<EmulatorPage />} />
 
         <Route path="settings">
-          <Route path="accumulators/:deviceId" element={<AccumulatorsPage />} />
+          <Route
+            path="accumulators/:deviceId"
+            element={(
+              <RestrictedSettingsRoute>
+                <AccumulatorsPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
           <Route path="announcement" element={<AnnouncementPage />} />
           <Route path="backup" element={<BackupPage />} />
-          <Route path="calendars" element={<CalendarsPage />} />
-          <Route path="calendar/:id" element={<CalendarPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
+          <Route
+            path="calendars"
+            element={(
+              <RestrictedSettingsRoute>
+                <CalendarsPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
+          <Route path="calendar/:id" element={(
+            <RestrictedSettingsRoute>
+              <CalendarPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="calendar" element={(
+            <RestrictedSettingsRoute>
+              <CalendarPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
           <Route path="commands" element={<CommandsPage />} />
           <Route path="command/:id" element={<CommandPage />} />
           <Route path="command" element={<CommandPage />} />
-          <Route path="attributes" element={<ComputedAttributesPage />} />
-          <Route path="attribute/:id" element={<ComputedAttributePage />} />
-          <Route path="attribute" element={<ComputedAttributePage />} />
-          <Route path="devices" element={<DevicesPage />} />
-          <Route path="device/:id/connections" element={<DeviceConnectionsPage />} />
-          <Route path="device/:id/command" element={<CommandDevicePage />} />
-          <Route path="device/:id/share" element={<SharePage />} />
-          <Route path="device/:id" element={<DevicePage />} />
-          <Route path="device" element={<DevicePage />} />
-          <Route path="drivers" element={<DriversPage />} />
-          <Route path="driver/:id" element={<DriverPage />} />
-          <Route path="driver" element={<DriverPage />} />
+          <Route
+            path="attributes"
+            element={(
+              <RestrictedSettingsRoute>
+                <ComputedAttributesPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
+          <Route path="attribute/:id" element={(
+            <RestrictedSettingsRoute>
+              <ComputedAttributePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="attribute" element={(
+            <RestrictedSettingsRoute>
+              <ComputedAttributePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route
+            path="devices"
+            element={(
+              <RestrictedSettingsRoute>
+                <DevicesPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
+          <Route path="device/:id/connections" element={(
+            <RestrictedSettingsRoute>
+              <DeviceConnectionsPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="device/:id/command" element={(
+            <RestrictedSettingsRoute>
+              <CommandDevicePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="device/:id/share" element={(
+            <RestrictedSettingsRoute>
+              <SharePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="device/:id" element={(
+            <RestrictedSettingsRoute>
+              <DevicePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="device" element={(
+            <RestrictedSettingsRoute>
+              <DevicePage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route
+            path="drivers"
+            element={(
+              <RestrictedSettingsRoute>
+                <DriversPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
+          <Route path="driver/:id" element={(
+            <RestrictedSettingsRoute>
+              <DriverPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="driver" element={(
+            <RestrictedSettingsRoute>
+              <DriverPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
           <Route path="geofence/:id" element={<GeofencePage />} />
           <Route path="geofence" element={<GeofencePage />} />
-          <Route path="groups" element={<GroupsPage />} />
-          <Route path="group/:id/connections" element={<GroupConnectionsPage />} />
-          <Route path="group/:id/command" element={<CommandGroupPage />} />
-          <Route path="group/:id" element={<GroupPage />} />
-          <Route path="group" element={<GroupPage />} />
+          <Route
+            path="groups"
+            element={(
+              <RestrictedSettingsRoute>
+                <GroupsPage />
+              </RestrictedSettingsRoute>
+            )}
+          />
+          <Route path="group/:id/connections" element={(
+            <RestrictedSettingsRoute>
+              <GroupConnectionsPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="group/:id/command" element={(
+            <RestrictedSettingsRoute>
+              <CommandGroupPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="group/:id" element={(
+            <RestrictedSettingsRoute>
+              <GroupPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
+          <Route path="group" element={(
+            <RestrictedSettingsRoute>
+              <GroupPage />
+            </RestrictedSettingsRoute>
+          )}
+          />
           <Route path="maintenances" element={<MaintenancesPage />} />
           <Route path="maintenance/:id" element={<MaintenancePage />} />
           <Route path="maintenance" element={<MaintenancePage />} />

@@ -32,3 +32,9 @@ export const useReportsAccess = () => useSelector((state) => {
   const manager = (state.session.user.userLimit || 0) !== 0;
   return admin || manager;
 });
+
+export const useSettingsAccess = () => useSelector((state) => {
+  const admin = state.session.user.administrator;
+  const manager = (state.session.user.userLimit || 0) !== 0;
+  return admin || manager;
+});
