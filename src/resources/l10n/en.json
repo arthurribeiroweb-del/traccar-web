@@ -585,7 +585,7 @@
     "notificationAlways": "All Devices",
     "notificationGeofenceLabel": "Link geofences to devices or groups to receive these events.",
     "notificationNotificators": "Channels",
-    "notificationTraccarMissing": "To enable push notifications in Traccar Manager, add \"traccar\" to notificator.types and set notificator.traccar.key in the server config, then restart the service.",
+    "notificationTraccarMissing": "To enable push notifications in TraccarPro Manager, add \"traccar\" to notificator.types and set notificator.traccar.key in the server config, then restart the service.",
     "notificatorCommand": "Command",
     "notificatorWeb": "Web",
     "notificatorMail": "Email",
