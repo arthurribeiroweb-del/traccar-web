@@ -14,6 +14,7 @@ import {
   Select,
   MenuItem,
   FormGroup,
+  FormHelperText,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useNavigate } from 'react-router-dom';
@@ -67,11 +68,78 @@ const ServerPage = () => {
     navigate(-1);
   });
 
+  const defaultActiveMapStyles = ['locationIqStreets', 'locationIqDark', 'openFreeMap'];
+  const googleMaps = ['googleRoad', 'googleSatellite', 'googleHybrid'];
+  const googleKey = item?.attributes?.googleKey;
+  const defaultMap = item?.map || 'locationIqStreets';
+  const activeMapStyles = item?.attributes?.activeMapStyles
+    ? item.attributes.activeMapStyles.split(',')
+    : defaultActiveMapStyles;
+  const googleKeyMissing = !googleKey;
+  const showGoogleWarning = googleMaps.includes(defaultMap) && googleKeyMissing;
+
+  const filteredCommonUserAttributes = { ...commonUserAttributes };
+  delete filteredCommonUserAttributes.activeMapStyles;
+  delete filteredCommonUserAttributes.googleKey;
+
   return (
     <PageLayout menu={<SettingsMenu />} breadcrumbs={['settingsTitle', 'settingsServer']}>
       <Container maxWidth="xs" className={classes.container}>
         {item && (
           <>
+            <Accordion defaultExpanded>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Typography variant="subtitle1">
+                  {t('mapGlobal')}
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails className={classes.details}>
+                <FormControl>
+                  <InputLabel>{t('mapDefault')}</InputLabel>
+                  <Select
+                    label={t('mapDefault')}
+                    value={defaultMap}
+                    onChange={(e) => setItem({ ...item, map: e.target.value })}
+                  >
+                    {mapStyles.map((style) => (
+                      <MenuItem key={style.id} value={style.id}>
+                        <Typography component="span" color={style.available ? 'textPrimary' : 'error'}>{style.title}</Typography>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {showGoogleWarning && (
+                    <FormHelperText error>{t('mapGoogleKeyWarning')}</FormHelperText>
+                  )}
+                </FormControl>
+                <FormControl>
+                  <InputLabel>{t('mapActive')}</InputLabel>
+                  <Select
+                    label={t('mapActive')}
+                    multiple
+                    value={activeMapStyles}
+                    onChange={(e) => setItem({
+                      ...item,
+                      attributes: { ...item.attributes, activeMapStyles: e.target.value.join(',') },
+                    })}
+                  >
+                    {mapStyles.map((style) => (
+                      <MenuItem key={style.id} value={style.id}>
+                        <Typography component="span" color={style.available ? 'textPrimary' : 'error'}>{style.title}</Typography>
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  <FormHelperText>{t('mapActiveIdsHelp')}</FormHelperText>
+                </FormControl>
+                <TextField
+                  value={googleKey || ''}
+                  onChange={(event) => setItem({
+                    ...item,
+                    attributes: { ...item.attributes, googleKey: event.target.value },
+                  })}
+                  label={t('mapGoogleKey')}
+                />
+              </AccordionDetails>
+            </Accordion>
             <Accordion defaultExpanded>
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Typography variant="subtitle1">
@@ -89,20 +157,6 @@ const ServerPage = () => {
                   onChange={(event) => setItem({ ...item, overlayUrl: event.target.value })}
                   label={t('mapOverlayCustom')}
                 />
-                <FormControl>
-                  <InputLabel>{t('mapDefault')}</InputLabel>
-                  <Select
-                    label={t('mapDefault')}
-                    value={item.map || 'locationIqStreets'}
-                    onChange={(e) => setItem({ ...item, map: e.target.value })}
-                  >
-                    {mapStyles.filter((style) => style.available).map((style) => (
-                      <MenuItem key={style.id} value={style.id}>
-                        <Typography component="span">{style.title}</Typography>
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
                 <FormControl>
                   <InputLabel>{t('settingsCoordinateFormat')}</InputLabel>
                   <Select
@@ -282,7 +336,7 @@ const ServerPage = () => {
             <EditAttributesAccordion
               attributes={item.attributes}
               setAttributes={(attributes) => setItem({ ...item, attributes })}
-              definitions={{ ...commonUserAttributes, ...commonDeviceAttributes, ...serverAttributes }}
+              definitions={{ ...filteredCommonUserAttributes, ...commonDeviceAttributes, ...serverAttributes }}
             />
           </>
         )}
