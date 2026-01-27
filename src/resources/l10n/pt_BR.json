@@ -518,6 +518,7 @@
     "eventDeviceOverspeed": "Excedido o limite de velocidade",
     "alertsToday": "Alertas hoje",
     "distanceToday": "Km hoje",
+    "mapRecenter": "Recentrar",
     "eventDeviceFuelDrop": "Queda de combustível",
     "eventDeviceFuelIncrease": "Acréscimo de combustível",
     "eventCommandResult": "Resultado do comando",

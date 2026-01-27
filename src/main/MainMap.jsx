@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
@@ -17,21 +17,43 @@ import MapOverlay from '../map/overlay/MapOverlay';
 import MapGeocoder from '../map/geocoder/MapGeocoder';
 import MapScale from '../map/MapScale';
 import MapNotification from '../map/notification/MapNotification';
+import MapFollow from '../map/main/MapFollow';
 import useFeatures from '../common/util/useFeatures';
+import { useTranslation } from '../common/components/LocalizationProvider';
 
 const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
   const theme = useTheme();
   const dispatch = useDispatch();
+  const t = useTranslation();
 
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const eventsAvailable = useSelector((state) => !!state.events.items.length);
+  const selectedId = useSelector((state) => state.devices.selectedId);
+  const selectTime = useSelector((state) => state.devices.selectTime);
 
   const features = useFeatures();
+
+  const [followEnabled, setFollowEnabled] = useState(false);
+
+  useEffect(() => {
+    if (selectedId) {
+      setFollowEnabled(true);
+    } else {
+      setFollowEnabled(false);
+    }
+  }, [selectedId, selectTime]);
 
   const onMarkerClick = useCallback((_, deviceId) => {
     dispatch(devicesActions.selectId(deviceId));
   }, [dispatch]);
+
+  const handleFollowToggle = useCallback(() => {
+    if (!selectedId) {
+      return;
+    }
+    setFollowEnabled((prev) => !prev);
+  }, [selectedId]);
 
   return (
     <>
@@ -47,11 +69,18 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
           showStatus
         />
         <MapDefaultCamera />
-        <MapSelectedDevice />
+        <MapSelectedDevice followEnabled={followEnabled} setFollowEnabled={setFollowEnabled} />
         <PoiMap />
       </MapView>
       <MapScale />
       <MapCurrentLocation />
+      <MapFollow
+        enabled={followEnabled}
+        visible={Boolean(selectedId)}
+        onToggle={handleFollowToggle}
+        titleOn={t('deviceFollow')}
+        titleOff={t('mapRecenter')}
+      />
       <MapGeocoder />
       {!features.disableEvents && (
         <MapNotification enabled={eventsAvailable} onClick={onEventsClick} />

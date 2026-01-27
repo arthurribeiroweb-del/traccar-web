@@ -1,0 +1,13 @@
+.maplibre-ctrl-follow {
+  background-repeat: no-repeat;
+  background-position: center;
+  pointer-events: auto;
+}
+
+.maplibre-ctrl-follow-on {
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='10' cy='10' r='6' stroke='%232196f3' stroke-width='2' fill='none'/%3E%3Ccircle cx='10' cy='10' r='2' fill='%232196f3'/%3E%3Cpath d='M10 1v4M10 15v4M1 10h4M15 10h4' stroke='%232196f3' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.maplibre-ctrl-follow-off {
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='10' cy='10' r='6' stroke='%239e9e9e' stroke-width='2' fill='none'/%3E%3Ccircle cx='10' cy='10' r='2' fill='%239e9e9e'/%3E%3Cpath d='M10 1v4M10 15v4M1 10h4M15 10h4' stroke='%239e9e9e' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}

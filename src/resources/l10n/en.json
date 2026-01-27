@@ -520,6 +520,7 @@
     "eventDeviceOverspeed": "Speed limit exceeded",
     "alertsToday": "Alerts today",
     "distanceToday": "Distance today",
+    "mapRecenter": "Recenter",
     "eventDeviceFuelDrop": "Fuel drop",
     "eventDeviceFuelIncrease": "Fuel increase",
     "eventCommandResult": "Command result",
