@@ -21,6 +21,13 @@ import MapFollow from '../map/main/MapFollow';
 import useFeatures from '../common/util/useFeatures';
 import { useTranslation } from '../common/components/LocalizationProvider';
 
+// Custom UI: hide follow/search/notifications shortcuts on map sidebar (keep GPS button).
+const HIDE_MAP_SHORTCUTS = {
+  follow: true,
+  search: true,
+  notifications: true,
+};
+
 const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
   const theme = useTheme();
   const dispatch = useDispatch();
@@ -74,15 +81,17 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
       </MapView>
       <MapScale />
       <MapCurrentLocation />
-      <MapFollow
-        enabled={followEnabled}
-        visible={Boolean(selectedId)}
-        onToggle={handleFollowToggle}
-        titleOn={t('deviceFollow')}
-        titleOff={t('mapRecenter')}
-      />
-      <MapGeocoder />
-      {!features.disableEvents && (
+      {!HIDE_MAP_SHORTCUTS.follow && (
+        <MapFollow
+          enabled={followEnabled}
+          visible={Boolean(selectedId)}
+          onToggle={handleFollowToggle}
+          titleOn={t('deviceFollow')}
+          titleOff={t('mapRecenter')}
+        />
+      )}
+      {!HIDE_MAP_SHORTCUTS.search && <MapGeocoder />}
+      {!HIDE_MAP_SHORTCUTS.notifications && !features.disableEvents && (
         <MapNotification enabled={eventsAvailable} onClick={onEventsClick} />
       )}
       {desktop && (
