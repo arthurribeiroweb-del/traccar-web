@@ -21,11 +21,12 @@ import MapFollow from '../map/main/MapFollow';
 import useFeatures from '../common/util/useFeatures';
 import { useTranslation } from '../common/components/LocalizationProvider';
 
-// Custom UI: hide follow/search/notifications shortcuts on map sidebar (keep GPS button).
+// Custom UI: hide specific shortcuts on map sidebar (swap follow vs GPS when needed).
 const HIDE_MAP_SHORTCUTS = {
-  follow: true,
+  follow: false,
   search: true,
   notifications: true,
+  geolocate: true,
 };
 
 const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
@@ -80,7 +81,7 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
         <PoiMap />
       </MapView>
       <MapScale />
-      <MapCurrentLocation />
+      {!HIDE_MAP_SHORTCUTS.geolocate && <MapCurrentLocation />}
       {!HIDE_MAP_SHORTCUTS.follow && (
         <MapFollow
           enabled={followEnabled}
