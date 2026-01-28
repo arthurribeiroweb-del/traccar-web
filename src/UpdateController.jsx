@@ -11,7 +11,29 @@ const withTimeout = (promise, ms) => Promise.race([
   new Promise((resolve) => setTimeout(resolve, ms)),
 ]);
 
-const forceReload = async () => {
+const fetchAndReplaceDocument = async (url) => {
+  try {
+    const response = await fetch(url.toString(), {
+      cache: 'no-store',
+      headers: {
+        cache: 'no-store',
+        'cache-control': 'no-cache',
+      },
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const html = await response.text();
+    document.open();
+    document.write(html);
+    document.close();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const forceReload = async (preferDocumentReload) => {
   try {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -30,6 +52,12 @@ const forceReload = async () => {
   }
   const url = new URL(window.location.href);
   url.searchParams.set('v', Date.now().toString());
+  if (preferDocumentReload) {
+    const replaced = await fetchAndReplaceDocument(url);
+    if (replaced) {
+      return;
+    }
+  }
   try {
     window.location.replace(url.toString());
   } catch {
@@ -86,12 +114,13 @@ const WebUpdateController = ({ swUpdateInterval }) => {
       return;
     }
     setUpdating(true);
+    setTimeout(() => setUpdating(false), 4000);
     try {
       await updateServiceWorker(true);
     } catch {
       // ignore
     }
-    await forceReload();
+    await forceReload(nativeEnvironment);
   };
 
   return (
@@ -154,7 +183,8 @@ const NativeUpdateController = () => {
       return;
     }
     setUpdating(true);
-    await forceReload();
+    setTimeout(() => setUpdating(false), 4000);
+    await forceReload(true);
   };
 
   return (
