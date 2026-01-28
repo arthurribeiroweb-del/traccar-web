@@ -140,7 +140,14 @@ const debugLog = (...args) => {
   }
 };
 
-const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPadding = 0 }) => {
+const StatusCard = ({
+  deviceId,
+  position,
+  onClose,
+  onEditDevice,
+  disableActions,
+  desktopPadding = 0,
+}) => {
   const { classes } = useStyles({ desktopPadding });
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -302,6 +309,10 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   };
 
   const commandDisabled = disableActions || readonly || deviceReadonly || limitCommands || !deviceOnline;
+  const editDisabled = disableActions || readonly || deviceReadonly;
+  const editTooltip = editDisabled
+    ? (t('deviceEditNoPermission') || 'No permission to edit')
+    : t('sharedEdit');
 
   const handleHoldStart = (event) => {
     if (commandDisabled || holdState === 'sending') {
@@ -485,13 +496,15 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     <SendIcon />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title={t('sharedEdit')}>
-                  <IconButton
-                    onClick={() => navigate(`/settings/device/${deviceId}`)}
-                    disabled={disableActions || deviceReadonly}
-                  >
-                    <EditIcon />
-                  </IconButton>
+                <Tooltip title={editTooltip}>
+                  <span>
+                    <IconButton
+                      onClick={onEditDevice || (() => navigate(`/settings/device/${deviceId}`))}
+                      disabled={editDisabled}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </span>
                 </Tooltip>
                 <Tooltip title={t('sharedRemove')}>
                   <IconButton

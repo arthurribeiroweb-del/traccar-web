@@ -16,6 +16,7 @@ import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import BottomPeekCard from './BottomPeekCard';
+import EditDeviceSheet from './EditDeviceSheet';
 import { useAttributePreference } from '../common/util/preferences';
 
 const useStyles = makeStyles()((theme) => ({
@@ -104,6 +105,7 @@ const MainPage = () => {
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
   const [panelState, setPanelState] = useState('closed');
+  const [editOpen, setEditOpen] = useState(false);
 
   const previousSelectedId = usePrevious(selectedDeviceId);
   const previousSelectTime = usePrevious(selectTime);
@@ -119,11 +121,13 @@ const MainPage = () => {
   useEffect(() => {
     if (!selectedDeviceId) {
       setPanelState('closed');
+      setEditOpen(false);
       return;
     }
     const selectionChanged = selectedDeviceId !== previousSelectedId || selectTime !== previousSelectTime;
     if (selectionChanged) {
       setPanelState('peek');
+      setEditOpen(false);
     }
   }, [previousSelectedId, previousSelectTime, selectTime, selectedDeviceId]);
 
@@ -132,6 +136,8 @@ const MainPage = () => {
   const handleExpandPanel = useCallback(() => setPanelState('expanded'), []);
   const handlePeekPanel = useCallback(() => setPanelState('peek'), []);
   const handleClosePanel = useCallback(() => setPanelState('closed'), []);
+  const handleEditOpen = useCallback(() => setEditOpen(true), []);
+  const handleEditClose = useCallback(() => setEditOpen(false), []);
 
   const handleExpandedPointerDown = useCallback((event) => {
     if (desktop) {
@@ -227,10 +233,16 @@ const MainPage = () => {
             deviceId={selectedDeviceId}
             position={selectedPosition}
             onClose={handlePeekPanel}
+            onEditDevice={handleEditOpen}
             desktopPadding={theme.dimensions.drawerWidthDesktop}
           />
         </div>
       )}
+      <EditDeviceSheet
+        open={Boolean(selectedDeviceId) && editOpen}
+        device={selectedDeviceId ? devices[selectedDeviceId] : null}
+        onClose={handleEditClose}
+      />
     </div>
   );
 };
