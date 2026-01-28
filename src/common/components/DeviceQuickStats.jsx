@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Tooltip, Typography } from '@mui/material';
+import { Tooltip } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { makeStyles } from 'tss-react/mui';
 import SpeedIcon from '@mui/icons-material/Speed';
-import KeyIcon from '@mui/icons-material/VpnKey';
 import RouteIcon from '@mui/icons-material/Route';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import dayjs from 'dayjs';
@@ -14,44 +14,39 @@ import { useEffectAsync } from '../../reactHelper';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     gap: theme.spacing(1),
-    padding: theme.spacing(0.5, 2, 1),
-    flexWrap: 'nowrap',
+    padding: theme.spacing(1, 2, 1.5),
   },
-  left: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1.5),
-    flexWrap: 'wrap',
-    flex: 1,
-    minWidth: 0,
-  },
-  metricsStack: {
+  stat: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing(0.25),
-    alignItems: 'flex-start',
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.borderRadius * 1.25,
+    backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.35 : 0.85),
+    border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
   },
-  item: {
-    display: 'inline-flex',
+  statHeader: {
+    display: 'flex',
     alignItems: 'center',
     gap: theme.spacing(0.5),
     color: theme.palette.text.secondary,
-    fontSize: '0.8rem',
-    lineHeight: 1,
+    fontSize: '0.7rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
   },
-  label: {
-    fontSize: '0.72rem',
-    opacity: 0.85,
+  statValue: {
+    fontWeight: 600,
+    fontSize: '1.05rem',
+    color: theme.palette.text.primary,
+    lineHeight: 1.2,
   },
-  value: {
-    fontWeight: 500,
-  },
-  accOn: {
-    color: theme.palette.success.main,
+  alertsValue: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
   },
 }));
 
@@ -102,15 +97,9 @@ const DeviceQuickStats = ({ device, position }) => {
   }, [device?.id, dayKey, disableReports]);
 
   const offline = !device || device.status !== 'online';
-  const ignition = position?.attributes?.ignition;
-
   const speedText = offline || position?.speed == null
     ? '--'
     : formatSpeed(position.speed, speedUnit, t);
-
-  const accText = offline || ignition == null
-    ? '--'
-    : ignition ? 'ON' : 'OFF';
 
   const distanceText = dailySummary.distance == null
     ? '--'
@@ -121,35 +110,29 @@ const DeviceQuickStats = ({ device, position }) => {
 
   return (
     <div className={classes.root}>
-      <div className={classes.left}>
-        {offline && (
-          <Typography className={classes.item}>
-            {t('deviceOffline')}
-          </Typography>
-        )}
-        <span className={classes.item}>
+      <div className={classes.stat}>
+        <div className={classes.statHeader}>
           <SpeedIcon fontSize="inherit" />
-          <span className={classes.value}>{speedText}</span>
-        </span>
-        <span className={`${classes.item} ${ignition ? classes.accOn : ''}`}>
-          <KeyIcon fontSize="inherit" />
-          <span className={classes.value}>{accText}</span>
-        </span>
-        <div className={classes.metricsStack}>
-          <span className={classes.item}>
-            <RouteIcon fontSize="inherit" />
-            <span className={classes.label}>{t('distanceToday')}</span>
-            <span className={classes.value}>{distanceText}</span>
-          </span>
-          <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
-            <Typography className={classes.item} component="span">
-              <NotificationsIcon fontSize="inherit" />
-              <span className={classes.label}>{t('alertsToday')}:</span>
-              <span className={classes.value}>{alertsValue}</span>
-            </Typography>
-          </Tooltip>
+          <span>{t('positionSpeed')}</span>
         </div>
+        <div className={classes.statValue}>{speedText}</div>
       </div>
+      <div className={classes.stat}>
+        <div className={classes.statHeader}>
+          <RouteIcon fontSize="inherit" />
+          <span>{t('distanceToday')}</span>
+        </div>
+        <div className={classes.statValue}>{distanceText}</div>
+      </div>
+      <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
+        <div className={classes.stat}>
+          <div className={classes.statHeader}>
+            <NotificationsIcon fontSize="inherit" />
+            <span>{t('alertsToday')}</span>
+          </div>
+          <div className={`${classes.statValue} ${classes.alertsValue}`}>{alertsValue}</div>
+        </div>
+      </Tooltip>
     </div>
   );
 };

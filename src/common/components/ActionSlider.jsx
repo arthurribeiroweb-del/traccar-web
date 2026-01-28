@@ -22,17 +22,16 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
   return {
     root: {
       width: '100%',
-      minWidth: 200,
-      maxWidth: 260,
+      minWidth: 220,
+      maxWidth: '100%',
       userSelect: 'none',
       [theme.breakpoints.down('sm')]: {
-        minWidth: 130,
-        maxWidth: 200,
+        minWidth: 180,
       },
     },
     track: {
       position: 'relative',
-      height: 44,
+      height: 52,
       borderRadius: 999,
       background: baseTrack,
       overflow: 'hidden',

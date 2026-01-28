@@ -4,21 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
 import {
   Card,
-  CardContent,
   Typography,
-  CardActions,
   IconButton,
-  Table,
-  TableBody,
-  TableRow,
-  TableCell,
   Menu,
   MenuItem,
-  CardMedia,
   Tooltip,
   Snackbar,
   Alert,
+  Divider,
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { makeStyles } from 'tss-react/mui';
 import CloseIcon from '@mui/icons-material/Close';
 import RouteIcon from '@mui/icons-material/Route';
@@ -28,6 +23,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import CircularProgress from '@mui/material/CircularProgress';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 
 import { useTranslation } from './LocalizationProvider';
 import ActionSlider from './ActionSlider';
@@ -42,94 +38,184 @@ import { useAttributePreference } from '../util/preferences';
 import fetchOrThrow from '../util/fetchOrThrow';
 import { snackBarDurationShortMs } from '../util/duration';
 
-const useStyles = makeStyles()((theme, { desktopPadding }) => ({
+const useStyles = makeStyles()((theme, { desktopPadding, actionTone }) => ({
   card: {
     pointerEvents: 'auto',
     width: theme.dimensions.popupMaxWidth,
-  },
-  media: {
-    height: theme.dimensions.popupImageHeight,
-    display: 'flex',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-  },
-  mediaButton: {
-    color: theme.palette.common.white,
-    mixBlendMode: 'difference',
+    backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.92 : 0.98),
+    border: `1px solid ${alpha(theme.palette.divider, 0.25)}`,
+    boxShadow: theme.shadows[8],
+    borderRadius: theme.shape.borderRadius * 2,
+    overflow: 'hidden',
   },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing(1, 1, 0, 2),
+    padding: theme.spacing(1.5, 2, 1),
   },
-  content: {
-    paddingTop: theme.spacing(1),
-    paddingBottom: theme.spacing(1),
-    maxHeight: theme.dimensions.cardContentMaxHeight,
-    overflow: 'auto',
+  headerMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(1.25),
+    minWidth: 0,
   },
-  icon: {
-    width: '25px',
-    height: '25px',
-    filter: 'brightness(0) invert(1)',
-  },
-  table: {
-    '& .MuiTableCell-sizeSmall': {
-      paddingLeft: 0,
-      paddingRight: 0,
-    },
-    '& .MuiTableCell-sizeSmall:first-of-type': {
-      paddingRight: theme.spacing(1),
-    },
-  },
-  cell: {
-    borderBottom: 'none',
-  },
-  primaryActions: {
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.shape.borderRadius * 1.5,
+    backgroundColor: alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.2),
+    border: `1px solid ${alpha(theme.palette.divider, 0.3)}`,
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: theme.spacing(1),
-    paddingBottom: theme.spacing(1),
+    flexShrink: 0,
   },
-  quickActions: {
-    justifyContent: 'center',
-    gap: theme.spacing(2),
-    paddingTop: 0,
-    paddingBottom: theme.spacing(1),
-    [theme.breakpoints.down('sm')]: {
-      gap: theme.spacing(1.5),
-    },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
   },
-  quickActionButton: {
-    padding: theme.spacing(0.75),
+  titleStack: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
   },
-  secondaryActions: {
-    justifyContent: 'flex-start',
-    paddingTop: 0,
-    paddingBottom: theme.spacing(1),
-    [theme.breakpoints.down('sm')]: {
-      gap: theme.spacing(0.5),
-      paddingLeft: theme.spacing(1),
-      paddingRight: theme.spacing(1),
-    },
+  title: {
+    fontWeight: 600,
+    fontSize: '1rem',
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  statusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    color: theme.palette.text.secondary,
+    fontSize: '0.75rem',
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    backgroundColor: theme.palette.text.disabled,
+  },
+  statusDotOn: {
+    backgroundColor: theme.palette.success.main,
+  },
+  statusDotOff: {
+    backgroundColor: theme.palette.warning.main,
+  },
+  statusDotOffline: {
+    backgroundColor: theme.palette.error.main,
+  },
+  statusDotNeutral: {
+    backgroundColor: theme.palette.text.disabled,
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+  },
+  section: {
+    padding: theme.spacing(0.5, 2, 1.5),
+  },
+  divider: {
+    borderColor: alpha(theme.palette.divider, 0.35),
+  },
+  infoGrid: {
+    display: 'grid',
+    gap: theme.spacing(1),
+  },
+  infoItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  infoLabel: {
+    fontSize: '0.72rem',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    color: theme.palette.text.secondary,
+  },
+  infoValue: {
+    fontSize: '0.9rem',
+    fontWeight: 500,
+    color: theme.palette.text.primary,
+    lineHeight: 1.35,
+  },
+  detailsGrid: {
+    marginTop: theme.spacing(1),
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+    gap: theme.spacing(0.75, 1.5),
+  },
+  detailItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  detailLabel: {
+    fontSize: '0.7rem',
+    color: theme.palette.text.secondary,
+  },
+  detailValue: {
+    fontSize: '0.8rem',
+    color: theme.palette.text.primary,
+  },
+  primaryAction: {
+    padding: theme.spacing(1.5, 2),
+    backgroundColor: alpha(actionTone, theme.palette.mode === 'dark' ? 0.12 : 0.08),
+    borderTop: `1px solid ${alpha(actionTone, 0.18)}`,
+    borderBottom: `1px solid ${alpha(actionTone, 0.12)}`,
+  },
+  primaryActionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing(1),
+  },
+  primaryActionTitle: {
+    fontWeight: 600,
+    fontSize: '0.9rem',
+  },
+  primaryActionBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: theme.spacing(0.5),
+    fontSize: '0.7rem',
+    letterSpacing: '0.04em',
+    textTransform: 'uppercase',
+    color: actionTone,
   },
   commandWrapper: {
-    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'stretch',
-    gap: 4,
-    margin: theme.spacing(0, 1),
-    minWidth: 0,
-    [theme.breakpoints.down('sm')]: {
-      margin: theme.spacing(0, 0.5),
-    },
+    gap: 6,
   },
   pendingHint: {
     fontSize: 11,
     lineHeight: 1.2,
     textAlign: 'center',
     color: theme.palette.text.secondary,
+  },
+  quickActions: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: theme.spacing(2.5),
+    padding: theme.spacing(1.25, 2, 1.5),
+    [theme.breakpoints.down('sm')]: {
+      gap: theme.spacing(1.5),
+    },
+  },
+  quickActionButton: {
+    padding: theme.spacing(0.75),
+    backgroundColor: alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.06 : 0.4),
   },
   root: {
     pointerEvents: 'none',
@@ -148,21 +234,6 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
   },
 }));
 
-const StatusRow = ({ name, content }) => {
-  const { classes } = useStyles({ desktopPadding: 0 });
-
-  return (
-    <TableRow>
-      <TableCell className={classes.cell}>
-        <Typography variant="body2">{name}</Typography>
-      </TableCell>
-      <TableCell className={classes.cell}>
-        <Typography variant="body2" color="textSecondary">{content}</Typography>
-      </TableCell>
-    </TableRow>
-  );
-};
-
 const isDev = process.env.NODE_ENV === 'development';
 
 const debugLog = (...args) => {
@@ -180,7 +251,7 @@ const StatusCard = ({
   disableActions,
   desktopPadding = 0,
 }) => {
-  const { classes } = useStyles({ desktopPadding });
+  const theme = useTheme();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const t = useTranslation();
@@ -406,6 +477,11 @@ const StatusCard = ({
   const sliderTone = isProcessing
     ? 'neutral'
     : (effectiveBlocked ? 'danger' : 'success');
+  const actionTone = sliderTone === 'danger'
+    ? theme.palette.error.main
+    : sliderTone === 'success'
+      ? theme.palette.success.main
+      : theme.palette.text.secondary;
   const sliderDirection = effectiveBlocked ? 'right' : 'left';
   const sliderIcon = isProcessing
     ? <CircularProgress size={14} />
@@ -440,6 +516,48 @@ const StatusCard = ({
     });
   }, [deviceId, isPending, resolvedBlockedState.blocked, resolvedBlockedState.source]);
 
+  const statusInfo = useMemo(() => {
+    if (!device) {
+      return { label: t('deviceStatusUnknown'), tone: 'neutral' };
+    }
+    if (!deviceOnline) {
+      return { label: t('deviceStatusOffline'), tone: 'offline' };
+    }
+    const ignition = position?.attributes?.ignition ?? position?.attributes?.acc;
+    if (ignition != null) {
+      return {
+        label: ignition ? t('eventIgnitionOn') : t('eventIgnitionOff'),
+        tone: ignition ? 'on' : 'off',
+      };
+    }
+    const moving = Number.isFinite(position?.speed) && position.speed > 0;
+    return {
+      label: moving ? t('eventDeviceMoving') : t('eventDeviceStopped'),
+      tone: moving ? 'on' : 'off',
+    };
+  }, [device, deviceOnline, position, t]);
+
+  const primaryInfoKeys = ['fixTime', 'address'];
+
+  const infoKeys = useMemo(() => {
+    if (!position) {
+      return [];
+    }
+    const keys = new Set(primaryInfoKeys);
+    positionItems.split(',')
+      .map((key) => key.trim())
+      .filter(Boolean)
+      .forEach((key) => keys.add(key));
+    return Array.from(keys)
+      .filter((key) => !hiddenPositionKeys.has(key))
+      .filter((key) => primaryInfoKeys.includes(key)
+        || position.hasOwnProperty(key)
+        || position.attributes.hasOwnProperty(key));
+  }, [position, positionItems]);
+  const secondaryInfoKeys = infoKeys.filter((key) => !primaryInfoKeys.includes(key));
+
+  const { classes } = useStyles({ desktopPadding, actionTone });
+
   return (
     <>
       <div className={classes.root}>
@@ -451,24 +569,48 @@ const StatusCard = ({
             style={{ position: 'relative' }}
           >
             <Card elevation={3} className={classes.card}>
-              {deviceImage ? (
-                <CardMedia
-                  className={`${classes.media} draggable-header`}
-                  image={`/api/media/${device.uniqueId}/${deviceImage}`}
-                >
-                  <IconButton
-                    size="small"
-                    onClick={onClose}
-                    onTouchStart={onClose}
-                  >
-                    <CloseIcon fontSize="small" className={classes.mediaButton} />
-                  </IconButton>
-                </CardMedia>
-              ) : (
-                <div className={`${classes.header} draggable-header`}>
-                  <Typography variant="body2" color="textSecondary">
-                    {device.name}
-                  </Typography>
+              <div className={`${classes.header} draggable-header`}>
+                <div className={classes.headerMain}>
+                  {deviceImage && (
+                    <div className={classes.avatar}>
+                      <img
+                        className={classes.avatarImage}
+                        src={`/api/media/${device.uniqueId}/${deviceImage}`}
+                        alt={device.name}
+                      />
+                    </div>
+                  )}
+                  <div className={classes.titleStack}>
+                    <Typography className={classes.title}>{device.name}</Typography>
+                    <div className={classes.statusRow}>
+                      <span
+                        className={`${classes.statusDot} ${
+                          statusInfo.tone === 'offline'
+                            ? classes.statusDotOffline
+                            : statusInfo.tone === 'on'
+                              ? classes.statusDotOn
+                              : statusInfo.tone === 'neutral'
+                                ? classes.statusDotNeutral
+                                : classes.statusDotOff
+                        }`}
+                      />
+                      <PowerSettingsNewIcon fontSize="inherit" />
+                      <span>{statusInfo.label}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className={classes.headerActions}>
+                  <Tooltip title={t('sharedExtra')}>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => setActionsEl(e.currentTarget)}
+                        disabled={!position}
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                   <IconButton
                     size="small"
                     onClick={onClose}
@@ -477,33 +619,59 @@ const StatusCard = ({
                     <CloseIcon fontSize="small" />
                   </IconButton>
                 </div>
-              )}
+              </div>
               <DeviceQuickStats device={device} position={position} />
               {position && (
-                <CardContent className={classes.content}>
-                  <Table size="small" classes={{ root: classes.table }}>
-                    <TableBody>
-                      {positionItems.split(',')
-                        .filter((key) => !hiddenPositionKeys.has(key))
-                        .filter((key) => position.hasOwnProperty(key) || position.attributes.hasOwnProperty(key))
-                        .map((key) => (
-                        <StatusRow
-                          key={key}
-                          name={positionAttributes[key]?.name || key}
-                          content={(
+                <>
+                  <Divider className={classes.divider} />
+                  <div className={classes.section}>
+                    <div className={classes.infoGrid}>
+                      {primaryInfoKeys.map((key) => (
+                        <div key={key} className={classes.infoItem}>
+                          <Typography className={classes.infoLabel}>
+                            {positionAttributes[key]?.name || key}
+                          </Typography>
+                          <Typography className={classes.infoValue}>
                             <PositionValue
                               position={position}
                               property={position.hasOwnProperty(key) ? key : null}
                               attribute={position.hasOwnProperty(key) ? null : key}
                             />
-                          )}
-                        />
+                          </Typography>
+                        </div>
                       ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            )}
-              <CardActions classes={{ root: classes.primaryActions }} disableSpacing>
+                    </div>
+                    {secondaryInfoKeys.length > 0 && (
+                      <div className={classes.detailsGrid}>
+                        {secondaryInfoKeys.map((key) => (
+                          <div key={key} className={classes.detailItem}>
+                            <span className={classes.detailLabel}>
+                              {positionAttributes[key]?.name || key}
+                            </span>
+                            <span className={classes.detailValue}>
+                              <PositionValue
+                                position={position}
+                                property={position.hasOwnProperty(key) ? key : null}
+                                attribute={position.hasOwnProperty(key) ? null : key}
+                              />
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              <div className={classes.primaryAction}>
+                <div className={classes.primaryActionHeader}>
+                  <Typography className={classes.primaryActionTitle}>
+                    {effectiveBlocked ? t('deviceLocked') : t('deviceUnlocked')}
+                  </Typography>
+                  <span className={classes.primaryActionBadge}>
+                    {effectiveBlocked ? <LockIcon fontSize="inherit" /> : <LockOpenIcon fontSize="inherit" />}
+                    {effectiveBlocked ? t('deviceUnlock') : t('deviceLock')}
+                  </span>
+                </div>
                 <Tooltip title={
                   !deviceOnline
                     ? t('deviceOffline')
@@ -533,8 +701,9 @@ const StatusCard = ({
                     )}
                   </span>
                 </Tooltip>
-              </CardActions>
-              <CardActions classes={{ root: classes.quickActions }} disableSpacing>
+              </div>
+              <Divider className={classes.divider} />
+              <div className={classes.quickActions}>
                 <Tooltip title={t('reportReplay')}>
                   <span>
                     <IconButton
@@ -568,20 +737,7 @@ const StatusCard = ({
                     </IconButton>
                   </span>
                 </Tooltip>
-              </CardActions>
-              <CardActions classes={{ root: classes.secondaryActions }} disableSpacing>
-                <Tooltip title={t('sharedExtra')}>
-                  <span>
-                    <IconButton
-                      color="secondary"
-                      onClick={(e) => setActionsEl(e.currentTarget)}
-                      disabled={!position}
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </CardActions>
+              </div>
             </Card>
           </Rnd>
         )}
