@@ -15,7 +15,7 @@ import { useEffectAsync } from '../../reactHelper';
 const useStyles = makeStyles()((theme) => ({
   root: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: theme.spacing(1),
     padding: theme.spacing(0.5, 2, 1),
@@ -29,9 +29,11 @@ const useStyles = makeStyles()((theme) => ({
     flex: 1,
     minWidth: 0,
   },
-  right: {
+  metricsStack: {
     display: 'flex',
-    alignItems: 'center',
+    flexDirection: 'column',
+    gap: theme.spacing(0.25),
+    alignItems: 'flex-start',
   },
   item: {
     display: 'inline-flex',
@@ -133,20 +135,20 @@ const DeviceQuickStats = ({ device, position }) => {
           <KeyIcon fontSize="inherit" />
           <span className={classes.value}>{accText}</span>
         </span>
-        <span className={classes.item}>
-          <RouteIcon fontSize="inherit" />
-          <span className={classes.label}>{t('distanceToday')}</span>
-          <span className={classes.value}>{distanceText}</span>
-        </span>
-      </div>
-      <div className={classes.right}>
-        <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
-          <Typography className={classes.item} component="span">
-            <NotificationsIcon fontSize="inherit" />
-            <span className={classes.label}>{t('alertsToday')}:</span>
-            <span className={classes.value}>{alertsValue}</span>
-          </Typography>
-        </Tooltip>
+        <div className={classes.metricsStack}>
+          <span className={classes.item}>
+            <RouteIcon fontSize="inherit" />
+            <span className={classes.label}>{t('distanceToday')}</span>
+            <span className={classes.value}>{distanceText}</span>
+          </span>
+          <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
+            <Typography className={classes.item} component="span">
+              <NotificationsIcon fontSize="inherit" />
+              <span className={classes.label}>{t('alertsToday')}:</span>
+              <span className={classes.value}>{alertsValue}</span>
+            </Typography>
+          </Tooltip>
+        </div>
       </div>
     </div>
   );

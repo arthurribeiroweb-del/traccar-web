@@ -21,6 +21,9 @@ import {
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import CloseIcon from '@mui/icons-material/Close';
+import RouteIcon from '@mui/icons-material/Route';
+import EditIcon from '@mui/icons-material/Edit';
+import AddLocationAltIcon from '@mui/icons-material/AddLocationAlt';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -87,6 +90,18 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     justifyContent: 'center',
     paddingTop: theme.spacing(1),
     paddingBottom: theme.spacing(1),
+  },
+  quickActions: {
+    justifyContent: 'center',
+    gap: theme.spacing(2),
+    paddingTop: 0,
+    paddingBottom: theme.spacing(1),
+    [theme.breakpoints.down('sm')]: {
+      gap: theme.spacing(1.5),
+    },
+  },
+  quickActionButton: {
+    padding: theme.spacing(0.75),
   },
   secondaryActions: {
     justifyContent: 'flex-start',
@@ -519,6 +534,41 @@ const StatusCard = ({
                   </span>
                 </Tooltip>
               </CardActions>
+              <CardActions classes={{ root: classes.quickActions }} disableSpacing>
+                <Tooltip title={t('reportReplay')}>
+                  <span>
+                    <IconButton
+                      className={classes.quickActionButton}
+                      onClick={() => navigate(`/replay?deviceId=${deviceId}`)}
+                      disabled={disableActions || !position}
+                    >
+                      <RouteIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('sharedCreateGeofence')}>
+                  <span>
+                    <IconButton
+                      className={classes.quickActionButton}
+                      onClick={handleGeofence}
+                      disabled={!position || readonly}
+                    >
+                      <AddLocationAltIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title={editTooltip}>
+                  <span>
+                    <IconButton
+                      className={classes.quickActionButton}
+                      onClick={onEditDevice || (() => navigate(`/settings/device/${deviceId}`))}
+                      disabled={editDisabled}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </CardActions>
               <CardActions classes={{ root: classes.secondaryActions }} disableSpacing>
                 <Tooltip title={t('sharedExtra')}>
                   <span>
@@ -541,29 +591,11 @@ const StatusCard = ({
           <MenuItem
             onClick={() => {
               setActionsEl(null);
-              navigate(`/replay?deviceId=${deviceId}`);
-            }}
-            disabled={disableActions || !position}
-          >
-            {t('reportReplay')}
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setActionsEl(null);
               navigate(`/settings/device/${deviceId}/command`);
             }}
             disabled={disableActions}
           >
             {t('commandTitle')}
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setActionsEl(null);
-              (onEditDevice || (() => navigate(`/settings/device/${deviceId}`)))();
-            }}
-            disabled={editDisabled}
-          >
-            {t('sharedEdit')}
           </MenuItem>
           <MenuItem
             onClick={() => {
@@ -574,15 +606,6 @@ const StatusCard = ({
           >
             {t('sharedRemove')}
           </MenuItem>
-          {!readonly && (
-            <MenuItem onClick={() => {
-              setActionsEl(null);
-              handleGeofence();
-            }}
-            >
-              {t('sharedCreateGeofence')}
-            </MenuItem>
-          )}
           <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/search/?api=1&query=${position.latitude}%2C${position.longitude}`}>
             {t('linkGoogleMaps')}
           </MenuItem>
