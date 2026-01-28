@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
@@ -89,6 +89,15 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
   actions: {
     justifyContent: 'space-between',
   },
+  commandWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+  },
+  pendingText: {
+    lineHeight: 1,
+  },
   root: {
     pointerEvents: 'none',
     position: 'fixed',
@@ -121,6 +130,16 @@ const StatusRow = ({ name, content }) => {
   );
 };
 
+const pendingWindowMs = 60 * 1000;
+const isDev = process.env.NODE_ENV === 'development';
+
+const debugLog = (...args) => {
+  if (isDev) {
+    // eslint-disable-next-line no-console
+    console.debug(...args);
+  }
+};
+
 const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPadding = 0 }) => {
   const { classes } = useStyles({ desktopPadding });
   const navigate = useNavigate();
@@ -137,7 +156,21 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
 
   const deviceImage = device?.attributes?.deviceImage;
   const deviceOnline = device?.status === 'online';
-  const positionBlocked = Boolean(position?.attributes?.blocked ?? position?.attributes?.lock);
+
+  const positionBlockedKnown = position?.attributes && (
+    Object.prototype.hasOwnProperty.call(position.attributes, 'blocked')
+    || Object.prototype.hasOwnProperty.call(position.attributes, 'lock')
+  );
+  const positionBlockedValue = positionBlockedKnown
+    ? Boolean(position?.attributes?.blocked ?? position?.attributes?.lock)
+    : null;
+
+  const deviceBlockedKnown = device?.attributes
+    && Object.prototype.hasOwnProperty.call(device.attributes, 'blocked');
+  const deviceBlockedValue = deviceBlockedKnown ? Boolean(device?.attributes?.blocked) : null;
+  const deviceBlockedAt = device?.attributes?.blockedAt != null
+    ? Number(device.attributes.blockedAt)
+    : null;
 
   const positionAttributes = usePositionAttributes(t);
   const positionItems = useAttributePreference('positionItems', 'fixTime,address,speed,totalDistance');
@@ -151,7 +184,44 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   const [removing, setRemoving] = useState(false);
   const [holdState, setHoldState] = useState('idle');
   const [commandToast, setCommandToast] = useState(false);
+  const [optimisticBlocked, setOptimisticBlocked] = useState(null);
+  const [, setPendingTick] = useState(0);
   const holdTimerRef = useRef(null);
+
+  const resolvedBlockedState = useMemo(() => {
+    if (positionBlockedKnown) {
+      return { blocked: positionBlockedValue, source: 'position', at: null };
+    }
+
+    const optimisticIsNewer = optimisticBlocked
+      && (deviceBlockedAt == null || optimisticBlocked.at > deviceBlockedAt);
+
+    if (optimisticIsNewer) {
+      return { blocked: optimisticBlocked.blocked, source: 'optimistic', at: optimisticBlocked.at };
+    }
+
+    if (deviceBlockedKnown) {
+      return { blocked: deviceBlockedValue, source: 'device', at: deviceBlockedAt };
+    }
+
+    if (optimisticBlocked) {
+      return { blocked: optimisticBlocked.blocked, source: 'optimistic', at: optimisticBlocked.at };
+    }
+
+    return { blocked: false, source: 'none', at: null };
+  }, [
+    deviceBlockedAt,
+    deviceBlockedKnown,
+    deviceBlockedValue,
+    optimisticBlocked,
+    positionBlockedKnown,
+    positionBlockedValue,
+  ]);
+
+  const lastCommandAt = optimisticBlocked?.at ?? deviceBlockedAt;
+  const isPending = resolvedBlockedState.source !== 'position'
+    && lastCommandAt != null
+    && Date.now() - lastCommandAt < pendingWindowMs;
 
   const handleRemove = useCatch(async (removed) => {
     if (removed) {
@@ -184,12 +254,39 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
     try {
       const command = {
         deviceId,
-        type: positionBlocked ? 'engineResume' : 'engineStop',
+        type: resolvedBlockedState.blocked ? 'engineResume' : 'engineStop',
       };
-      await fetchOrThrow('/api/commands/send', {
+      const response = await fetchOrThrow('/api/commands/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(command),
+      });
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        payload = null;
+      }
+      debugLog('[device-lock] commands/send response', {
+        deviceId,
+        status: response.status,
+        payload,
+      });
+      debugLog('[device-lock] device/position after send', {
+        deviceId: device?.id,
+        deviceAttributes: device?.attributes,
+        positionId: position?.id,
+        positionAttributes: position?.attributes,
+      });
+      debugLog('[device-lock] decision after send', {
+        deviceId,
+        blocked: resolvedBlockedState.blocked,
+        source: resolvedBlockedState.source,
+      });
+
+      setOptimisticBlocked({
+        blocked: !resolvedBlockedState.blocked,
+        at: Date.now(),
       });
       setCommandToast(true);
     } finally {
@@ -227,6 +324,40 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
   };
 
   useEffect(() => () => clearHoldTimer(), []);
+  useEffect(() => {
+    if (lastCommandAt == null) {
+      return undefined;
+    }
+    const remaining = pendingWindowMs - (Date.now() - lastCommandAt);
+    if (remaining <= 0) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setPendingTick((tick) => tick + 1), remaining);
+    return () => clearTimeout(timer);
+  }, [lastCommandAt]);
+  useEffect(() => {
+    if (!optimisticBlocked) {
+      return;
+    }
+
+    if (positionBlockedKnown) {
+      setOptimisticBlocked(null);
+      return;
+    }
+
+    if (deviceBlockedAt != null && deviceBlockedAt >= optimisticBlocked.at) {
+      setOptimisticBlocked(null);
+    }
+  }, [deviceBlockedAt, optimisticBlocked, positionBlockedKnown]);
+
+  useEffect(() => {
+    debugLog('[device-lock] decision', {
+      deviceId,
+      blocked: resolvedBlockedState.blocked,
+      source: resolvedBlockedState.source,
+      pending: isPending,
+    });
+  }, [deviceId, isPending, resolvedBlockedState.blocked, resolvedBlockedState.source]);
 
   return (
     <>
@@ -306,17 +437,17 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     ? t('deviceOffline')
                     : limitCommands
                       ? t('commandRestricted')
-                      : positionBlocked
+                      : resolvedBlockedState.blocked
                         ? t('deviceUnlock')
                         : t('deviceLock')
                 }
                 >
-                  <span>
+                  <span className={classes.commandWrapper}>
                     <Button
                       size="small"
                       variant="contained"
-                      color={positionBlocked ? 'success' : 'warning'}
-                      startIcon={positionBlocked ? <LockOpenIcon /> : <LockIcon />}
+                      color={resolvedBlockedState.blocked ? 'success' : 'warning'}
+                      startIcon={resolvedBlockedState.blocked ? <LockOpenIcon /> : <LockIcon />}
                       disabled={commandDisabled || holdState === 'sending'}
                       onPointerDown={handleHoldStart}
                       onPointerUp={handleHoldEnd}
@@ -325,10 +456,17 @@ const StatusCard = ({ deviceId, position, onClose, disableActions, desktopPaddin
                     >
                       {holdState === 'holding'
                         ? t('deviceHoldToConfirm')
-                        : positionBlocked
+                        : resolvedBlockedState.blocked
                           ? t('deviceUnlock')
                           : t('deviceLock')}
                     </Button>
+                    {isPending && (
+                      <Tooltip title={t('deviceLockPendingHint')}>
+                        <Typography variant="caption" color="textSecondary" className={classes.pendingText}>
+                          {t('deviceLockPending')}
+                        </Typography>
+                      </Tooltip>
+                    )}
                   </span>
                 </Tooltip>
                 <Tooltip title={t('reportReplay')}>

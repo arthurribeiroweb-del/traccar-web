@@ -539,6 +539,8 @@
     "deviceLock": "Lock",
     "deviceUnlock": "Unlock",
     "deviceHoldToConfirm": "Hold to confirm",
+    "deviceLockPending": "Pending",
+    "deviceLockPendingHint": "No tracker confirmation",
     "deviceOffline": "Device offline",
     "eventsScrollToLast": "Scroll to Last",
     "eventsSoundEvents": "Sound Events",

@@ -537,6 +537,8 @@
     "deviceLock": "Bloquear",
     "deviceUnlock": "Desbloquear",
     "deviceHoldToConfirm": "Segure para confirmar",
+    "deviceLockPending": "Pendente",
+    "deviceLockPendingHint": "Sem confirmação do rastreador",
     "deviceOffline": "Dispositivo offline",
     "eventsScrollToLast": "Rolar até o final",
     "eventsSoundEvents": "Som de eventos",
