@@ -187,6 +187,7 @@ const MainPage = () => {
             setFilterSort={setFilterSort}
             filterMap={filterMap}
             setFilterMap={setFilterMap}
+            onEventsClick={onEventsClick}
           />
         </Paper>
         <div className={classes.middle}>

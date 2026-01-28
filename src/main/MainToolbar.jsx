@@ -10,7 +10,9 @@ import MapIcon from '@mui/icons-material/Map';
 import DnsIcon from '@mui/icons-material/Dns';
 import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTranslation } from '../common/components/LocalizationProvider';
+import useFeatures from '../common/util/useFeatures';
 import { useDeviceReadonly } from '../common/util/permissions';
 import DeviceRow from './DeviceRow';
 
@@ -40,16 +42,19 @@ const MainToolbar = ({
   setFilterSort,
   filterMap,
   setFilterMap,
+  onEventsClick,
 }) => {
   const { classes } = useStyles();
   const theme = useTheme();
   const navigate = useNavigate();
   const t = useTranslation();
+  const features = useFeatures();
 
   const deviceReadonly = useDeviceReadonly();
 
   const groups = useSelector((state) => state.groups.items);
   const devices = useSelector((state) => state.devices.items);
+  const events = useSelector((state) => state.events.items);
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
   const selectedDevice = useMemo(
     () => (selectedDeviceId != null ? devices[selectedDeviceId] : null),
@@ -185,6 +190,15 @@ const MainToolbar = ({
           </FormGroup>
         </div>
       </Popover>
+      {!features.disableEvents && (
+        <Tooltip title={t('reportEvents')}>
+          <IconButton onClick={onEventsClick}>
+            <Badge color="error" badgeContent={events.length} invisible={!events.length}>
+              <NotificationsIcon />
+            </Badge>
+          </IconButton>
+        </Tooltip>
+      )}
       <IconButton edge="end" onClick={() => navigate('/settings/device')} disabled={deviceReadonly}>
         <Tooltip open={!deviceReadonly && Object.keys(devices).length === 0} title={t('deviceRegisterFirst')} arrow>
           <AddIcon />

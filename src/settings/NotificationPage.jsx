@@ -21,10 +21,12 @@ import SettingsMenu from './components/SettingsMenu';
 import { useCatch, useEffectAsync } from '../reactHelper';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useAdministrator } from '../common/util/permissions';
 
 const NotificationPage = () => {
   const { classes } = useSettingsStyles();
   const t = useTranslation();
+  const admin = useAdministrator();
 
   const [item, setItem] = useState();
   const [notificators, setNotificators] = useState();
@@ -50,8 +52,9 @@ const NotificationPage = () => {
   });
 
   const validate = () => item && item.type && item.notificators && (!item.notificators?.includes('command') || item.commandId);
-  const hasTraccarNotificator = notificators?.some((notificator) => notificator.type === 'traccar');
+  const hasPushNotificator = notificators?.some((notificator) => ['traccar', 'firebase'].includes(notificator.type));
   const missingTraccarMessage = t('notificationTraccarMissing');
+  const missingTraccarUserMessage = t('notificationTraccarMissingUser');
 
   return (
     <EditItemView
@@ -99,16 +102,16 @@ const NotificationPage = () => {
                 titleGetter={(it) => t(prefixString('notificator', it.type))}
                 label={t('notificationNotificators')}
               />
-              {notificators && !hasTraccarNotificator && (
+              {notificators && !hasPushNotificator && (
                 <Alert severity="info">
-                  {missingTraccarMessage || (
+                  {admin ? (missingTraccarMessage || (
                     <>
                       To enable push notifications in Traccar Manager, add <code>traccar</code> to
                       {' '}
                       <code>notificator.types</code> and set <code>notificator.traccar.key</code> in the server config,
                       then restart the service.
                     </>
-                  )}
+                  )) : (missingTraccarUserMessage || missingTraccarMessage)}
                 </Alert>
               )}
               {item.notificators?.includes('command') && (
