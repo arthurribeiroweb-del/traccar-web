@@ -16,7 +16,20 @@ const resolveAppVersion = () => {
   }
 };
 
-export default defineConfig(() => ({
+const emitVersionPlugin = (version) => ({
+  name: 'emit-version',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: JSON.stringify({ version }),
+    });
+  },
+});
+
+export default defineConfig(() => {
+  const appVersion = resolveAppVersion();
+  return ({
   server: {
     port: 3000,
     proxy: {
@@ -28,11 +41,12 @@ export default defineConfig(() => ({
     outDir: 'build',
   },
   define: {
-    __APP_VERSION__: JSON.stringify(resolveAppVersion()),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [
     svgr(),
     react(),
+    emitVersionPlugin(appVersion),
     VitePWA({
       includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
       registerType: 'autoUpdate',
@@ -74,4 +88,5 @@ export default defineConfig(() => ({
       ],
     }),
   ],
-}));
+  });
+});

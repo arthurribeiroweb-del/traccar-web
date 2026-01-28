@@ -1,6 +1,6 @@
 import { Snackbar, IconButton } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
@@ -62,6 +62,58 @@ const WebUpdateController = ({ swUpdateInterval }) => {
   );
 };
 
+const NativeUpdateController = () => {
+  const t = useTranslation();
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const appVersion = import.meta.env.VITE_APP_VERSION
+    || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
+
+  useEffect(() => {
+    if (!nativeEnvironment || !appVersion) {
+      return undefined;
+    }
+    let cancelled = false;
+    const checkVersion = async () => {
+      try {
+        const response = await fetch(`/version.json?ts=${Date.now()}`, {
+          cache: 'no-store',
+          headers: {
+            cache: 'no-store',
+            'cache-control': 'no-cache',
+          },
+        });
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        if (!cancelled && data?.version && data.version !== appVersion) {
+          setUpdateAvailable(true);
+        }
+      } catch {
+        // ignore fetch errors
+      }
+    };
+    checkVersion();
+    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [appVersion]);
+
+  return (
+    <Snackbar
+      open={updateAvailable}
+      message={t('settingsUpdateAvailable')}
+      action={(
+        <IconButton color="inherit" onClick={() => window.location.reload()}>
+          <RefreshIcon />
+        </IconButton>
+      )}
+    />
+  );
+};
+
 const UpdateController = () => {
   const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
 
@@ -94,7 +146,7 @@ const UpdateController = () => {
   }, []);
 
   if (nativeEnvironment) {
-    return null;
+    return <NativeUpdateController />;
   }
 
   return <WebUpdateController swUpdateInterval={swUpdateInterval} />;

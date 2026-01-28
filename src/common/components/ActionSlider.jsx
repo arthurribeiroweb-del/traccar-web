@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import { makeStyles } from 'tss-react/mui';
 
 const thumbSize = 32;
 const confirmThreshold = 0.98;
 
 const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
-  const neutral = theme.palette.action.disabledBackground;
-  const warning = theme.palette.warning.light;
-  const success = theme.palette.success.light;
-  const error = theme.palette.error.light;
-  const trackColor = status === 'error'
-    ? error
+  const baseTrack = theme.palette.mode === 'dark'
+    ? alpha(theme.palette.common.white, 0.08)
+    : alpha(theme.palette.common.black, 0.08);
+  const accent = status === 'error'
+    ? theme.palette.error.main
     : tone === 'success'
-      ? success
+      ? theme.palette.success.main
       : tone === 'warning'
-        ? warning
-        : neutral;
-
-  const textColor = disabled
-    ? theme.palette.text.disabled
-    : theme.palette.text.primary;
+        ? theme.palette.warning.main
+        : theme.palette.text.secondary;
+  const accentSoft = alpha(accent, 0.18);
+  const textColor = disabled ? theme.palette.text.disabled : theme.palette.text.primary;
 
   return {
     root: {
@@ -30,29 +28,41 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
     },
     track: {
       position: 'relative',
-      height: 40,
+      height: 44,
       borderRadius: 999,
-      background: trackColor,
+      background: baseTrack,
       overflow: 'hidden',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingLeft: theme.spacing(1.5),
-      paddingRight: theme.spacing(1.5),
+      paddingLeft: thumbSize + 12,
+      paddingRight: thumbSize + 12,
       touchAction: 'pan-y',
       transition: 'background 200ms ease',
-      border: `1px solid ${theme.palette.divider}`,
+      border: `1px solid ${alpha(accent, 0.25)}`,
       opacity: disabled ? 0.7 : 1,
     },
+    progress: {
+      position: 'absolute',
+      inset: 0,
+      width: 0,
+      background: accentSoft,
+      transition: 'width 120ms ease',
+    },
     label: {
-      position: 'relative',
-      zIndex: 1,
+      position: 'absolute',
+      left: thumbSize + 12,
+      right: thumbSize + 12,
+      zIndex: 3,
       fontSize: 12,
       fontWeight: 600,
       letterSpacing: '0.2px',
       color: textColor,
       textTransform: 'uppercase',
       textAlign: 'center',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
       pointerEvents: 'none',
     },
     thumb: {
@@ -69,6 +79,7 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
       justifyContent: 'center',
       color: theme.palette.text.secondary,
       transition: disabled ? 'none' : 'transform 160ms ease',
+      zIndex: 2,
     },
   };
 });
@@ -114,6 +125,7 @@ const ActionSlider = ({
 
   const maxOffset = useMemo(() => Math.max(trackWidth - thumbSize - 8, 0), [trackWidth]);
   const offset = Math.round(progress * maxOffset);
+  const labelOpacity = disabled ? 0.6 : Math.max(1 - progress * 0.5, 0.4);
 
   const updateProgress = (nextOffset) => {
     if (!maxOffset) {
@@ -166,7 +178,8 @@ const ActionSlider = ({
         aria-valuemax={100}
         aria-valuenow={Math.round(progress * 100)}
       >
-        <div className={classes.label}>{label}</div>
+        <div className={classes.progress} style={{ width: `${Math.round(progress * 100)}%` }} />
+        <div className={classes.label} style={{ opacity: labelOpacity }}>{label}</div>
         <div
           className={classes.thumb}
           style={{ transform: `translate(${offset}px, -50%)` }}

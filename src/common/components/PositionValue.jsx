@@ -13,6 +13,7 @@ import {
   formatPercentage,
   formatSpeed,
   formatTime,
+  formatGpsShort,
   formatTemperature,
   formatVoltage,
   formatVolume,
@@ -101,6 +102,12 @@ const PositionValue = ({ position, property, attribute }) => {
   }
 
   switch (key) {
+    case 'fixTime':
+      return (
+        <span title={formatTime(value, 'seconds')}>
+          {formatGpsShort(value)}
+        </span>
+      );
     case 'image':
     case 'video':
     case 'audio':

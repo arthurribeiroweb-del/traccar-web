@@ -98,6 +98,12 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     gap: 4,
     margin: theme.spacing(0, 1),
   },
+  version: {
+    marginTop: 6,
+    fontSize: 10,
+    textAlign: 'right',
+    opacity: 0.6,
+  },
   root: {
     pointerEvents: 'none',
     position: 'fixed',
@@ -185,6 +191,8 @@ const StatusCard = ({
 
   const navigationAppLink = useAttributePreference('navigationAppLink');
   const navigationAppTitle = useAttributePreference('navigationAppTitle');
+  const appVersion = import.meta.env.VITE_APP_VERSION
+    || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
 
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -320,11 +328,14 @@ const StatusCard = ({
   const confirmedState = resolvedBlockedState.source === 'position';
   const actionLabel = resolvedBlockedState.blocked ? t('deviceSliderUnlock') : t('deviceSliderLock');
   const confirmedLabel = resolvedBlockedState.blocked ? t('deviceLocked') : t('deviceUnlocked');
+  const retryLabel = t('deviceCommandRetry');
   let sliderLabel = actionLabel;
   if (commandState === 'sending') {
     sliderLabel = t('deviceCommandSending');
   } else if (commandState === 'error') {
-    sliderLabel = t('deviceCommandFailed');
+    sliderLabel = retryLabel
+      ? `${t('deviceCommandFailed')} \u00b7 ${retryLabel}`
+      : t('deviceCommandFailed');
   } else if (confirmedState) {
     sliderLabel = confirmedLabel;
   } else if (isPending) {
@@ -438,10 +449,15 @@ const StatusCard = ({
                           )}
                         />
                       ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              )}
+                  </TableBody>
+                </Table>
+                {appVersion && (
+                  <Typography variant="caption" color="textSecondary" className={classes.version}>
+                    {`v${appVersion}`}
+                  </Typography>
+                )}
+              </CardContent>
+            )}
               <CardActions classes={{ root: classes.actions }} disableSpacing>
                 <Tooltip title={t('sharedExtra')}>
                   <IconButton
