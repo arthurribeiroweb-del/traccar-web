@@ -1,20 +1,21 @@
 import {
-  useState, useCallback, useEffect,
+  useState, useCallback, useEffect, useRef,
 } from 'react';
 import { Paper } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import DeviceList from './DeviceList';
 import BottomMenu from '../common/components/BottomMenu';
 import StatusCard from '../common/components/StatusCard';
-import { devicesActions } from '../store';
+import { usePrevious } from '../reactHelper';
 import usePersistedState from '../common/util/usePersistedState';
 import EventsDrawer from './EventsDrawer';
 import useFilter from './useFilter';
 import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
+import BottomPeekCard from './BottomPeekCard';
 import { useAttributePreference } from '../common/util/preferences';
 
 const useStyles = makeStyles()((theme) => ({
@@ -63,18 +64,26 @@ const useStyles = makeStyles()((theme) => ({
     display: 'flex',
     minHeight: 0,
   },
+  expandedWrapper: {
+    animation: '$fadeIn 160ms ease',
+  },
+  '@keyframes fadeIn': {
+    from: { opacity: 0 },
+    to: { opacity: 1 },
+  },
 }));
 
 const MainPage = () => {
   const { classes } = useStyles();
-  const dispatch = useDispatch();
   const theme = useTheme();
+  const swipeRef = useRef(null);
 
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const mapOnSelect = useAttributePreference('mapOnSelect', true);
 
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
+  const selectTime = useSelector((state) => state.devices.selectTime);
   const positions = useSelector((state) => state.session.positions);
   const devices = useSelector((state) => state.devices.items);
   const [filteredPositions, setFilteredPositions] = useState([]);
@@ -94,6 +103,10 @@ const MainPage = () => {
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [panelState, setPanelState] = useState('closed');
+
+  const previousSelectedId = usePrevious(selectedDeviceId);
+  const previousSelectTime = usePrevious(selectTime);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), [setEventsOpen]);
 
@@ -103,7 +116,47 @@ const MainPage = () => {
     }
   }, [desktop, mapOnSelect, selectedDeviceId]);
 
+  useEffect(() => {
+    if (!selectedDeviceId) {
+      setPanelState('closed');
+      return;
+    }
+    const selectionChanged = selectedDeviceId !== previousSelectedId || selectTime !== previousSelectTime;
+    if (selectionChanged) {
+      setPanelState('peek');
+    }
+  }, [previousSelectedId, previousSelectTime, selectTime, selectedDeviceId]);
+
   useFilter(keyword, filter, filterSort, filterMap, positions, setFilteredDevices, setFilteredPositions);
+
+  const handleExpandPanel = useCallback(() => setPanelState('expanded'), []);
+  const handlePeekPanel = useCallback(() => setPanelState('peek'), []);
+  const handleClosePanel = useCallback(() => setPanelState('closed'), []);
+
+  const handleExpandedPointerDown = useCallback((event) => {
+    if (desktop) {
+      return;
+    }
+    if (!(event.target instanceof Element) || !event.target.closest('.draggable-header')) {
+      return;
+    }
+    swipeRef.current = { y: event.clientY };
+  }, [desktop]);
+
+  const handleExpandedPointerMove = useCallback((event) => {
+    if (desktop || !swipeRef.current) {
+      return;
+    }
+    const delta = event.clientY - swipeRef.current.y;
+    if (delta > 24) {
+      swipeRef.current = null;
+      setPanelState('peek');
+    }
+  }, [desktop]);
+
+  const clearExpandedSwipe = useCallback(() => {
+    swipeRef.current = null;
+  }, []);
 
   return (
     <div className={classes.root}>
@@ -151,13 +204,32 @@ const MainPage = () => {
         )}
       </div>
       <EventsDrawer open={eventsOpen} onClose={() => setEventsOpen(false)} />
-      {selectedDeviceId && (
-        <StatusCard
-          deviceId={selectedDeviceId}
+      {selectedDeviceId && panelState === 'peek' && (
+        <BottomPeekCard
+          device={devices[selectedDeviceId]}
           position={selectedPosition}
-          onClose={() => dispatch(devicesActions.selectId(null))}
           desktopPadding={theme.dimensions.drawerWidthDesktop}
+          onExpand={handleExpandPanel}
+          onClose={handleClosePanel}
+          enableSwipe={!desktop}
         />
+      )}
+      {selectedDeviceId && panelState === 'expanded' && (
+        <div
+          className={classes.expandedWrapper}
+          onPointerDown={handleExpandedPointerDown}
+          onPointerMove={handleExpandedPointerMove}
+          onPointerUp={clearExpandedSwipe}
+          onPointerCancel={clearExpandedSwipe}
+          onPointerLeave={clearExpandedSwipe}
+        >
+          <StatusCard
+            deviceId={selectedDeviceId}
+            position={selectedPosition}
+            onClose={handlePeekPanel}
+            desktopPadding={theme.dimensions.drawerWidthDesktop}
+          />
+        </div>
       )}
     </div>
   );

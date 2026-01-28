@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -50,13 +50,20 @@ const MainToolbar = ({
 
   const groups = useSelector((state) => state.groups.items);
   const devices = useSelector((state) => state.devices.items);
+  const selectedDeviceId = useSelector((state) => state.devices.selectedId);
+  const selectedDevice = useMemo(
+    () => (selectedDeviceId != null ? devices[selectedDeviceId] : null),
+    [devices, selectedDeviceId],
+  );
 
   const toolbarRef = useRef();
   const inputRef = useRef();
   const [filterAnchorEl, setFilterAnchorEl] = useState(null);
   const [devicesAnchorEl, setDevicesAnchorEl] = useState(null);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const deviceStatusCount = (status) => Object.values(devices).filter((d) => d.status === status).length;
+  const displayValue = keyword || (searchFocused ? '' : (selectedDevice?.name || ''));
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
@@ -66,10 +73,19 @@ const MainToolbar = ({
       <OutlinedInput
         ref={inputRef}
         placeholder={t('sharedSearchDevices')}
-        value={keyword}
+        value={displayValue}
         onChange={(e) => setKeyword(e.target.value)}
-        onFocus={() => setDevicesAnchorEl(toolbarRef.current)}
-        onBlur={() => setDevicesAnchorEl(null)}
+        onFocus={() => {
+          setSearchFocused(true);
+          setDevicesAnchorEl(toolbarRef.current);
+          if (!keyword) {
+            setKeyword('');
+          }
+        }}
+        onBlur={() => {
+          setSearchFocused(false);
+          setDevicesAnchorEl(null);
+        }}
         endAdornment={(
           <InputAdornment position="end">
             <IconButton size="small" edge="end" onClick={() => setFilterAnchorEl(inputRef.current)}>
