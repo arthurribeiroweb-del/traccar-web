@@ -267,6 +267,7 @@
     "settingsTotpForce": "Force One-time Password",
     "settingsServiceWorkerUpdateInterval": "ServiceWorker Update Interval",
     "settingsUpdateAvailable": "There is an update available.",
+    "settingsUpdating": "Updating...",
     "settingsSupport": "Support",
     "settingsBackup": "Backup",
     "backupAdminOnly": "Administrator access required.",

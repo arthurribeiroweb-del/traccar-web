@@ -6,31 +6,41 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
 import { nativeEnvironment } from './common/components/NativeInterface';
 
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((resolve) => setTimeout(resolve, ms)),
+]);
+
 const forceReload = async () => {
-  if ('serviceWorker' in navigator) {
-    try {
+  try {
+    if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(registrations.map((registration) => registration.unregister()));
-    } catch {
-      // ignore
+      await withTimeout(Promise.all(registrations.map((registration) => registration.unregister())), 2000);
     }
+  } catch {
+    // ignore
   }
-  if ('caches' in window) {
-    try {
+  try {
+    if ('caches' in window) {
       const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
-    } catch {
-      // ignore
+      await withTimeout(Promise.all(keys.map((key) => caches.delete(key))), 2000);
     }
+  } catch {
+    // ignore
   }
   const url = new URL(window.location.href);
   url.searchParams.set('v', Date.now().toString());
-  window.location.replace(url.toString());
+  try {
+    window.location.replace(url.toString());
+  } catch {
+    window.location.href = url.toString();
+  }
 };
 
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
 const WebUpdateController = ({ swUpdateInterval }) => {
   const t = useTranslation();
+  const [updating, setUpdating] = useState(false);
 
   const {
     needRefresh: [needRefresh],
@@ -72,23 +82,29 @@ const WebUpdateController = ({ swUpdateInterval }) => {
   }, [needRefresh, updateServiceWorker]);
 
   const handleReload = async () => {
+    if (updating) {
+      return;
+    }
+    setUpdating(true);
     try {
       await updateServiceWorker(true);
-    } finally {
-      await forceReload();
+    } catch {
+      // ignore
     }
+    await forceReload();
   };
 
   return (
     <Snackbar
       open={needRefresh}
-      message={t('settingsUpdateAvailable')}
+      message={updating ? t('settingsUpdating') : t('settingsUpdateAvailable')}
       action={(
-        <IconButton color="inherit" onClick={handleReload}>
+        <IconButton color="inherit" onClick={handleReload} disabled={updating}>
           <RefreshIcon />
         </IconButton>
       )}
       onClick={handleReload}
+      ContentProps={{ onClick: handleReload, style: { cursor: updating ? 'default' : 'pointer' } }}
     />
   );
 };
@@ -96,6 +112,7 @@ const WebUpdateController = ({ swUpdateInterval }) => {
 const NativeUpdateController = () => {
   const t = useTranslation();
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const appVersion = import.meta.env.VITE_APP_VERSION
     || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
 
@@ -133,19 +150,24 @@ const NativeUpdateController = () => {
   }, [appVersion]);
 
   const handleReload = async () => {
+    if (updating) {
+      return;
+    }
+    setUpdating(true);
     await forceReload();
   };
 
   return (
     <Snackbar
       open={updateAvailable}
-      message={t('settingsUpdateAvailable')}
+      message={updating ? t('settingsUpdating') : t('settingsUpdateAvailable')}
       action={(
-        <IconButton color="inherit" onClick={handleReload}>
+        <IconButton color="inherit" onClick={handleReload} disabled={updating}>
           <RefreshIcon />
         </IconButton>
       )}
       onClick={handleReload}
+      ContentProps={{ onClick: handleReload, style: { cursor: updating ? 'default' : 'pointer' } }}
     />
   );
 };
