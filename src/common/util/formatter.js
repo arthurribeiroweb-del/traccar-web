@@ -55,8 +55,8 @@ export const formatGpsShort = (value) => {
   if (value) {
     const d = dayjs(value).toDate();
     const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-    const date = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
-    return `H: ${time} \u2022 D: ${date}`;
+    const date = d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return `Horas: ${time}   Data: ${date}`;
   }
   return '';
 };

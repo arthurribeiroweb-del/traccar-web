@@ -30,6 +30,7 @@ import ActionSlider from './ActionSlider';
 import RemoveDialog from './RemoveDialog';
 import PositionValue from './PositionValue';
 import DeviceQuickStats from './DeviceQuickStats';
+import AddressValue from './AddressValue';
 import { useDeviceReadonly, useRestriction } from '../util/permissions';
 import usePositionAttributes from '../attributes/usePositionAttributes';
 import { devicesActions } from '../../store';
@@ -147,6 +148,19 @@ const useStyles = makeStyles()((theme, { desktopPadding, actionTone }) => ({
     fontWeight: 500,
     color: theme.palette.text.primary,
     lineHeight: 1.35,
+  },
+  addressClamp: {
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    wordBreak: 'break-word',
+    cursor: 'pointer',
+  },
+  addressExpanded: {
+    WebkitLineClamp: 'unset',
+    overflow: 'visible',
   },
   detailsGrid: {
     marginTop: theme.spacing(1),
@@ -632,11 +646,24 @@ const StatusCard = ({
                             {positionAttributes[key]?.name || key}
                           </Typography>
                           <Typography className={classes.infoValue}>
-                            <PositionValue
-                              position={position}
-                              property={position.hasOwnProperty(key) ? key : null}
-                              attribute={position.hasOwnProperty(key) ? null : key}
-                            />
+                            {key === 'address' ? (
+                              <AddressValue
+                                latitude={position.latitude}
+                                longitude={position.longitude}
+                                originalAddress={position.address}
+                                inline
+                                enableExpand
+                                showTooltip
+                                className={classes.addressClamp}
+                                expandedClassName={classes.addressExpanded}
+                              />
+                            ) : (
+                              <PositionValue
+                                position={position}
+                                property={position.hasOwnProperty(key) ? key : null}
+                                attribute={position.hasOwnProperty(key) ? null : key}
+                              />
+                            )}
                           </Typography>
                         </div>
                       ))}

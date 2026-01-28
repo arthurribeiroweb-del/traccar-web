@@ -22,11 +22,13 @@ const useStyles = makeStyles()((theme) => ({
   stat: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(0.4),
     padding: theme.spacing(1),
     borderRadius: theme.shape.borderRadius * 1.25,
     backgroundColor: alpha(theme.palette.background.paper, theme.palette.mode === 'dark' ? 0.35 : 0.85),
     border: `1px solid ${alpha(theme.palette.divider, 0.2)}`,
+    alignItems: 'center',
+    textAlign: 'center',
   },
   statHeader: {
     display: 'flex',
@@ -34,14 +36,17 @@ const useStyles = makeStyles()((theme) => ({
     gap: theme.spacing(0.5),
     color: theme.palette.text.secondary,
     fontSize: '0.7rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
   },
   statValue: {
     fontWeight: 600,
     fontSize: '1.05rem',
     color: theme.palette.text.primary,
     lineHeight: 1.2,
+  },
+  statUnit: {
+    fontSize: '0.75rem',
+    color: theme.palette.text.secondary,
+    lineHeight: 1.1,
   },
   alertsValue: {
     display: 'flex',
@@ -59,6 +64,18 @@ const formatCount = (count) => {
     return '99+';
   }
   return String(count);
+};
+
+const splitValueUnit = (valueText) => {
+  if (!valueText || valueText === '--') {
+    return { value: '--', unit: '' };
+  }
+  const parts = String(valueText).trim().split(' ');
+  if (parts.length < 2) {
+    return { value: valueText, unit: '' };
+  }
+  const unit = parts.pop();
+  return { value: parts.join(' '), unit };
 };
 
 const DeviceQuickStats = ({ device, position }) => {
@@ -107,28 +124,29 @@ const DeviceQuickStats = ({ device, position }) => {
 
   const alertsValue = dailySummary.alerts == null ? '--' : formatCount(dailySummary.alerts);
   const alertsTooltip = dailySummary.alerts == null ? '--' : dailySummary.alerts;
+  const speedParts = splitValueUnit(speedText);
+  const distanceParts = splitValueUnit(distanceText);
 
   return (
     <div className={classes.root}>
       <div className={classes.stat}>
         <div className={classes.statHeader}>
           <SpeedIcon fontSize="inherit" />
-          <span>{t('positionSpeed')}</span>
         </div>
-        <div className={classes.statValue}>{speedText}</div>
+        <div className={classes.statValue}>{speedParts.value}</div>
+        {speedParts.unit && <div className={classes.statUnit}>{speedParts.unit}</div>}
       </div>
       <div className={classes.stat}>
         <div className={classes.statHeader}>
           <RouteIcon fontSize="inherit" />
-          <span>{t('distanceToday')}</span>
         </div>
-        <div className={classes.statValue}>{distanceText}</div>
+        <div className={classes.statValue}>{distanceParts.value}</div>
+        {distanceParts.unit && <div className={classes.statUnit}>{distanceParts.unit}</div>}
       </div>
       <Tooltip title={`${t('alertsToday')}: ${alertsTooltip}`}>
         <div className={classes.stat}>
           <div className={classes.statHeader}>
             <NotificationsIcon fontSize="inherit" />
-            <span>{t('alertsToday')}</span>
           </div>
           <div className={`${classes.statValue} ${classes.alertsValue}`}>{alertsValue}</div>
         </div>
