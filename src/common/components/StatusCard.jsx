@@ -482,11 +482,13 @@ const StatusCard = ({
   const effectiveBlocked = resolvedBlockedState.blocked;
   const isSending = commandState === 'sending';
   const isProcessing = isSending || isPending;
-  let sliderLabel = effectiveBlocked ? t('deviceLocked') : t('deviceSliderLock');
+  const stateText = effectiveBlocked ? 'BLOQUEADO' : 'DESBLOQUEADO';
+  const stateLineText = `Veículo: ${stateText}`;
+  const actionText = effectiveBlocked ? 'DESBLOQUEAR VEÍCULO' : 'BLOQUEAR VEÍCULO';
+  const actionIcon = effectiveBlocked ? <LockOpenIcon fontSize="inherit" /> : <LockIcon fontSize="inherit" />;
+  let sliderLabel = stateText;
   if (isProcessing) {
     sliderLabel = t('deviceCommandSending');
-  } else if (effectiveBlocked) {
-    sliderLabel = t('deviceLocked');
   }
   const sliderTone = isProcessing
     ? 'neutral'
@@ -692,11 +694,11 @@ const StatusCard = ({
               <div className={classes.primaryAction}>
                 <div className={classes.primaryActionHeader}>
                   <Typography className={classes.primaryActionTitle}>
-                    {effectiveBlocked ? t('deviceLocked') : t('deviceUnlocked')}
+                    {stateLineText}
                   </Typography>
                   <span className={classes.primaryActionBadge}>
-                    {effectiveBlocked ? <LockIcon fontSize="inherit" /> : <LockOpenIcon fontSize="inherit" />}
-                    {effectiveBlocked ? t('deviceUnlock') : t('deviceLock')}
+                    {actionIcon}
+                    {actionText}
                   </span>
                 </div>
                 <Tooltip title={
@@ -704,9 +706,7 @@ const StatusCard = ({
                     ? t('deviceOffline')
                     : limitCommands
                       ? t('commandRestricted')
-                      : resolvedBlockedState.blocked
-                        ? t('deviceUnlock')
-                        : t('deviceLock')
+                      : actionText
                 }
                 >
                   <span className={classes.commandWrapper}>
