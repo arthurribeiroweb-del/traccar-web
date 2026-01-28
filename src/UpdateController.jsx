@@ -4,12 +4,11 @@ import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
+import { nativeEnvironment } from './common/components/NativeInterface';
 
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
-const UpdateController = () => {
+const WebUpdateController = ({ swUpdateInterval }) => {
   const t = useTranslation();
-
-  const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
 
   const {
     needRefresh: [needRefresh],
@@ -61,6 +60,44 @@ const UpdateController = () => {
       )}
     />
   );
+};
+
+const UpdateController = () => {
+  const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
+
+  useEffect(() => {
+    if (!nativeEnvironment || !('serviceWorker' in navigator)) {
+      return undefined;
+    }
+
+    const disabledFlag = 'traccar.sw.disabled';
+    if (window.sessionStorage.getItem(disabledFlag)) {
+      return undefined;
+    }
+
+    const disableServiceWorker = async () => {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((key) => caches.delete(key)));
+        }
+      } finally {
+        window.sessionStorage.setItem(disabledFlag, '1');
+        window.location.reload();
+      }
+    };
+
+    disableServiceWorker();
+    return undefined;
+  }, []);
+
+  if (nativeEnvironment) {
+    return null;
+  }
+
+  return <WebUpdateController swUpdateInterval={swUpdateInterval} />;
 };
 
 export default UpdateController;
