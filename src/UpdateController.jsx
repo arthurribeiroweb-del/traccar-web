@@ -11,29 +11,13 @@ const withTimeout = (promise, ms) => Promise.race([
   new Promise((resolve) => setTimeout(resolve, ms)),
 ]);
 
-const fetchAndReplaceDocument = async (url) => {
-  try {
-    const response = await fetch(url.toString(), {
-      cache: 'no-store',
-      headers: {
-        cache: 'no-store',
-        'cache-control': 'no-cache',
-      },
-    });
-    if (!response.ok) {
-      return false;
-    }
-    const html = await response.text();
-    document.open();
-    document.write(html);
-    document.close();
-    return true;
-  } catch {
-    return false;
-  }
+const buildCacheBustUrl = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', Date.now().toString());
+  return url.toString();
 };
 
-const forceReload = async (preferDocumentReload) => {
+const clearCaches = async () => {
   try {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -50,19 +34,27 @@ const forceReload = async (preferDocumentReload) => {
   } catch {
     // ignore
   }
-  const url = new URL(window.location.href);
-  url.searchParams.set('v', Date.now().toString());
-  if (preferDocumentReload) {
-    const replaced = await fetchAndReplaceDocument(url);
-    if (replaced) {
-      return;
-    }
-  }
+};
+
+const navigateWithCacheBust = () => {
+  const url = buildCacheBustUrl();
   try {
-    window.location.replace(url.toString());
+    window.location.replace(url);
   } catch {
-    window.location.href = url.toString();
+    window.location.href = url;
   }
+};
+
+const forceReload = async (eager) => {
+  if (eager) {
+    setTimeout(() => {
+      clearCaches();
+    }, 0);
+    navigateWithCacheBust();
+    return;
+  }
+  await clearCaches();
+  navigateWithCacheBust();
 };
 
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
@@ -120,7 +112,7 @@ const WebUpdateController = ({ swUpdateInterval }) => {
     } catch {
       // ignore
     }
-    await forceReload(nativeEnvironment);
+    await forceReload(false);
   };
 
   return (
