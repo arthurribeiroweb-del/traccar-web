@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
@@ -16,7 +16,6 @@ import {
   MenuItem,
   CardMedia,
   Tooltip,
-  Button,
   Snackbar,
   Alert,
 } from '@mui/material';
@@ -29,8 +28,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PendingIcon from '@mui/icons-material/Pending';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 
 import { useTranslation } from './LocalizationProvider';
+import ActionSlider from './ActionSlider';
 import RemoveDialog from './RemoveDialog';
 import PositionValue from './PositionValue';
 import DeviceQuickStats from './DeviceQuickStats';
@@ -90,13 +91,12 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     justifyContent: 'space-between',
   },
   commandWrapper: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 2,
-  },
-  pendingText: {
-    lineHeight: 1,
+    alignItems: 'stretch',
+    gap: 4,
+    margin: theme.spacing(0, 1),
   },
   root: {
     pointerEvents: 'none',
@@ -189,11 +189,10 @@ const StatusCard = ({
   const [anchorEl, setAnchorEl] = useState(null);
 
   const [removing, setRemoving] = useState(false);
-  const [holdState, setHoldState] = useState('idle');
+  const [commandState, setCommandState] = useState('idle');
   const [commandToast, setCommandToast] = useState(false);
   const [optimisticBlocked, setOptimisticBlocked] = useState(null);
   const [, setPendingTick] = useState(0);
-  const holdTimerRef = useRef(null);
 
   const resolvedBlockedState = useMemo(() => {
     if (positionBlockedKnown) {
@@ -257,7 +256,8 @@ const StatusCard = ({
     navigate(`/settings/geofence/${item.id}`);
   }, [navigate, position]);
 
-  const handleCommandSend = useCatch(async () => {
+  const handleCommandSend = useCatchCallback(async () => {
+    setCommandState('sending');
     try {
       const command = {
         deviceId,
@@ -296,17 +296,20 @@ const StatusCard = ({
         at: Date.now(),
       });
       setCommandToast(true);
-    } finally {
-      setHoldState('idle');
+      setCommandState('idle');
+    } catch (error) {
+      setCommandState('error');
+      throw error;
     }
-  });
-
-  const clearHoldTimer = () => {
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-  };
+  }, [
+    deviceId,
+    device?.attributes,
+    device?.id,
+    position?.attributes,
+    position?.id,
+    resolvedBlockedState.blocked,
+    resolvedBlockedState.source,
+  ]);
 
   const commandDisabled = disableActions || readonly || deviceReadonly || limitCommands || !deviceOnline;
   const editDisabled = disableActions || readonly || deviceReadonly;
@@ -314,27 +317,33 @@ const StatusCard = ({
     ? (t('deviceEditNoPermission') || 'No permission to edit')
     : t('sharedEdit');
 
-  const handleHoldStart = (event) => {
-    if (commandDisabled || holdState === 'sending') {
-      return;
-    }
-    event.preventDefault();
-    clearHoldTimer();
-    setHoldState('holding');
-    holdTimerRef.current = setTimeout(() => {
-      setHoldState('sending');
-      handleCommandSend();
-    }, 1500);
-  };
+  const confirmedState = resolvedBlockedState.source === 'position';
+  const actionLabel = resolvedBlockedState.blocked ? t('deviceSliderUnlock') : t('deviceSliderLock');
+  const confirmedLabel = resolvedBlockedState.blocked ? t('deviceLocked') : t('deviceUnlocked');
+  let sliderLabel = actionLabel;
+  if (commandState === 'sending') {
+    sliderLabel = t('deviceCommandSending');
+  } else if (commandState === 'error') {
+    sliderLabel = t('deviceCommandFailed');
+  } else if (confirmedState) {
+    sliderLabel = confirmedLabel;
+  } else if (isPending) {
+    sliderLabel = t('deviceCommandPending');
+  }
+  const sliderTone = commandState === 'sending'
+    ? 'neutral'
+    : (resolvedBlockedState.blocked ? 'success' : 'warning');
+  const sliderIcon = confirmedState
+    ? (resolvedBlockedState.blocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />)
+    : (commandState === 'sending' || isPending
+      ? <PendingIcon fontSize="small" />
+      : <ChevronRightIcon fontSize="small" />);
 
-  const handleHoldEnd = () => {
-    if (holdState === 'holding') {
-      clearHoldTimer();
-      setHoldState('idle');
+  const handleSliderStart = () => {
+    if (commandState === 'error') {
+      setCommandState('idle');
     }
   };
-
-  useEffect(() => () => clearHoldTimer(), []);
   useEffect(() => {
     if (lastCommandAt == null) {
       return undefined;
@@ -454,30 +463,15 @@ const StatusCard = ({
                 }
                 >
                   <span className={classes.commandWrapper}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      color={resolvedBlockedState.blocked ? 'success' : 'warning'}
-                      startIcon={resolvedBlockedState.blocked ? <LockOpenIcon /> : <LockIcon />}
-                      disabled={commandDisabled || holdState === 'sending'}
-                      onPointerDown={handleHoldStart}
-                      onPointerUp={handleHoldEnd}
-                      onPointerLeave={handleHoldEnd}
-                      onPointerCancel={handleHoldEnd}
-                    >
-                      {holdState === 'holding'
-                        ? t('deviceHoldToConfirm')
-                        : resolvedBlockedState.blocked
-                          ? t('deviceUnlock')
-                          : t('deviceLock')}
-                    </Button>
-                    {isPending && (
-                      <Tooltip title={t('deviceLockPendingHint')}>
-                        <Typography variant="caption" color="textSecondary" className={classes.pendingText}>
-                          {t('deviceLockPending')}
-                        </Typography>
-                      </Tooltip>
-                    )}
+                    <ActionSlider
+                      label={sliderLabel}
+                      status={commandState}
+                      tone={sliderTone}
+                      icon={sliderIcon}
+                      disabled={commandDisabled || commandState === 'sending'}
+                      onStart={handleSliderStart}
+                      onConfirm={handleCommandSend}
+                    />
                   </span>
                 </Tooltip>
                 <Tooltip title={t('reportReplay')}>
