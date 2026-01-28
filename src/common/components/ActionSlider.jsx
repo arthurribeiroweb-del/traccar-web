@@ -9,7 +9,7 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
   const baseTrack = theme.palette.mode === 'dark'
     ? alpha(theme.palette.common.white, 0.08)
     : alpha(theme.palette.common.black, 0.08);
-  const accent = status === 'error'
+  const accent = tone === 'danger'
     ? theme.palette.error.main
     : tone === 'success'
       ? theme.palette.success.main
@@ -22,7 +22,7 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
   return {
     root: {
       width: '100%',
-      minWidth: 180,
+      minWidth: 200,
       maxWidth: 260,
       userSelect: 'none',
     },
@@ -54,15 +54,14 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
       left: thumbSize + 12,
       right: thumbSize + 12,
       zIndex: 3,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: 600,
-      letterSpacing: '0.2px',
+      letterSpacing: '0.3px',
       color: textColor,
       textTransform: 'uppercase',
       textAlign: 'center',
       whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
+      overflow: 'visible',
       pointerEvents: 'none',
     },
     thumb: {
@@ -93,6 +92,7 @@ const ActionSlider = ({
   tone = 'neutral',
   icon,
   direction = 'right',
+  progressOverride = null,
   onConfirm,
   onStart,
 }) => {
@@ -129,8 +129,9 @@ const ActionSlider = ({
   }, [direction]);
 
   const maxOffset = useMemo(() => Math.max(trackWidth - thumbSize - 8, 0), [trackWidth]);
-  const offset = Math.round((direction === 'left' ? (1 - progress) : progress) * maxOffset);
-  const labelOpacity = disabled ? 0.6 : Math.max(1 - progress * 0.5, 0.4);
+  const displayProgress = progressOverride != null ? progressOverride : progress;
+  const offset = Math.round((direction === 'left' ? (1 - displayProgress) : displayProgress) * maxOffset);
+  const labelOpacity = disabled ? 0.7 : Math.max(1 - displayProgress * 0.5, 0.5);
 
   const updateProgress = (nextOffset) => {
     if (!maxOffset) {
@@ -187,7 +188,7 @@ const ActionSlider = ({
         aria-valuemax={100}
         aria-valuenow={Math.round(progress * 100)}
       >
-        <div className={classes.progress} style={{ width: `${Math.round(progress * 100)}%` }} />
+        <div className={classes.progress} style={{ width: `${Math.round(displayProgress * 100)}%` }} />
         <div className={classes.label} style={{ opacity: labelOpacity }}>{label}</div>
         <div
           className={classes.thumb}

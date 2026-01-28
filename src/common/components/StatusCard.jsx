@@ -136,7 +136,6 @@ const StatusRow = ({ name, content }) => {
   );
 };
 
-const pendingWindowMs = 5 * 60 * 1000;
 const isDev = process.env.NODE_ENV === 'development';
 
 const debugLog = (...args) => {
@@ -198,7 +197,7 @@ const StatusCard = ({
   const [commandState, setCommandState] = useState('idle');
   const [commandToast, setCommandToast] = useState(false);
   const [localBlocked, setLocalBlocked] = useState(null);
-  const [, setPendingTick] = useState(0);
+  
 
   const localStorageKey = deviceId ? `deviceLockState:${deviceId}` : null;
   const readLocalBlocked = useCallback(() => {
@@ -276,8 +275,7 @@ const StatusCard = ({
 
   const lastCommandAt = localBlocked?.at ?? deviceBlockedAt;
   const isPending = resolvedBlockedState.source !== 'position'
-    && lastCommandAt != null
-    && Date.now() - lastCommandAt < pendingWindowMs;
+    && lastCommandAt != null;
 
   const handleRemove = useCatch(async (removed) => {
     if (removed) {
@@ -370,44 +368,27 @@ const StatusCard = ({
 
   const confirmedState = resolvedBlockedState.source === 'position';
   const effectiveBlocked = resolvedBlockedState.blocked;
-  const retryLabel = t('deviceCommandRetry');
   const isSending = commandState === 'sending';
+  const isProcessing = isSending || isPending;
   let sliderLabel = effectiveBlocked ? t('deviceLocked') : t('deviceSliderLock');
-  if (isSending) {
+  if (isProcessing) {
     sliderLabel = t('deviceCommandSending');
-  } else if (commandState === 'error') {
-    sliderLabel = retryLabel
-      ? `${t('deviceCommandFailed')} ${retryLabel}`
-      : t('deviceCommandFailed');
   } else if (effectiveBlocked) {
     sliderLabel = t('deviceLocked');
   }
-  const sliderTone = isSending
+  const sliderTone = isProcessing
     ? 'neutral'
-    : (effectiveBlocked ? 'success' : 'warning');
+    : (effectiveBlocked ? 'danger' : 'success');
   const sliderDirection = effectiveBlocked ? 'right' : 'left';
-  const sliderIcon = isSending
+  const sliderIcon = isProcessing
     ? <CircularProgress size={14} />
-    : (commandState === 'error'
-      ? <PendingIcon fontSize="small" />
-      : (effectiveBlocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />));
+    : (effectiveBlocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />);
 
   const handleSliderStart = () => {
     if (commandState === 'error') {
       setCommandState('idle');
     }
   };
-  useEffect(() => {
-    if (lastCommandAt == null) {
-      return undefined;
-    }
-    const remaining = pendingWindowMs - (Date.now() - lastCommandAt);
-    if (remaining <= 0) {
-      return undefined;
-    }
-    const timer = setTimeout(() => setPendingTick((tick) => tick + 1), remaining);
-    return () => clearTimeout(timer);
-  }, [lastCommandAt]);
   useEffect(() => {
     if (!localBlocked) {
       return;
@@ -522,7 +503,8 @@ const StatusCard = ({
                       tone={sliderTone}
                       icon={sliderIcon}
                       direction={sliderDirection}
-                      disabled={commandDisabled || isSending}
+                      disabled={commandDisabled || isProcessing}
+                      progressOverride={isProcessing ? 0.5 : null}
                       onStart={handleSliderStart}
                       onConfirm={handleCommandSend}
                     />
