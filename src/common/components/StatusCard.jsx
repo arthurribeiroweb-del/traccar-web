@@ -29,6 +29,8 @@ import PendingIcon from '@mui/icons-material/Pending';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import CircularProgress from '@mui/material/CircularProgress';
 
 import { useTranslation } from './LocalizationProvider';
 import ActionSlider from './ActionSlider';
@@ -97,12 +99,6 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     alignItems: 'stretch',
     gap: 4,
     margin: theme.spacing(0, 1),
-  },
-  version: {
-    marginTop: 6,
-    fontSize: 10,
-    textAlign: 'right',
-    opacity: 0.6,
   },
   root: {
     pointerEvents: 'none',
@@ -191,8 +187,6 @@ const StatusCard = ({
 
   const navigationAppLink = useAttributePreference('navigationAppLink');
   const navigationAppTitle = useAttributePreference('navigationAppTitle');
-  const appVersion = import.meta.env.VITE_APP_VERSION
-    || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
 
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -326,29 +320,31 @@ const StatusCard = ({
     : t('sharedEdit');
 
   const confirmedState = resolvedBlockedState.source === 'position';
-  const actionLabel = resolvedBlockedState.blocked ? t('deviceSliderUnlock') : t('deviceSliderLock');
-  const confirmedLabel = resolvedBlockedState.blocked ? t('deviceLocked') : t('deviceUnlocked');
+  const confirmedBlocked = confirmedState ? resolvedBlockedState.blocked : false;
   const retryLabel = t('deviceCommandRetry');
-  let sliderLabel = actionLabel;
-  if (commandState === 'sending') {
+  const isProcessing = commandState === 'sending' || (isPending && !confirmedState);
+  let sliderLabel = confirmedBlocked ? t('deviceLocked') : t('deviceSliderLock');
+  if (isProcessing) {
     sliderLabel = t('deviceCommandSending');
   } else if (commandState === 'error') {
     sliderLabel = retryLabel
-      ? `${t('deviceCommandFailed')} \u00b7 ${retryLabel}`
+      ? `${t('deviceCommandFailed')} ${retryLabel}`
       : t('deviceCommandFailed');
-  } else if (confirmedState) {
-    sliderLabel = confirmedLabel;
-  } else if (isPending) {
-    sliderLabel = t('deviceCommandPending');
+  } else if (confirmedState && confirmedBlocked) {
+    sliderLabel = t('deviceLocked');
   }
-  const sliderTone = commandState === 'sending'
+  const sliderTone = isProcessing
     ? 'neutral'
-    : (resolvedBlockedState.blocked ? 'success' : 'warning');
-  const sliderIcon = confirmedState
-    ? (resolvedBlockedState.blocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />)
-    : (commandState === 'sending' || isPending
-      ? <PendingIcon fontSize="small" />
-      : <ChevronRightIcon fontSize="small" />);
+    : (confirmedBlocked ? 'success' : 'warning');
+  const sliderDirection = confirmedBlocked ? 'right' : 'left';
+  const idleChevron = sliderDirection === 'left' ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />;
+  const sliderIcon = isProcessing
+    ? <CircularProgress size={14} />
+    : confirmedState
+      ? (resolvedBlockedState.blocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />)
+      : (commandState === 'error'
+        ? <PendingIcon fontSize="small" />
+        : idleChevron);
 
   const handleSliderStart = () => {
     if (commandState === 'error') {
@@ -451,11 +447,6 @@ const StatusCard = ({
                       ))}
                   </TableBody>
                 </Table>
-                {appVersion && (
-                  <Typography variant="caption" color="textSecondary" className={classes.version}>
-                    {`v${appVersion}`}
-                  </Typography>
-                )}
               </CardContent>
             )}
               <CardActions classes={{ root: classes.actions }} disableSpacing>
@@ -484,7 +475,8 @@ const StatusCard = ({
                       status={commandState}
                       tone={sliderTone}
                       icon={sliderIcon}
-                      disabled={commandDisabled || commandState === 'sending'}
+                      direction={sliderDirection}
+                      disabled={commandDisabled || isProcessing}
                       onStart={handleSliderStart}
                       onConfirm={handleCommandSend}
                     />

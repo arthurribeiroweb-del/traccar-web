@@ -6,6 +6,28 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
 import { nativeEnvironment } from './common/components/NativeInterface';
 
+const forceReload = async () => {
+  if ('serviceWorker' in navigator) {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    } catch {
+      // ignore
+    }
+  }
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    } catch {
+      // ignore
+    }
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set('v', Date.now().toString());
+  window.location.replace(url.toString());
+};
+
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
 const WebUpdateController = ({ swUpdateInterval }) => {
   const t = useTranslation();
@@ -49,15 +71,24 @@ const WebUpdateController = ({ swUpdateInterval }) => {
     return undefined;
   }, [needRefresh, updateServiceWorker]);
 
+  const handleReload = async () => {
+    try {
+      await updateServiceWorker(true);
+    } finally {
+      await forceReload();
+    }
+  };
+
   return (
     <Snackbar
       open={needRefresh}
       message={t('settingsUpdateAvailable')}
       action={(
-        <IconButton color="inherit" onClick={() => updateServiceWorker(true)}>
+        <IconButton color="inherit" onClick={handleReload}>
           <RefreshIcon />
         </IconButton>
       )}
+      onClick={handleReload}
     />
   );
 };
@@ -101,15 +132,20 @@ const NativeUpdateController = () => {
     };
   }, [appVersion]);
 
+  const handleReload = async () => {
+    await forceReload();
+  };
+
   return (
     <Snackbar
       open={updateAvailable}
       message={t('settingsUpdateAvailable')}
       action={(
-        <IconButton color="inherit" onClick={() => window.location.reload()}>
+        <IconButton color="inherit" onClick={handleReload}>
           <RefreshIcon />
         </IconButton>
       )}
+      onClick={handleReload}
     />
   );
 };

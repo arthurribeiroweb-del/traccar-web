@@ -92,6 +92,7 @@ const ActionSlider = ({
   status = 'idle',
   tone = 'neutral',
   icon,
+  direction = 'right',
   onConfirm,
   onStart,
 }) => {
@@ -123,8 +124,12 @@ const ActionSlider = ({
     }
   }, [disabled]);
 
+  useEffect(() => {
+    setProgress(0);
+  }, [direction]);
+
   const maxOffset = useMemo(() => Math.max(trackWidth - thumbSize - 8, 0), [trackWidth]);
-  const offset = Math.round(progress * maxOffset);
+  const offset = Math.round((direction === 'left' ? (1 - progress) : progress) * maxOffset);
   const labelOpacity = disabled ? 0.6 : Math.max(1 - progress * 0.5, 0.4);
 
   const updateProgress = (nextOffset) => {
@@ -132,7 +137,11 @@ const ActionSlider = ({
       setProgress(0);
       return;
     }
-    setProgress(clamp(nextOffset, 0, maxOffset) / maxOffset);
+    const clamped = clamp(nextOffset, 0, maxOffset);
+    const nextProgress = direction === 'left'
+      ? 1 - (clamped / maxOffset)
+      : (clamped / maxOffset);
+    setProgress(clamp(nextProgress, 0, 1));
   };
 
   const handlePointerDown = (event) => {
