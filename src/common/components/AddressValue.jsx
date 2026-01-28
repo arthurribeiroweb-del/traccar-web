@@ -6,6 +6,27 @@ import { useCatch } from '../../reactHelper';
 import fetchOrThrow from '../util/fetchOrThrow';
 
 const GEOCODE_TIMEOUT_MS = 15_000;
+const NOMINATIM_TIMEOUT_MS = 8_000;
+const NOMINATIM_USER_AGENT = 'TraccarWeb/1.0 (https://www.traccar.org)';
+
+const CITY_KEYS = ['city', 'town', 'village', 'municipality', 'county', 'state'];
+
+async function fetchCityFallback(latitude, longitude, signal) {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`;
+  const res = await fetch(url, {
+    signal,
+    headers: { 'Accept-Language': typeof navigator !== 'undefined' ? navigator.language : 'en', 'User-Agent': NOMINATIM_USER_AGENT },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const addr = json?.address;
+  if (!addr || typeof addr !== 'object') return null;
+  for (const k of CITY_KEYS) {
+    const v = addr[k];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return null;
+}
 
 const AddressValue = ({
   latitude,
@@ -56,25 +77,39 @@ const AddressValue = ({
     };
     const stillCurrent = () => currentKeyRef.current === key;
 
+    const tryCityFallback = () => {
+      if (!stillCurrent() || ac.signal.aborted) return Promise.resolve();
+      const ac2 = new AbortController();
+      const t2 = setTimeout(() => ac2.abort(), NOMINATIM_TIMEOUT_MS);
+      return fetchCityFallback(latitude, longitude, ac2.signal)
+        .then((city) => {
+          clearTimeout(t2);
+          if (stillCurrent() && !ac.signal.aborted && city) apply(() => setAddress(city));
+          else if (stillCurrent() && !ac.signal.aborted) apply(() => setFailed(true));
+        })
+        .catch(() => {
+          clearTimeout(t2);
+          if (stillCurrent() && !ac.signal.aborted) apply(() => setFailed(true));
+        });
+    };
+
     const query = new URLSearchParams({ latitude, longitude });
     fetchOrThrow(`/api/server/geocode?${query.toString()}`, { signal: ac.signal })
       .then((response) => response.text())
       .then((text) => {
-        apply(() => {
-          const trimmed = (text || '').trim();
-          if (trimmed && trimmed.toLowerCase() !== 'null') {
-            setAddress(trimmed);
-          } else {
-            setFailed(true);
-          }
-        });
+        const trimmed = (text || '').trim();
+        if (trimmed && trimmed.toLowerCase() !== 'null') {
+          apply(() => setAddress(trimmed));
+          return;
+        }
+        return tryCityFallback();
       })
       .catch((error) => {
         if (error?.name === 'AbortError') {
-          if (stillCurrent()) setFailed(true);
+          if (stillCurrent()) return tryCityFallback();
           return;
         }
-        apply(() => setFailed(true));
+        return tryCityFallback();
       })
       .finally(() => {
         clearTimeout(timeout);
