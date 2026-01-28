@@ -45,16 +45,15 @@ const navigateWithCacheBust = () => {
   }
 };
 
-const forceReload = async (eager) => {
+const forceReload = (eager) => {
   if (eager) {
-    setTimeout(() => {
-      clearCaches();
-    }, 0);
+    clearCaches();
     navigateWithCacheBust();
     return;
   }
-  await clearCaches();
-  navigateWithCacheBust();
+  clearCaches().finally(() => {
+    navigateWithCacheBust();
+  });
 };
 
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
@@ -112,7 +111,7 @@ const WebUpdateController = ({ swUpdateInterval }) => {
     } catch {
       // ignore
     }
-    await forceReload(false);
+    forceReload(false);
   };
 
   return (
@@ -170,13 +169,13 @@ const NativeUpdateController = () => {
     };
   }, [appVersion]);
 
-  const handleReload = async () => {
+  const handleReload = () => {
     if (updating) {
       return;
     }
     setUpdating(true);
     setTimeout(() => setUpdating(false), 4000);
-    await forceReload(true);
+    forceReload(true);
   };
 
   return (
