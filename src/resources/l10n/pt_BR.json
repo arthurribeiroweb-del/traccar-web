@@ -537,7 +537,7 @@
     "eventMedia": "Media",
     "deviceLock": "Bloquear",
     "deviceUnlock": "Desbloquear",
-    "deviceSliderLock": "BLOQUEAR",
+    "deviceSliderLock": "DESBLOQUEADO",
     "deviceSliderUnlock": "Deslize para DESBLOQUEAR",
     "deviceCommandSending": "PROCESSANDO",
     "deviceCommandFailed": "Falha.",

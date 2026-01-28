@@ -25,6 +25,10 @@ const useStyles = makeStyles()((theme, { disabled, status, tone }) => {
       minWidth: 200,
       maxWidth: 260,
       userSelect: 'none',
+      [theme.breakpoints.down('sm')]: {
+        minWidth: 130,
+        maxWidth: 200,
+      },
     },
     track: {
       position: 'relative',

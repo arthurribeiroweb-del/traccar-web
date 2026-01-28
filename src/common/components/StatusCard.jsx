@@ -89,6 +89,14 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
   },
   actions: {
     justifyContent: 'space-between',
+    [theme.breakpoints.down('sm')]: {
+      gap: theme.spacing(0.5),
+      paddingLeft: theme.spacing(1),
+      paddingRight: theme.spacing(1),
+      '& .MuiIconButton-root': {
+        padding: theme.spacing(0.5),
+      },
+    },
   },
   commandWrapper: {
     flex: 1,
@@ -97,6 +105,10 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     alignItems: 'stretch',
     gap: 4,
     margin: theme.spacing(0, 1),
+    minWidth: 0,
+    [theme.breakpoints.down('sm')]: {
+      margin: theme.spacing(0, 0.5),
+    },
   },
   pendingHint: {
     fontSize: 11,

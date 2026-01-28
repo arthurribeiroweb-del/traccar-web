@@ -539,7 +539,7 @@
     "eventMedia": "Media",
     "deviceLock": "Lock",
     "deviceUnlock": "Unlock",
-    "deviceSliderLock": "LOCK",
+    "deviceSliderLock": "UNLOCKED",
     "deviceSliderUnlock": "Slide to UNLOCK",
     "deviceCommandSending": "PROCESSING",
     "deviceCommandFailed": "Failed.",
