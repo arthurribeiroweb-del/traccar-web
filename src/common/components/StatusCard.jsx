@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
@@ -28,8 +28,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import PendingIcon from '@mui/icons-material/Pending';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import CircularProgress from '@mui/material/CircularProgress';
 
 import { useTranslation } from './LocalizationProvider';
@@ -100,6 +98,12 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
     gap: 4,
     margin: theme.spacing(0, 1),
   },
+  pendingHint: {
+    fontSize: 11,
+    lineHeight: 1.2,
+    textAlign: 'center',
+    color: theme.palette.text.secondary,
+  },
   root: {
     pointerEvents: 'none',
     position: 'fixed',
@@ -132,7 +136,7 @@ const StatusRow = ({ name, content }) => {
   );
 };
 
-const pendingWindowMs = 60 * 1000;
+const pendingWindowMs = 5 * 60 * 1000;
 const isDev = process.env.NODE_ENV === 'development';
 
 const debugLog = (...args) => {
@@ -193,27 +197,71 @@ const StatusCard = ({
   const [removing, setRemoving] = useState(false);
   const [commandState, setCommandState] = useState('idle');
   const [commandToast, setCommandToast] = useState(false);
-  const [optimisticBlocked, setOptimisticBlocked] = useState(null);
+  const [localBlocked, setLocalBlocked] = useState(null);
   const [, setPendingTick] = useState(0);
+
+  const localStorageKey = deviceId ? `deviceLockState:${deviceId}` : null;
+  const readLocalBlocked = useCallback(() => {
+    if (!localStorageKey) {
+      return null;
+    }
+    try {
+      const raw = localStorage.getItem(localStorageKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.blocked !== 'boolean') {
+        return null;
+      }
+      const at = Number(parsed?.at);
+      return {
+        blocked: parsed.blocked,
+        at: Number.isFinite(at) ? at : Date.now(),
+      };
+    } catch (error) {
+      return null;
+    }
+  }, [localStorageKey]);
+
+  const persistLocalBlocked = useCallback((next) => {
+    setLocalBlocked(next);
+    if (!localStorageKey) {
+      return;
+    }
+    try {
+      if (next) {
+        localStorage.setItem(localStorageKey, JSON.stringify(next));
+      } else {
+        localStorage.removeItem(localStorageKey);
+      }
+    } catch (error) {
+      // Ignore storage errors (private mode, quota, etc.)
+    }
+  }, [localStorageKey]);
+
+  useEffect(() => {
+    setLocalBlocked(readLocalBlocked());
+  }, [readLocalBlocked]);
 
   const resolvedBlockedState = useMemo(() => {
     if (positionBlockedKnown) {
       return { blocked: positionBlockedValue, source: 'position', at: null };
     }
 
-    const optimisticIsNewer = optimisticBlocked
-      && (deviceBlockedAt == null || optimisticBlocked.at > deviceBlockedAt);
+    const optimisticIsNewer = localBlocked
+      && (deviceBlockedAt == null || localBlocked.at > deviceBlockedAt);
 
     if (optimisticIsNewer) {
-      return { blocked: optimisticBlocked.blocked, source: 'optimistic', at: optimisticBlocked.at };
+      return { blocked: localBlocked.blocked, source: 'local', at: localBlocked.at };
     }
 
     if (deviceBlockedKnown) {
       return { blocked: deviceBlockedValue, source: 'device', at: deviceBlockedAt };
     }
 
-    if (optimisticBlocked) {
-      return { blocked: optimisticBlocked.blocked, source: 'optimistic', at: optimisticBlocked.at };
+    if (localBlocked) {
+      return { blocked: localBlocked.blocked, source: 'local', at: localBlocked.at };
     }
 
     return { blocked: false, source: 'none', at: null };
@@ -221,12 +269,12 @@ const StatusCard = ({
     deviceBlockedAt,
     deviceBlockedKnown,
     deviceBlockedValue,
-    optimisticBlocked,
+    localBlocked,
     positionBlockedKnown,
     positionBlockedValue,
   ]);
 
-  const lastCommandAt = optimisticBlocked?.at ?? deviceBlockedAt;
+  const lastCommandAt = localBlocked?.at ?? deviceBlockedAt;
   const isPending = resolvedBlockedState.source !== 'position'
     && lastCommandAt != null
     && Date.now() - lastCommandAt < pendingWindowMs;
@@ -293,7 +341,7 @@ const StatusCard = ({
         source: resolvedBlockedState.source,
       });
 
-      setOptimisticBlocked({
+      persistLocalBlocked({
         blocked: !resolvedBlockedState.blocked,
         at: Date.now(),
       });
@@ -307,6 +355,7 @@ const StatusCard = ({
     deviceId,
     device?.attributes,
     device?.id,
+    persistLocalBlocked,
     position?.attributes,
     position?.id,
     resolvedBlockedState.blocked,
@@ -320,31 +369,28 @@ const StatusCard = ({
     : t('sharedEdit');
 
   const confirmedState = resolvedBlockedState.source === 'position';
-  const confirmedBlocked = confirmedState ? resolvedBlockedState.blocked : false;
+  const effectiveBlocked = resolvedBlockedState.blocked;
   const retryLabel = t('deviceCommandRetry');
-  const isProcessing = commandState === 'sending' || (isPending && !confirmedState);
-  let sliderLabel = confirmedBlocked ? t('deviceLocked') : t('deviceSliderLock');
-  if (isProcessing) {
+  const isSending = commandState === 'sending';
+  let sliderLabel = effectiveBlocked ? t('deviceLocked') : t('deviceSliderLock');
+  if (isSending) {
     sliderLabel = t('deviceCommandSending');
   } else if (commandState === 'error') {
     sliderLabel = retryLabel
       ? `${t('deviceCommandFailed')} ${retryLabel}`
       : t('deviceCommandFailed');
-  } else if (confirmedState && confirmedBlocked) {
+  } else if (effectiveBlocked) {
     sliderLabel = t('deviceLocked');
   }
-  const sliderTone = isProcessing
+  const sliderTone = isSending
     ? 'neutral'
-    : (confirmedBlocked ? 'success' : 'warning');
-  const sliderDirection = confirmedBlocked ? 'right' : 'left';
-  const idleChevron = sliderDirection === 'left' ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />;
-  const sliderIcon = isProcessing
+    : (effectiveBlocked ? 'success' : 'warning');
+  const sliderDirection = effectiveBlocked ? 'right' : 'left';
+  const sliderIcon = isSending
     ? <CircularProgress size={14} />
-    : confirmedState
-      ? (resolvedBlockedState.blocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />)
-      : (commandState === 'error'
-        ? <PendingIcon fontSize="small" />
-        : idleChevron);
+    : (commandState === 'error'
+      ? <PendingIcon fontSize="small" />
+      : (effectiveBlocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />));
 
   const handleSliderStart = () => {
     if (commandState === 'error') {
@@ -363,19 +409,19 @@ const StatusCard = ({
     return () => clearTimeout(timer);
   }, [lastCommandAt]);
   useEffect(() => {
-    if (!optimisticBlocked) {
+    if (!localBlocked) {
       return;
     }
 
     if (positionBlockedKnown) {
-      setOptimisticBlocked(null);
+      persistLocalBlocked(null);
       return;
     }
 
-    if (deviceBlockedAt != null && deviceBlockedAt >= optimisticBlocked.at) {
-      setOptimisticBlocked(null);
+    if (deviceBlockedKnown && (deviceBlockedAt == null || deviceBlockedAt >= localBlocked.at)) {
+      persistLocalBlocked(null);
     }
-  }, [deviceBlockedAt, optimisticBlocked, positionBlockedKnown]);
+  }, [deviceBlockedAt, deviceBlockedKnown, localBlocked, persistLocalBlocked, positionBlockedKnown]);
 
   useEffect(() => {
     debugLog('[device-lock] decision', {
@@ -476,10 +522,15 @@ const StatusCard = ({
                       tone={sliderTone}
                       icon={sliderIcon}
                       direction={sliderDirection}
-                      disabled={commandDisabled || isProcessing}
+                      disabled={commandDisabled || isSending}
                       onStart={handleSliderStart}
                       onConfirm={handleCommandSend}
                     />
+                    {isPending && !confirmedState && (
+                      <Typography variant="caption" className={classes.pendingHint}>
+                        {t('deviceLockPendingHint')}
+                      </Typography>
+                    )}
                   </span>
                 </Tooltip>
                 <Tooltip title={t('reportReplay')}>
