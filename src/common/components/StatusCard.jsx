@@ -31,7 +31,7 @@ import RemoveDialog from './RemoveDialog';
 import PositionValue from './PositionValue';
 import DeviceQuickStats from './DeviceQuickStats';
 import AddressValue from './AddressValue';
-import { useDeviceReadonly, useRestriction } from '../util/permissions';
+import { canSeeDeviceAction, useDeviceReadonly, useRestriction } from '../util/permissions';
 import usePositionAttributes from '../attributes/usePositionAttributes';
 import { devicesActions } from '../../store';
 import { useCatch, useCatchCallback } from '../../reactHelper';
@@ -572,6 +572,140 @@ const StatusCard = ({
   }, [position, positionItems]);
   const secondaryInfoKeys = infoKeys.filter((key) => !primaryInfoKeys.includes(key));
 
+  const menuItems = useMemo(() => {
+    if (!position) {
+      return [];
+    }
+    const items = [
+      {
+        action: 'OPEN_COMMAND',
+        element: (
+          <MenuItem
+            key="command"
+            onClick={() => {
+              setActionsEl(null);
+              navigate(`/settings/device/${deviceId}/command`);
+            }}
+            disabled={disableActions}
+          >
+            {t('commandTitle')}
+          </MenuItem>
+        ),
+      },
+      {
+        action: 'REMOVE_DEVICE',
+        element: (
+          <MenuItem
+            key="remove"
+            onClick={() => {
+              setActionsEl(null);
+              setRemoving(true);
+            }}
+            disabled={disableActions || deviceReadonly}
+          >
+            {t('sharedRemove')}
+          </MenuItem>
+        ),
+      },
+      {
+        action: 'OPEN_GOOGLE_MAPS',
+        element: (
+          <MenuItem
+            key="google-maps"
+            component="a"
+            target="_blank"
+            href={`https://www.google.com/maps/search/?api=1&query=${position.latitude}%2C${position.longitude}`}
+            onClick={() => setActionsEl(null)}
+          >
+            {t('linkGoogleMaps')}
+          </MenuItem>
+        ),
+      },
+      {
+        action: 'OPEN_APPLE_MAPS',
+        element: (
+          <MenuItem
+            key="apple-maps"
+            component="a"
+            target="_blank"
+            href={`http://maps.apple.com/?ll=${position.latitude},${position.longitude}`}
+            onClick={() => setActionsEl(null)}
+          >
+            {t('linkAppleMaps')}
+          </MenuItem>
+        ),
+      },
+      {
+        action: 'OPEN_STREET_VIEW',
+        element: (
+          <MenuItem
+            key="street-view"
+            component="a"
+            target="_blank"
+            href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${position.latitude}%2C${position.longitude}&heading=${position.course}`}
+            onClick={() => setActionsEl(null)}
+          >
+            {t('linkStreetView')}
+          </MenuItem>
+        ),
+      },
+    ];
+
+    if (navigationAppTitle) {
+      items.push({
+        action: 'OPEN_NAV_APP',
+        element: (
+          <MenuItem
+            key="nav-app"
+            component="a"
+            target="_blank"
+            href={navigationAppLink.replace('{latitude}', position.latitude).replace('{longitude}', position.longitude)}
+            onClick={() => setActionsEl(null)}
+          >
+            {navigationAppTitle}
+          </MenuItem>
+        ),
+      });
+    }
+
+    if (!shareDisabled && !user.temporary) {
+      items.push({
+        action: 'SHARE_DEVICE',
+        element: (
+          <MenuItem
+            key="share"
+            onClick={() => {
+              setActionsEl(null);
+              navigate(`/settings/device/${deviceId}/share`);
+            }}
+          >
+            <Typography color="secondary">{t('deviceShare')}</Typography>
+          </MenuItem>
+        ),
+      });
+    }
+
+    return items;
+  }, [
+    deviceId,
+    deviceReadonly,
+    disableActions,
+    navigationAppLink,
+    navigationAppTitle,
+    navigate,
+    position,
+    setActionsEl,
+    shareDisabled,
+    t,
+    user?.temporary,
+  ]);
+
+  const visibleMenuItems = useMemo(
+    () => menuItems.filter((item) => canSeeDeviceAction(user, item.action)),
+    [menuItems, user],
+  );
+  const showMenuButton = Boolean(position) && visibleMenuItems.length > 0;
+
   const { classes } = useStyles({ desktopPadding, actionTone });
 
   return (
@@ -616,17 +750,18 @@ const StatusCard = ({
                   </div>
                 </div>
                 <div className={classes.headerActions}>
-                  <Tooltip title={t('sharedExtra')}>
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => setActionsEl(e.currentTarget)}
-                        disabled={!position}
-                      >
-                        <MoreVertIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  {showMenuButton && (
+                    <Tooltip title={t('sharedExtra')}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => setActionsEl(e.currentTarget)}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
                   <IconButton
                     size="small"
                     onClick={onClose}
@@ -769,49 +904,9 @@ const StatusCard = ({
           </Rnd>
         )}
       </div>
-      {position && (
+      {showMenuButton && (
         <Menu anchorEl={actionsEl} open={Boolean(actionsEl)} onClose={() => setActionsEl(null)}>
-          <MenuItem
-            onClick={() => {
-              setActionsEl(null);
-              navigate(`/settings/device/${deviceId}/command`);
-            }}
-            disabled={disableActions}
-          >
-            {t('commandTitle')}
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setActionsEl(null);
-              setRemoving(true);
-            }}
-            disabled={disableActions || deviceReadonly}
-          >
-            {t('sharedRemove')}
-          </MenuItem>
-          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/search/?api=1&query=${position.latitude}%2C${position.longitude}`}>
-            {t('linkGoogleMaps')}
-          </MenuItem>
-          <MenuItem component="a" target="_blank" href={`http://maps.apple.com/?ll=${position.latitude},${position.longitude}`}>
-            {t('linkAppleMaps')}
-          </MenuItem>
-          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${position.latitude}%2C${position.longitude}&heading=${position.course}`}>
-            {t('linkStreetView')}
-          </MenuItem>
-          {navigationAppTitle && (
-            <MenuItem component="a" target="_blank" href={navigationAppLink.replace('{latitude}', position.latitude).replace('{longitude}', position.longitude)}>
-              {navigationAppTitle}
-            </MenuItem>
-          )}
-          {!shareDisabled && !user.temporary && (
-            <MenuItem onClick={() => {
-              setActionsEl(null);
-              navigate(`/settings/device/${deviceId}/share`);
-            }}
-            >
-              <Typography color="secondary">{t('deviceShare')}</Typography>
-            </MenuItem>
-          )}
+          {visibleMenuItems.map((item) => item.element)}
         </Menu>
       )}
       <RemoveDialog

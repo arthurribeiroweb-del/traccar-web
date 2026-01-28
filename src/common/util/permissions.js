@@ -38,3 +38,17 @@ export const useSettingsAccess = () => useSelector((state) => {
   const manager = (state.session.user.userLimit || 0) !== 0;
   return admin || manager;
 });
+
+export const isCommonUser = (user) => !user?.administrator;
+
+export const canSeeDeviceAction = (user, action) => {
+  if (user?.administrator) {
+    return true;
+  }
+  const allowed = new Set([
+    'OPEN_GOOGLE_MAPS',
+    'OPEN_APPLE_MAPS',
+    'OPEN_STREET_VIEW',
+  ]);
+  return allowed.has(action);
+};
