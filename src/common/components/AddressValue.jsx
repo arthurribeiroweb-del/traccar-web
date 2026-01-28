@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Link } from '@mui/material';
 import { useTranslation } from './LocalizationProvider';
 import { useCatch } from '../../reactHelper';
 import fetchOrThrow from '../util/fetchOrThrow';
+
+const GEOCODE_TIMEOUT_MS = 15_000;
 
 const AddressValue = ({
   latitude,
@@ -22,48 +24,91 @@ const AddressValue = ({
   const [address, setAddress] = useState();
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const currentKeyRef = useRef('');
+  const abortRef = useRef(null);
 
   useEffect(() => {
     setAddress(originalAddress);
+    setFailed(false);
   }, [latitude, longitude, originalAddress]);
 
   useEffect(() => {
-    let active = true;
-    const fetchAddress = async () => {
-      if (!inline || !addressEnabled || address || loading) {
-        return;
-      }
-      try {
-        setLoading(true);
-        const query = new URLSearchParams({ latitude, longitude });
-        const response = await fetchOrThrow(`/api/server/geocode?${query.toString()}`);
-        const text = await response.text();
-        if (active) {
-          setAddress(text);
-        }
-      } catch (error) {
-        // Ignore geocode errors silently for inline display
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
+    if (!inline || !addressEnabled || address) {
+      setLoading(false);
+      return;
+    }
+
+    const key = `${latitude},${longitude}`;
+    if (currentKeyRef.current === key && failed) return;
+    currentKeyRef.current = key;
+
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const timeout = setTimeout(() => ac.abort(), GEOCODE_TIMEOUT_MS);
+
+    setFailed(false);
+    setLoading(true);
+
+    const apply = (fn) => {
+      if (!ac.signal.aborted && currentKeyRef.current === key) fn();
     };
-    fetchAddress();
+    const stillCurrent = () => currentKeyRef.current === key;
+
+    const query = new URLSearchParams({ latitude, longitude });
+    fetchOrThrow(`/api/server/geocode?${query.toString()}`, { signal: ac.signal })
+      .then((response) => response.text())
+      .then((text) => {
+        apply(() => {
+          const trimmed = (text || '').trim();
+          if (trimmed && trimmed.toLowerCase() !== 'null') {
+            setAddress(trimmed);
+          } else {
+            setFailed(true);
+          }
+        });
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') {
+          if (stillCurrent()) setFailed(true);
+          return;
+        }
+        apply(() => setFailed(true));
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (abortRef.current === ac) abortRef.current = null;
+        if (stillCurrent()) setLoading(false);
+      });
+
     return () => {
-      active = false;
+      ac.abort();
+      clearTimeout(timeout);
+      if (abortRef.current === ac) abortRef.current = null;
     };
-  }, [address, addressEnabled, inline, latitude, longitude, loading]);
+  }, [inline, addressEnabled, address, failed, latitude, longitude]);
 
   const showAddress = useCatch(async (event) => {
     event.preventDefault();
     const query = new URLSearchParams({ latitude, longitude });
     const response = await fetchOrThrow(`/api/server/geocode?${query.toString()}`);
-    setAddress(await response.text());
+    const text = await response.text();
+    const trimmed = (text || '').trim();
+    setAddress(trimmed && trimmed.toLowerCase() !== 'null' ? trimmed : null);
   });
 
   if (inline) {
-    const value = address || (loading ? t('sharedLoading') : '--');
+    let value;
+    if (address) {
+      value = address;
+    } else if (loading) {
+      value = t('sharedLoading');
+    } else if (failed) {
+      value = t('sharedAddressUnavailable');
+    } else {
+      value = '--';
+    }
     const classNames = expanded ? `${className} ${expandedClassName}`.trim() : className;
     return (
       <span

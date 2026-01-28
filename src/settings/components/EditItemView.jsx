@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Container, Button, Accordion, AccordionDetails, AccordionSummary, Skeleton, Typography, TextField,
+  Container, Button, Accordion, AccordionDetails, AccordionSummary, Skeleton, Typography, TextField, CircularProgress,
 } from '@mui/material';
 import { useCatch, useEffectAsync } from '../../reactHelper';
 import { useTranslation } from '../../common/components/LocalizationProvider';
@@ -10,6 +10,7 @@ import fetchOrThrow from '../../common/util/fetchOrThrow';
 
 const EditItemView = ({
   children, endpoint, item, setItem, defaultItem, validate, onItemSaved, menu, breadcrumbs,
+  customSave, saving, saveLabel,
 }) => {
   const navigate = useNavigate();
   const { classes } = useSettingsStyles();
@@ -29,6 +30,10 @@ const EditItemView = ({
   }, [id, item, defaultItem]);
 
   const handleSave = useCatch(async () => {
+    if (customSave) {
+      await customSave(item);
+      return;
+    }
     let url = `/api/${endpoint}`;
     if (id) {
       url += `/${id}`;
@@ -45,6 +50,9 @@ const EditItemView = ({
     }
     navigate(-1);
   });
+
+  const saveDisabled = !item || !validate() || saving;
+  const displaySaveLabel = saving && saveLabel ? saveLabel : t('sharedSave');
 
   return (
     <PageLayout menu={menu} breadcrumbs={breadcrumbs}>
@@ -70,7 +78,7 @@ const EditItemView = ({
             color="primary"
             variant="outlined"
             onClick={() => navigate(-1)}
-            disabled={!item}
+            disabled={!item || saving}
           >
             {t('sharedCancel')}
           </Button>
@@ -78,9 +86,10 @@ const EditItemView = ({
             color="primary"
             variant="contained"
             onClick={handleSave}
-            disabled={!item || !validate()}
+            disabled={saveDisabled}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
           >
-            {t('sharedSave')}
+            {displaySaveLabel}
           </Button>
         </div>
       </Container>
