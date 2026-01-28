@@ -225,7 +225,8 @@ const UpdateController = () => {
   }, []);
 
   if (nativeEnvironment) {
-    return <NativeUpdateController />;
+    // Temporary: disable update banner in native WebView to avoid reload loop.
+    return null;
   }
 
   return <WebUpdateController swUpdateInterval={swUpdateInterval} />;
