@@ -21,14 +21,10 @@ import {
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
 import CloseIcon from '@mui/icons-material/Close';
-import RouteIcon from '@mui/icons-material/Route';
-import SendIcon from '@mui/icons-material/Send';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import PendingIcon from '@mui/icons-material/Pending';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import CircularProgress from '@mui/material/CircularProgress';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 import { useTranslation } from './LocalizationProvider';
 import ActionSlider from './ActionSlider';
@@ -87,15 +83,19 @@ const useStyles = makeStyles()((theme, { desktopPadding }) => ({
   cell: {
     borderBottom: 'none',
   },
-  actions: {
-    justifyContent: 'space-between',
+  primaryActions: {
+    justifyContent: 'center',
+    paddingTop: theme.spacing(1),
+    paddingBottom: theme.spacing(1),
+  },
+  secondaryActions: {
+    justifyContent: 'flex-start',
+    paddingTop: 0,
+    paddingBottom: theme.spacing(1),
     [theme.breakpoints.down('sm')]: {
       gap: theme.spacing(0.5),
       paddingLeft: theme.spacing(1),
       paddingRight: theme.spacing(1),
-      '& .MuiIconButton-root': {
-        padding: theme.spacing(0.5),
-      },
     },
   },
   commandWrapper: {
@@ -203,7 +203,7 @@ const StatusCard = ({
   const navigationAppLink = useAttributePreference('navigationAppLink');
   const navigationAppTitle = useAttributePreference('navigationAppTitle');
 
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [actionsEl, setActionsEl] = useState(null);
 
   const [removing, setRemoving] = useState(false);
   const [commandState, setCommandState] = useState('idle');
@@ -488,16 +488,7 @@ const StatusCard = ({
                 </Table>
               </CardContent>
             )}
-              <CardActions classes={{ root: classes.actions }} disableSpacing>
-                <Tooltip title={t('sharedExtra')}>
-                  <IconButton
-                    color="secondary"
-                    onClick={(e) => setAnchorEl(e.currentTarget)}
-                    disabled={!position}
-                  >
-                    <PendingIcon />
-                  </IconButton>
-                </Tooltip>
+              <CardActions classes={{ root: classes.primaryActions }} disableSpacing>
                 <Tooltip title={
                   !deviceOnline
                     ? t('deviceOffline')
@@ -527,40 +518,18 @@ const StatusCard = ({
                     )}
                   </span>
                 </Tooltip>
-                <Tooltip title={t('reportReplay')}>
-                  <IconButton
-                    onClick={() => navigate(`/replay?deviceId=${deviceId}`)}
-                    disabled={disableActions || !position}
-                  >
-                    <RouteIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={t('commandTitle')}>
-                  <IconButton
-                    onClick={() => navigate(`/settings/device/${deviceId}/command`)}
-                    disabled={disableActions}
-                  >
-                    <SendIcon />
-                  </IconButton>
-                </Tooltip>
-                <Tooltip title={editTooltip}>
+              </CardActions>
+              <CardActions classes={{ root: classes.secondaryActions }} disableSpacing>
+                <Tooltip title={t('sharedExtra')}>
                   <span>
                     <IconButton
-                      onClick={onEditDevice || (() => navigate(`/settings/device/${deviceId}`))}
-                      disabled={editDisabled}
+                      color="secondary"
+                      onClick={(e) => setActionsEl(e.currentTarget)}
+                      disabled={!position}
                     >
-                      <EditIcon />
+                      <MoreVertIcon />
                     </IconButton>
                   </span>
-                </Tooltip>
-                <Tooltip title={t('sharedRemove')}>
-                  <IconButton
-                    color="error"
-                    onClick={() => setRemoving(true)}
-                    disabled={disableActions || deviceReadonly}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
                 </Tooltip>
               </CardActions>
             </Card>
@@ -568,14 +537,74 @@ const StatusCard = ({
         )}
       </div>
       {position && (
-        <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
-          {!readonly && <MenuItem onClick={handleGeofence}>{t('sharedCreateGeofence')}</MenuItem>}
-          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/search/?api=1&query=${position.latitude}%2C${position.longitude}`}>{t('linkGoogleMaps')}</MenuItem>
-          <MenuItem component="a" target="_blank" href={`http://maps.apple.com/?ll=${position.latitude},${position.longitude}`}>{t('linkAppleMaps')}</MenuItem>
-          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${position.latitude}%2C${position.longitude}&heading=${position.course}`}>{t('linkStreetView')}</MenuItem>
-          {navigationAppTitle && <MenuItem component="a" target="_blank" href={navigationAppLink.replace('{latitude}', position.latitude).replace('{longitude}', position.longitude)}>{navigationAppTitle}</MenuItem>}
+        <Menu anchorEl={actionsEl} open={Boolean(actionsEl)} onClose={() => setActionsEl(null)}>
+          <MenuItem
+            onClick={() => {
+              setActionsEl(null);
+              navigate(`/replay?deviceId=${deviceId}`);
+            }}
+            disabled={disableActions || !position}
+          >
+            {t('reportReplay')}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setActionsEl(null);
+              navigate(`/settings/device/${deviceId}/command`);
+            }}
+            disabled={disableActions}
+          >
+            {t('commandTitle')}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setActionsEl(null);
+              (onEditDevice || (() => navigate(`/settings/device/${deviceId}`)))();
+            }}
+            disabled={editDisabled}
+          >
+            {t('sharedEdit')}
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setActionsEl(null);
+              setRemoving(true);
+            }}
+            disabled={disableActions || deviceReadonly}
+          >
+            {t('sharedRemove')}
+          </MenuItem>
+          {!readonly && (
+            <MenuItem onClick={() => {
+              setActionsEl(null);
+              handleGeofence();
+            }}
+            >
+              {t('sharedCreateGeofence')}
+            </MenuItem>
+          )}
+          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/search/?api=1&query=${position.latitude}%2C${position.longitude}`}>
+            {t('linkGoogleMaps')}
+          </MenuItem>
+          <MenuItem component="a" target="_blank" href={`http://maps.apple.com/?ll=${position.latitude},${position.longitude}`}>
+            {t('linkAppleMaps')}
+          </MenuItem>
+          <MenuItem component="a" target="_blank" href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${position.latitude}%2C${position.longitude}&heading=${position.course}`}>
+            {t('linkStreetView')}
+          </MenuItem>
+          {navigationAppTitle && (
+            <MenuItem component="a" target="_blank" href={navigationAppLink.replace('{latitude}', position.latitude).replace('{longitude}', position.longitude)}>
+              {navigationAppTitle}
+            </MenuItem>
+          )}
           {!shareDisabled && !user.temporary && (
-            <MenuItem onClick={() => navigate(`/settings/device/${deviceId}/share`)}><Typography color="secondary">{t('deviceShare')}</Typography></MenuItem>
+            <MenuItem onClick={() => {
+              setActionsEl(null);
+              navigate(`/settings/device/${deviceId}/share`);
+            }}
+            >
+              <Typography color="secondary">{t('deviceShare')}</Typography>
+            </MenuItem>
           )}
         </Menu>
       )}
