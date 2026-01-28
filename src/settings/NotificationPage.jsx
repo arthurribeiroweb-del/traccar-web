@@ -86,7 +86,7 @@ const NotificationPage = () => {
     name: t(it),
   }));
 
-  const isOverspeed = item?.type === 'overspeed';
+  const isOverspeed = ['overspeed', 'deviceOverspeed'].includes(item?.type);
   const limitNum = speedLimit.trim() === '' ? NaN : Number(speedLimit);
   const limitValid = Number.isFinite(limitNum) && limitNum > 0;
 
