@@ -21,6 +21,7 @@ const SocketController = () => {
   const navigate = useNavigate();
 
   const authenticated = useSelector((state) => Boolean(state.session.user));
+  const userId = useSelector((state) => state.session.user?.id);
   const includeLogs = useSelector((state) => state.session.includeLogs);
 
   const socketRef = useRef();
@@ -42,7 +43,7 @@ const SocketController = () => {
 
   const handleEvents = useCallback((events) => {
     if (!features.disableEvents) {
-      dispatch(eventsActions.add(events));
+      dispatch(eventsActions.add({ events, userId }));
     }
     if (events.some((e) => soundEvents.includes(e.type)
         || (e.type === 'alarm' && soundAlarms.includes(e.attributes.alarm)))) {
@@ -53,7 +54,7 @@ const SocketController = () => {
       message: event.attributes.message,
       show: true,
     })));
-  }, [features, dispatch, soundEvents, soundAlarms]);
+  }, [features, dispatch, soundEvents, soundAlarms, userId]);
 
   const connectSocket = () => {
     clearReconnectTimeout();
