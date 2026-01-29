@@ -12,6 +12,7 @@ import AddIcon from '@mui/icons-material/Add';
 import TuneIcon from '@mui/icons-material/Tune';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTranslation } from '../common/components/LocalizationProvider';
+import WhatsAppIcon from '../resources/images/whatsapp.svg?react';
 import useFeatures from '../common/util/useFeatures';
 import { useDeviceReadonly } from '../common/util/permissions';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
@@ -70,6 +71,7 @@ const MainToolbar = ({
 
   const deviceStatusCount = (status) => Object.values(devices).filter((d) => d.status === status).length;
   const displayValue = keyword || (searchFocused ? '' : (selectedDevice ? (getDeviceDisplayName(selectedDevice) || selectedDevice.name) : ''));
+  const whatsappUrl = import.meta.env.VITE_WHATSAPP_URL || 'https://wa.me/559491796309';
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
@@ -197,6 +199,20 @@ const MainToolbar = ({
             <Badge color="error" badgeContent={events.length} invisible={!events.length}>
               <NotificationsIcon />
             </Badge>
+          </IconButton>
+        </Tooltip>
+      )}
+      {whatsappUrl && (
+        <Tooltip title={t('whatsappSupport')}>
+          <IconButton
+            component="a"
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t('whatsappSupport')}
+            sx={{ color: '#25D366', '&:hover': { color: '#1da851' } }}
+          >
+            <WhatsAppIcon style={{ width: 24, height: 24 }} />
           </IconButton>
         </Tooltip>
       )}
