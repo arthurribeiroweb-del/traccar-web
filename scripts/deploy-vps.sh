@@ -12,6 +12,12 @@ SERVER_SRC="/opt/traccar-server-src"
 TRACCAR="/opt/traccar"
 BACKUP_DIR="/root"
 
+# Carregar nvm (node/npm) quando o script roda com sudo
+export NVM_DIR="${NVM_DIR:-/root/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+fi
+
 echo "=== 1. BACKUP ==="
 BACKUP_FILE="$BACKUP_DIR/backup-traccar-$(date +%F_%H%M).tgz"
 sudo tar -czf "$BACKUP_FILE" "$TRACCAR/data" "$TRACCAR/conf/traccar.xml" "$TRACCAR/web"
