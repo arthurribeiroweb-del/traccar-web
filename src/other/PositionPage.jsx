@@ -12,6 +12,7 @@ import PositionValue from '../common/components/PositionValue';
 import usePositionAttributes from '../common/attributes/usePositionAttributes';
 import BackIcon from '../common/components/BackIcon';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -51,7 +52,7 @@ const PositionPage = () => {
     if (item) {
       const device = state.devices.items[item.deviceId];
       if (device) {
-        return device.name;
+        return getDeviceDisplayName(device) || device.name;
       }
     }
     return null;

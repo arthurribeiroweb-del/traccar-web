@@ -9,6 +9,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useEffectAsync } from '../reactHelper';
 import BackIcon from '../common/components/BackIcon';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -48,7 +49,7 @@ const NetworkPage = () => {
     if (item) {
       const device = state.devices.items[item.deviceId];
       if (device) {
-        return device.name;
+        return getDeviceDisplayName(device) || device.name;
       }
     }
     return null;

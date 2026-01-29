@@ -22,6 +22,7 @@ import { makeStyles } from 'tss-react/mui';
 import DeleteIcon from '@mui/icons-material/Delete';
 import dayjs from 'dayjs';
 import { formatNotificationTitle, formatTime } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { eventsActions } from '../store';
 import useFeatures from '../common/util/useFeatures';
@@ -201,7 +202,7 @@ const EventsDrawer = ({ open, onClose }) => {
             disabled={!event.id}
           >
             <ListItemText
-              primary={`${devices[event.deviceId]?.name || event.deviceId} - ${formatType(event)}`}
+              primary={`${(devices[event.deviceId] && (getDeviceDisplayName(devices[event.deviceId]) || devices[event.deviceId].name)) || event.deviceId} - ${formatType(event)}`}
               secondary={formatTime(event.eventTime, 'seconds')}
             />
             <IconButton

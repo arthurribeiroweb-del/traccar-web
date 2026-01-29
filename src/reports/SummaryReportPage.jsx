@@ -8,6 +8,7 @@ import { useTheme } from '@mui/material/styles';
 import {
   formatDistance, formatSpeed, formatVolume, formatTime, formatNumericHours,
 } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import ReportFilter, { updateReportParams } from './components/ReportFilter';
 import { useAttributePreference } from '../common/util/preferences';
 import { useTranslation } from '../common/components/LocalizationProvider';
@@ -74,7 +75,7 @@ const SummaryReportPage = () => {
     const rows = [];
     const deviceHeader = t('sharedDevice');
     items.forEach((item) => {
-      const row = { [deviceHeader]: devices[item.deviceId].name };
+      const row = { [deviceHeader]: getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name };
       columns.forEach((key) => {
         const header = t(columnsMap.get(key));
         row[header] = formatValue(item, key);
@@ -101,7 +102,7 @@ const SummaryReportPage = () => {
     const value = item[key];
     switch (key) {
       case 'deviceId':
-        return devices[value].name;
+        return getDeviceDisplayName(devices[value]) || devices[value].name;
       case 'startTime':
         return formatTime(value, 'date');
       case 'startOdometer':
@@ -152,7 +153,7 @@ const SummaryReportPage = () => {
         <TableBody>
           {!loading ? items.map((item) => (
             <TableRow key={(`${item.deviceId}_${Date.parse(item.startTime)}`)}>
-              <TableCell>{devices[item.deviceId].name}</TableCell>
+              <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
               {columns.map((key) => (
                 <TableCell key={key}>
                   {formatValue(item, key)}

@@ -24,6 +24,7 @@ import useReportStyles from './common/useReportStyles';
 import MapCamera from '../map/MapCamera';
 import MapGeofence from '../map/MapGeofence';
 import { formatDistance, formatSpeed, formatTime } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import { prefixString } from '../common/util/stringUtils';
 import MapMarkers from '../map/MapMarkers';
 import MapRouteCoordinates from '../map/MapRouteCoordinates';
@@ -364,7 +365,7 @@ const CombinedReportPage = () => {
               {items.map((item) => (
                 <MapRouteCoordinates
                   key={item.deviceId}
-                  name={devices[item.deviceId].name}
+                  name={getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}
                   coordinates={item.route}
                   deviceId={item.deviceId}
                 />

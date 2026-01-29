@@ -18,6 +18,7 @@ import SettingsMenu from './components/SettingsMenu';
 import { useCatchCallback } from '../reactHelper';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 
 const SharePage = () => {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ const SharePage = () => {
           </AccordionSummary>
           <AccordionDetails className={classes.details}>
             <TextField
-              value={device.name}
+              value={device ? (getDeviceDisplayName(device) || device.name) : ''}
               label={t('sharedDevice')}
               disabled
             />

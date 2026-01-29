@@ -12,6 +12,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useAttributePreference } from '../common/util/preferences';
 import { speedFromKnots, speedUnitString } from '../common/util/converter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 
 const swipeThresholdPx = 24;
 
@@ -98,8 +99,9 @@ const BottomPeekCard = ({
 
   const lineText = useMemo(() => {
     const parts = [];
-    if (device?.name) {
-      parts.push(device.name);
+    const label = device ? (getDeviceDisplayName(device) || device.name) : '';
+    if (label) {
+      parts.push(label);
     }
     if (statusLabel) {
       parts.push(statusLabel);

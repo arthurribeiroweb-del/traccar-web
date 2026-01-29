@@ -35,6 +35,7 @@ import MapRoutePath from '../map/MapRoutePath';
 import MapRoutePoints from '../map/MapRoutePoints';
 import MapPositions from '../map/MapPositions';
 import { formatDistance, formatTime } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import ReportFilter, { updateReportParams } from '../reports/components/ReportFilter';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useCatch } from '../reactHelper';
@@ -286,7 +287,7 @@ const ReplayPage = () => {
     if (selectedDeviceId) {
       const device = state.devices.items[selectedDeviceId];
       if (device) {
-        return device.name;
+        return getDeviceDisplayName(device) || device.name;
       }
     }
     return null;

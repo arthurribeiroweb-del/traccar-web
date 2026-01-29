@@ -8,6 +8,7 @@ import LocationSearchingIcon from '@mui/icons-material/LocationSearching';
 import { useSelector } from 'react-redux';
 import { useTheme } from '@mui/material/styles';
 import { formatSpeed, formatTime } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import ReportFilter, { updateReportParams } from './components/ReportFilter';
 import { prefixString, unprefixString } from '../common/util/stringUtils';
 import { useTranslation, useTranslationKeys } from '../common/components/LocalizationProvider';
@@ -126,7 +127,7 @@ const EventReportPage = () => {
   const onExport = useCatch(async () => {
     const sheets = new Map();
     items.forEach((item) => {
-      const deviceName = devices[item.deviceId].name;
+      const deviceName = getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name;
       if (!sheets.has(deviceName)) {
         sheets.set(deviceName, []);
       }
@@ -159,7 +160,7 @@ const EventReportPage = () => {
     const value = item[key];
     switch (key) {
       case 'deviceId':
-        return devices[value].name;
+        return getDeviceDisplayName(devices[value]) || devices[value].name;
       case 'eventTime':
         return formatTime(value, 'seconds');
       case 'type':
@@ -281,7 +282,7 @@ const EventReportPage = () => {
                       </IconButton>
                     ))) || ''}
                   </TableCell>
-                  <TableCell>{devices[item.deviceId].name}</TableCell>
+                  <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
                   {columns.map((key) => (
                     <TableCell key={key}>
                       {formatValue(item, key)}

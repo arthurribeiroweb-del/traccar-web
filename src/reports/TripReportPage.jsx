@@ -11,6 +11,7 @@ import RouteIcon from '@mui/icons-material/Route';
 import {
   formatDistance, formatSpeed, formatVolume, formatTime, formatNumericHours,
 } from '../common/util/formatter';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import ReportFilter from './components/ReportFilter';
 import { useAttributePreference } from '../common/util/preferences';
 import { useTranslation } from '../common/components/LocalizationProvider';
@@ -113,7 +114,7 @@ const TripReportPage = () => {
   const onExport = useCatch(async () => {
     const sheets = new Map();
     items.forEach((item) => {
-      const deviceName = devices[item.deviceId].name;
+      const deviceName = getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name;
       if (!sheets.has(deviceName)) {
         sheets.set(deviceName, []);
       }
@@ -154,7 +155,7 @@ const TripReportPage = () => {
     const value = item[key];
     switch (key) {
       case 'deviceId':
-        return devices[value].name;
+        return getDeviceDisplayName(devices[value]) || devices[value].name;
       case 'startTime':
       case 'endTime':
         return formatTime(value, 'minutes');
@@ -229,7 +230,7 @@ const TripReportPage = () => {
                       </IconButton>
                     </div>
                   </TableCell>
-                  <TableCell>{devices[item.deviceId].name}</TableCell>
+                  <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
                   {columns.map((key) => (
                     <TableCell key={key}>
                       {formatValue(item, key)}

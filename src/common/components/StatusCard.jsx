@@ -33,6 +33,7 @@ import PositionValue from './PositionValue';
 import DeviceQuickStats from './DeviceQuickStats';
 import AddressValue from './AddressValue';
 import { canSeeDeviceAction, useDeviceReadonly, useRestriction } from '../util/permissions';
+import { getDeviceDisplayName } from '../util/deviceUtils';
 import usePositionAttributes from '../attributes/usePositionAttributes';
 import { devicesActions } from '../../store';
 import { useCatch, useCatchCallback } from '../../reactHelper';
@@ -790,12 +791,12 @@ const StatusCard = ({
                       <img
                         className={classes.avatarImage}
                         src={`/api/media/${device.uniqueId}/${deviceImage}`}
-                        alt={device.name}
+                        alt={getDeviceDisplayName(device) || device.name}
                       />
                     </div>
                   )}
                   <div className={classes.titleStack}>
-                    <Typography className={classes.title}>{device.name}</Typography>
+                    <Typography className={classes.title}>{getDeviceDisplayName(device) || device.name}</Typography>
                     <div className={classes.statusRow}>
                       <span
                         className={`${classes.statusDot} ${

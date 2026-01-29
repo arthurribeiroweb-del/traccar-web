@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import dayjs from 'dayjs';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 
 export default (keyword, filter, filterSort, filterMap, positions, setFilteredDevices, setFilteredPositions) => {
   const groups = useSelector((state) => state.groups.items);
@@ -22,11 +23,12 @@ export default (keyword, filter, filterSort, filterMap, positions, setFilteredDe
       .filter((device) => !filter.groups.length || deviceGroups(device).some((id) => filter.groups.includes(id)))
       .filter((device) => {
         const lowerCaseKeyword = keyword.toLowerCase();
-        return [device.name, device.uniqueId, device.phone, device.model, device.contact].some((s) => s && s.toLowerCase().includes(lowerCaseKeyword));
+        const displayName = getDeviceDisplayName(device);
+        return [displayName || device.name, device.uniqueId, device.phone, device.model, device.contact].some((s) => s && s.toLowerCase().includes(lowerCaseKeyword));
       });
     switch (filterSort) {
       case 'name':
-        filtered.sort((device1, device2) => device1.name.localeCompare(device2.name));
+        filtered.sort((device1, device2) => (getDeviceDisplayName(device1) || device1.name || '').localeCompare(getDeviceDisplayName(device2) || device2.name || ''));
         break;
       case 'lastUpdate':
         filtered.sort((device1, device2) => {
