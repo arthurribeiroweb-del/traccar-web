@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { Rnd } from 'react-rnd';
@@ -12,6 +12,7 @@ import {
   Snackbar,
   Alert,
   Divider,
+  Button,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { makeStyles } from 'tss-react/mui';
@@ -248,6 +249,10 @@ const useStyles = makeStyles()((theme, { desktopPadding, actionTone }) => ({
   },
 }));
 
+const RETRY_MS = 60_000;
+const TIMEOUT_MS = 120_000;
+const TICK_MS = 500;
+
 const isDev = process.env.NODE_ENV === 'development';
 
 const debugLog = (...args) => {
@@ -306,10 +311,13 @@ const StatusCard = ({
   const [actionsEl, setActionsEl] = useState(null);
 
   const [removing, setRemoving] = useState(false);
-  const [commandState, setCommandState] = useState('idle');
+  const [commandController, setCommandController] = useState(null);
   const [commandToast, setCommandToast] = useState(false);
   const [localBlocked, setLocalBlocked] = useState(null);
-  
+  const commandTimerRef = useRef(null);
+  const commandControllerRef = useRef(null);
+  const retryFiredRef = useRef(false);
+  commandControllerRef.current = commandController;
 
   const localStorageKey = deviceId ? `deviceLockState:${deviceId}` : null;
   const readLocalBlocked = useCallback(() => {
@@ -385,10 +393,6 @@ const StatusCard = ({
     positionBlockedValue,
   ]);
 
-  const lastCommandAt = localBlocked?.at ?? deviceBlockedAt;
-  const isPending = resolvedBlockedState.source !== 'position'
-    && lastCommandAt != null;
-
   const handleRemove = useCatch(async (removed) => {
     if (removed) {
       const response = await fetchOrThrow('/api/devices');
@@ -416,60 +420,96 @@ const StatusCard = ({
     navigate(`/settings/geofence/${item.id}`);
   }, [navigate, position]);
 
-  const handleCommandSend = useCatchCallback(async () => {
-    setCommandState('sending');
-    try {
-      const command = {
-        deviceId,
-        type: resolvedBlockedState.blocked ? 'engineResume' : 'engineStop',
-      };
-      const response = await fetchOrThrow('/api/commands/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(command),
-      });
-      let payload = null;
-      try {
-        payload = await response.json();
-      } catch (error) {
-        payload = null;
-      }
-      debugLog('[device-lock] commands/send response', {
-        deviceId,
-        status: response.status,
-        payload,
-      });
-      debugLog('[device-lock] device/position after send', {
-        deviceId: device?.id,
-        deviceAttributes: device?.attributes,
-        positionId: position?.id,
-        positionAttributes: position?.attributes,
-      });
-      debugLog('[device-lock] decision after send', {
-        deviceId,
-        blocked: resolvedBlockedState.blocked,
-        source: resolvedBlockedState.source,
-      });
+  const sendCommand = useCallback((targetBlocked) => {
+    const type = targetBlocked ? 'engineStop' : 'engineResume';
+    return fetchOrThrow('/api/commands/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, type }),
+    });
+  }, [deviceId]);
 
-      persistLocalBlocked({
-        blocked: !resolvedBlockedState.blocked,
-        at: Date.now(),
+  const handleCommandSend = useCatchCallback(async () => {
+    const effectiveBlocked = resolvedBlockedState.blocked;
+    const targetBlocked = !effectiveBlocked;
+    if (commandController?.state === 'processing') return;
+    try {
+      await sendCommand(targetBlocked);
+      setCommandController({
+        state: 'processing',
+        attempt: 1,
+        startedAt: Date.now(),
+        targetBlocked,
+        retrying: false,
       });
-      setCommandToast(true);
-      setCommandState('idle');
     } catch (error) {
-      setCommandState('error');
+      debugLog('[device-lock] send failed', error);
       throw error;
     }
+  }, [commandController?.state, resolvedBlockedState.blocked, sendCommand]);
+
+  useEffect(() => {
+    const c = commandController;
+    if (!c || c.state !== 'processing') {
+      retryFiredRef.current = false;
+      return;
+    }
+    retryFiredRef.current = false;
+    const clearTimer = () => {
+      if (commandTimerRef.current) {
+        clearInterval(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+    };
+    const startedAt = c.startedAt;
+    const targetBlocked = c.targetBlocked;
+    commandTimerRef.current = setInterval(() => {
+      const cc = commandControllerRef.current;
+      if (!cc || cc.state !== 'processing') return;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= TIMEOUT_MS) {
+        clearTimer();
+        setCommandController((prev) => prev && prev.state === 'processing'
+          ? { ...prev, state: 'timeout' }
+          : prev);
+        return;
+      }
+      if (elapsed >= RETRY_MS && !retryFiredRef.current) {
+        retryFiredRef.current = true;
+        setCommandController((prev) => (prev?.state === 'processing' ? { ...prev, attempt: 2, retrying: true } : prev));
+        sendCommand(targetBlocked)
+          .catch((err) => debugLog('[device-lock] retry send failed', err))
+          .finally(() => {
+            setCommandController((prev) => (prev?.state === 'processing' && prev.retrying
+              ? { ...prev, retrying: false }
+              : prev));
+          });
+      }
+    }, TICK_MS);
+    return clearTimer;
+  }, [commandController?.state, commandController?.startedAt, sendCommand]);
+
+  useEffect(() => {
+    const c = commandController;
+    if (!c || c.state !== 'processing') return;
+    const posMatch = positionBlockedKnown && positionBlockedValue === c.targetBlocked;
+    const devMatch = deviceBlockedKnown && deviceBlockedValue === c.targetBlocked;
+    if (posMatch || devMatch) {
+      if (commandTimerRef.current) {
+        clearInterval(commandTimerRef.current);
+        commandTimerRef.current = null;
+      }
+      persistLocalBlocked({ blocked: c.targetBlocked, at: Date.now() });
+      setCommandToast(true);
+      setCommandController(null);
+    }
   }, [
-    deviceId,
-    device?.attributes,
-    device?.id,
+    commandController,
+    deviceBlockedKnown,
+    deviceBlockedValue,
     persistLocalBlocked,
-    position?.attributes,
-    position?.id,
-    resolvedBlockedState.blocked,
-    resolvedBlockedState.source,
+    positionBlockedKnown,
+    positionBlockedValue,
   ]);
 
   const commandDisabled = disableActions || readonly || deviceReadonly || limitCommands || !deviceOnline;
@@ -478,18 +518,14 @@ const StatusCard = ({
     ? (t('deviceEditNoPermission') || 'No permission to edit')
     : t('sharedEdit');
 
-  const confirmedState = resolvedBlockedState.source === 'position';
   const effectiveBlocked = resolvedBlockedState.blocked;
-  const isSending = commandState === 'sending';
-  const isProcessing = isSending || isPending;
+  const isProcessing = commandController?.state === 'processing';
+  const isTimeout = commandController?.state === 'timeout';
   const stateText = effectiveBlocked ? 'BLOQUEADO' : 'DESBLOQUEADO';
   const stateLineText = `Veículo: ${stateText}`;
   const actionText = effectiveBlocked ? 'DESBLOQUEAR VEÍCULO' : 'BLOQUEAR VEÍCULO';
   const actionIcon = effectiveBlocked ? <LockOpenIcon fontSize="inherit" /> : <LockIcon fontSize="inherit" />;
-  let sliderLabel = stateText;
-  if (isProcessing) {
-    sliderLabel = t('deviceCommandSending');
-  }
+  const sliderLabel = stateText;
   const sliderTone = isProcessing
     ? 'neutral'
     : (effectiveBlocked ? 'danger' : 'success');
@@ -503,10 +539,24 @@ const StatusCard = ({
     ? <CircularProgress size={14} />
     : (effectiveBlocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />);
 
-  const handleSliderStart = () => {
-    if (commandState === 'error') {
-      setCommandState('idle');
+  let commandStatusLine = null;
+  if (isProcessing) {
+    const c = commandController;
+    if (c?.retrying) {
+      commandStatusLine = t('deviceCommandRetrySending');
+    } else if (c?.attempt === 2) {
+      commandStatusLine = t('deviceCommandProcessing2');
+    } else {
+      commandStatusLine = t('deviceCommandProcessing1');
     }
+  } else if (isTimeout) {
+    commandStatusLine = null;
+  }
+
+  const handleSliderStart = () => {};
+
+  const handleRetryClick = () => {
+    setCommandController(null);
   };
   useEffect(() => {
     if (!localBlocked) {
@@ -528,9 +578,8 @@ const StatusCard = ({
       deviceId,
       blocked: resolvedBlockedState.blocked,
       source: resolvedBlockedState.source,
-      pending: isPending,
     });
-  }, [deviceId, isPending, resolvedBlockedState.blocked, resolvedBlockedState.source]);
+  }, [deviceId, resolvedBlockedState.blocked, resolvedBlockedState.source]);
 
   const statusInfo = useMemo(() => {
     if (!device) {
@@ -847,7 +896,7 @@ const StatusCard = ({
                   <span className={classes.commandWrapper}>
                     <ActionSlider
                       label={sliderLabel}
-                      status={commandState}
+                      status={isProcessing ? 'sending' : 'idle'}
                       tone={sliderTone}
                       icon={sliderIcon}
                       direction={sliderDirection}
@@ -856,10 +905,26 @@ const StatusCard = ({
                       onStart={handleSliderStart}
                       onConfirm={handleCommandSend}
                     />
-                    {isPending && !confirmedState && (
+                    {commandStatusLine && (
                       <Typography variant="caption" className={classes.pendingHint}>
-                        {t('deviceLockPendingHint')}
+                        {commandStatusLine}
                       </Typography>
+                    )}
+                    {isTimeout && (
+                      <>
+                        <Typography variant="caption" className={classes.pendingHint}>
+                          {t('deviceCommandTimeoutMessage')}
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="primary"
+                          onClick={handleRetryClick}
+                          sx={{ alignSelf: 'center', minHeight: 44 }}
+                        >
+                          {t('deviceCommandRetryButton')}
+                        </Button>
+                      </>
                     )}
                   </span>
                 </Tooltip>
