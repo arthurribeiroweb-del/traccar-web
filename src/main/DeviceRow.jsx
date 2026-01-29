@@ -20,6 +20,7 @@ import {
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { mapDeviceIconKey, mapIcons } from '../map/core/preloadImages';
 import { useAdministrator } from '../common/util/permissions';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import EngineIcon from '../resources/images/data/engine.svg?react';
 import { useAttributePreference } from '../common/util/preferences';
 import GeofencesValue from '../common/components/GeofencesValue';
@@ -77,6 +78,9 @@ const DeviceRow = ({ devices, index, style }) => {
     if (field === 'driverUniqueId') {
       const driverUniqueId = position?.attributes?.driverUniqueId;
       return driverUniqueId ? <DriverValue driverUniqueId={driverUniqueId} /> : null;
+    }
+    if (field === 'name') {
+      return getDeviceDisplayName(item) || item.name;
     }
     return item[field];
   };

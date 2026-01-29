@@ -14,6 +14,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import useFeatures from '../common/util/useFeatures';
 import { useDeviceReadonly } from '../common/util/permissions';
+import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import DeviceRow from './DeviceRow';
 
 const useStyles = makeStyles()((theme) => ({
@@ -68,7 +69,7 @@ const MainToolbar = ({
   const [searchFocused, setSearchFocused] = useState(false);
 
   const deviceStatusCount = (status) => Object.values(devices).filter((d) => d.status === status).length;
-  const displayValue = keyword || (searchFocused ? '' : (selectedDevice?.name || ''));
+  const displayValue = keyword || (searchFocused ? '' : (selectedDevice ? (getDeviceDisplayName(selectedDevice) || selectedDevice.name) : ''));
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
