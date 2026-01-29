@@ -442,11 +442,18 @@ const StatusCard = ({
         targetBlocked,
         retrying: false,
       });
+      try {
+        const r = await fetchOrThrow('/api/devices');
+        const list = await r.json();
+        dispatch(devicesActions.refresh(list));
+      } catch (e) {
+        debugLog('[device-lock] devices refetch after send', e);
+      }
     } catch (error) {
       debugLog('[device-lock] send failed', error);
       throw error;
     }
-  }, [commandController?.state, resolvedBlockedState.blocked, sendCommand]);
+  }, [commandController?.state, dispatch, resolvedBlockedState.blocked, sendCommand]);
 
   useEffect(() => {
     const c = commandController;
@@ -478,6 +485,14 @@ const StatusCard = ({
         retryFiredRef.current = true;
         setCommandController((prev) => (prev?.state === 'processing' ? { ...prev, attempt: 2, retrying: true } : prev));
         sendCommand(targetBlocked)
+          .then(async () => {
+            try {
+              const r = await fetchOrThrow('/api/devices');
+              dispatch(devicesActions.refresh(await r.json()));
+            } catch (e) {
+              debugLog('[device-lock] devices refetch after retry', e);
+            }
+          })
           .catch((err) => debugLog('[device-lock] retry send failed', err))
           .finally(() => {
             setCommandController((prev) => (prev?.state === 'processing' && prev.retrying
@@ -487,7 +502,7 @@ const StatusCard = ({
       }
     }, TICK_MS);
     return clearTimer;
-  }, [commandController?.state, commandController?.startedAt, sendCommand]);
+  }, [commandController?.state, commandController?.startedAt, dispatch, sendCommand]);
 
   useEffect(() => {
     const c = commandController;
