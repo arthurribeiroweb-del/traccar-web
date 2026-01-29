@@ -10,7 +10,9 @@ import { useTranslation } from './LocalizationProvider';
 import { useAttributePreference } from '../util/preferences';
 import { formatDistance, formatSpeed } from '../util/formatter';
 import { useRestriction } from '../util/permissions';
+import { computeRouteDistanceFromPositions } from '../util/routeDistanceUtils';
 import { useEffectAsync } from '../../reactHelper';
+import fetchOrThrow from '../util/fetchOrThrow';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -86,30 +88,35 @@ const DeviceQuickStats = ({ device, position }) => {
   const speedUnit = useAttributePreference('speedUnit');
   const distanceUnit = useAttributePreference('distanceUnit');
 
-  const [dailySummary, setDailySummary] = useState({ distance: null, alerts: null });
+  const [dailySummary, setDailySummary] = useState({ distanceMeters: null, alerts: null });
 
   const dayKey = dayjs().format('YYYY-MM-DD');
 
   useEffectAsync(async () => {
     if (!device?.id || disableReports) {
-      setDailySummary({ distance: null, alerts: null });
+      setDailySummary({ distanceMeters: null, alerts: null });
       return;
     }
+    const todayFrom = dayjs(dayKey).startOf('day').toISOString();
+    const todayTo = dayjs(dayKey).endOf('day').toISOString();
     try {
-      const query = new URLSearchParams({ deviceId: String(device.id) });
-      const response = await fetch(`/api/reports/daily?${query.toString()}`);
-      if (!response.ok) {
-        setDailySummary({ distance: null, alerts: null });
-        return;
+      const [dailyRes, positionsRes] = await Promise.all([
+        fetch(`/api/reports/daily?${new URLSearchParams({ deviceId: String(device.id) })}`),
+        fetchOrThrow(`/api/positions?${new URLSearchParams({ deviceId: String(device.id), from: todayFrom, to: todayTo })}`),
+      ]);
+      let alerts = null;
+      if (dailyRes.ok) {
+        const summaries = await dailyRes.json();
+        const s = summaries.find((item) => item.deviceId === device.id) || summaries[0];
+        alerts = s?.alerts ?? null;
       }
-      const summaries = await response.json();
-      const summary = summaries.find((item) => item.deviceId === device.id) || summaries[0];
-      setDailySummary({
-        distance: summary?.distance ?? null,
-        alerts: summary?.alerts ?? null,
-      });
+      const positions = await positionsRes.json();
+      const distanceMeters = Array.isArray(positions) && positions.length >= 2
+        ? computeRouteDistanceFromPositions(positions)
+        : null;
+      setDailySummary({ distanceMeters, alerts });
     } catch (error) {
-      setDailySummary({ distance: null, alerts: null });
+      setDailySummary({ distanceMeters: null, alerts: null });
     }
   }, [device?.id, dayKey, disableReports]);
 
@@ -118,9 +125,9 @@ const DeviceQuickStats = ({ device, position }) => {
     ? '--'
     : formatSpeed(position.speed, speedUnit, t);
 
-  const distanceText = dailySummary.distance == null
+  const distanceText = dailySummary.distanceMeters == null
     ? '--'
-    : formatDistance(dailySummary.distance, distanceUnit, t);
+    : formatDistance(dailySummary.distanceMeters, distanceUnit, t);
 
   const alertsValue = dailySummary.alerts == null ? '--' : formatCount(dailySummary.alerts);
   const alertsTooltip = dailySummary.alerts == null ? '--' : dailySummary.alerts;
