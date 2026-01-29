@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Accordion,
@@ -25,6 +25,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import CachedIcon from '@mui/icons-material/Cached';
 import CloseIcon from '@mui/icons-material/Close';
+import PhoneIcon from '@mui/icons-material/Phone';
 import { useDispatch, useSelector } from 'react-redux';
 import EditItemView from './components/EditItemView';
 import EditAttributesAccordion from './components/EditAttributesAccordion';
@@ -40,6 +41,12 @@ import useMapStyles from '../map/core/useMapStyles';
 import { map } from '../map/core/MapView';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+
+const normalizePhone = (v) => (v || '').replace(/\D/g, '');
+const isValidBRPhone = (digits) => {
+  const d = digits || '';
+  return d.length === 10 || d.length === 11;
+};
 
 const UserPage = () => {
   const { classes } = useSettingsStyles();
@@ -185,7 +192,34 @@ const UserPage = () => {
     }
   };
 
-  const validate = () => item && item.name && item.email && (item.id || item.password) && (admin || !totpForce || item.totpKey);
+  const phoneError = useMemo(() => {
+    if (!item?.phone || !String(item.phone).trim()) return null;
+    const d = normalizePhone(item.phone);
+    return isValidBRPhone(d) ? null : 'userPhoneInvalid';
+  }, [item?.phone]);
+
+  const [saving, setSaving] = useState(false);
+
+  const validate = () => item && item.name && item.email && (item.id || item.password) && (admin || !totpForce || item.totpKey) && !phoneError;
+
+  const handleUserSave = useCatch(async () => {
+    setSaving(true);
+    try {
+      const digits = normalizePhone(item.phone);
+      const payload = { ...item, phone: digits || null };
+      const url = id ? `/api/users/${id}` : '/api/users';
+      const res = await fetchOrThrow(url, {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      onItemSaved(result);
+      navigate(-1);
+    } finally {
+      setSaving(false);
+    }
+  });
 
   return (
     <EditItemView
@@ -195,6 +229,9 @@ const UserPage = () => {
       defaultItem={applyServerDefaults(admin ? { deviceLimit: -1 } : {})}
       validate={validate}
       onItemSaved={onItemSaved}
+      customSave={handleUserSave}
+      saving={saving}
+      saveLabel={t('sharedSaving')}
       menu={<SettingsMenu />}
       breadcrumbs={['settingsTitle', 'settingsUser']}
     >
@@ -217,6 +254,23 @@ const UserPage = () => {
                 onChange={(e) => setItem({ ...item, email: e.target.value })}
                 label={t('userEmail')}
                 disabled={fixedEmail && item.id === currentUser.id}
+              />
+              <TextField
+                value={item.phone || ''}
+                onChange={(e) => setItem({ ...item, phone: e.target.value })}
+                label={t('sharedPhone')}
+                placeholder="(94) 98125-4808"
+                helperText={phoneError ? t(phoneError) : t('userPhoneHelper')}
+                error={!!phoneError}
+                inputProps={{ inputMode: 'tel', 'aria-describedby': 'user-phone-helper' }}
+                FormHelperTextProps={{ id: 'user-phone-helper' }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PhoneIcon fontSize="small" sx={{ color: 'action.disabled' }} />
+                    </InputAdornment>
+                  ),
+                }}
               />
               {!openIdForced && (
                 <TextField
@@ -256,11 +310,6 @@ const UserPage = () => {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails className={classes.details}>
-                  <TextField
-                    value={item.phone || ''}
-                    onChange={(e) => setItem({ ...item, phone: e.target.value })}
-                    label={t('sharedPhone')}
-                  />
                   <FormControl>
                     <InputLabel>{t('mapDefault')}</InputLabel>
                     <Select
