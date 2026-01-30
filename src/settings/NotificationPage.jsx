@@ -81,12 +81,27 @@ const NotificationPage = () => {
     setNotificators(await response.json());
   }, []);
 
+  useEffectAsync(async () => {
+    if (id && item && ['geofenceEnter', 'geofenceExit'].includes(item.type)) {
+      try {
+        const res = await fetchOrThrow(`/api/devices?notificationId=${id}`);
+        const linked = await res.json();
+        if (Array.isArray(linked)) {
+          setSelectedDeviceIds(linked.map((d) => d.id));
+        }
+      } catch {
+        setSelectedDeviceIds([]);
+      }
+    }
+  }, [id, item]);
+
   const alarms = useTranslationKeys((it) => it.startsWith('alarm')).map((it) => ({
     key: unprefixString('alarm', it),
     name: t(it),
   }));
 
   const isOverspeed = ['overspeed', 'deviceOverspeed'].includes(item?.type);
+  const isGeofenceNotification = ['geofenceEnter', 'geofenceExit'].includes(item?.type);
   const limitNum = speedLimit.trim() === '' ? NaN : Number(speedLimit);
   const limitValid = Number.isFinite(limitNum) && limitNum > 0;
 
@@ -98,8 +113,12 @@ const NotificationPage = () => {
       if (item.always) return true;
       return Array.isArray(selectedDeviceIds) && selectedDeviceIds.length > 0;
     }
+    if (isGeofenceNotification) {
+      if (item.always) return true;
+      return Array.isArray(selectedDeviceIds) && selectedDeviceIds.length > 0;
+    }
     return true;
-  }, [item, isOverspeed, limitValid, selectedDeviceIds]);
+  }, [item, isOverspeed, isGeofenceNotification, limitValid, selectedDeviceIds]);
 
   const testNotificators = useCatch(async () => {
     await Promise.all(item.notificators.split(/[, ]+/).map(async (notificator) => {
@@ -116,9 +135,27 @@ const NotificationPage = () => {
     return { success, fail };
   }, []);
 
-  const customSave = useCatch(async (payload) => {
-    if (!isOverspeed || !limitValid) return;
+  const applyDeviceNotificationLinks = useCatch(async (notificationId, deviceIdsToLink) => {
+    const allDevices = await fetchDevices();
+    const allIds = allDevices.map((d) => d.id);
+    const toAdd = deviceIdsToLink;
+    const toRemove = allIds.filter((did) => !deviceIdsToLink.includes(did));
 
+    await Promise.all([
+      ...toAdd.map((deviceId) => fetchOrThrow('/api/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, notificationId }),
+      })),
+      ...toRemove.map((deviceId) => fetchOrThrow('/api/permissions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, notificationId }),
+      })),
+    ]);
+  });
+
+  const customSave = useCatch(async (payload) => {
     setSaving(true);
     setSaveLabel(t('notificationSavingAlert'));
 
@@ -130,40 +167,59 @@ const NotificationPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      await res.json();
+      const saved = await res.json();
+      const notificationId = saved.id;
 
-      setSaveLabel(t('notificationApplyingLimit'));
-
-      let deviceIds;
-      if (payload.always) {
-        const list = await fetchDevices();
-        deviceIds = list.map((d) => d.id);
-      } else {
-        deviceIds = Array.isArray(selectedDeviceIds) ? [...selectedDeviceIds] : [];
-      }
-
-      if (deviceIds.length === 0) {
-        setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', '0'), severity: 'success', retry: null });
+      if (isGeofenceNotification) {
+        setSaveLabel(t('notificationApplyingLimit'));
+        const deviceIds = payload.always
+          ? (await fetchDevices()).map((d) => d.id)
+          : (Array.isArray(selectedDeviceIds) ? selectedDeviceIds : []);
+        await applyDeviceNotificationLinks(notificationId, deviceIds);
+        setToast({ open: true, message: t('sharedSaved'), severity: 'success', retry: null });
         setSaving(false);
         setSaveLabel('');
         navigate(-1);
         return;
       }
 
-      const { success, fail } = await doApplyAndHandleResult(deviceIds, limitNum);
+      if (isOverspeed && limitValid) {
+        setSaveLabel(t('notificationApplyingLimit'));
+        let deviceIds;
+        if (payload.always) {
+          deviceIds = (await fetchDevices()).map((d) => d.id);
+        } else {
+          deviceIds = Array.isArray(selectedDeviceIds) ? selectedDeviceIds : [];
+        }
 
-      setSaving(false);
-      setSaveLabel('');
+        if (deviceIds.length === 0) {
+          setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', '0'), severity: 'success', retry: null });
+          setSaving(false);
+          setSaveLabel('');
+          navigate(-1);
+          return;
+        }
 
-      if (fail.length === 0) {
-        setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', String(success.length)), severity: 'success', retry: null });
+        const { success, fail } = await doApplyAndHandleResult(deviceIds, limitNum);
+        setSaving(false);
+        setSaveLabel('');
+
+        if (fail.length === 0) {
+          setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', String(success.length)), severity: 'success', retry: null });
+          navigate(-1);
+          return;
+        }
+        setFailedDeviceIds(fail);
+        setToast({
+          open: true,
+          message: t('notificationOverspeedPartialFailure').replace('{{n}}', String(fail.length)),
+          severity: 'warning',
+          retry: true,
+        });
+      } else {
+        setSaving(false);
         navigate(-1);
-        return;
       }
-
-      setFailedDeviceIds(fail);
-      const msg = t('notificationOverspeedPartialFailure').replace('{{n}}', String(fail.length));
-      setToast({ open: true, message: msg, severity: 'warning', retry: true });
     } catch (e) {
       setSaving(false);
       setSaveLabel('');
@@ -212,7 +268,7 @@ const NotificationPage = () => {
         validate={validate}
         menu={<SettingsMenu />}
         breadcrumbs={['settingsTitle', 'sharedNotification']}
-        customSave={isOverspeed ? customSave : undefined}
+        customSave={(isOverspeed || isGeofenceNotification) ? customSave : undefined}
         saving={saving}
         saveLabel={saveLabel}
       >
@@ -337,6 +393,19 @@ const NotificationPage = () => {
                     titleGetter={(it) => it.name}
                     label={t('notificationDevices')}
                     helperText={t('sharedRequired')}
+                  />
+                )}
+                {isGeofenceNotification && !item.always && (
+                  <SelectField
+                    multiple
+                    fullWidth
+                    value={selectedDeviceIds}
+                    onChange={(e) => setSelectedDeviceIds(Array.isArray(e.target.value) ? e.target.value : [])}
+                    endpoint="/api/devices"
+                    keyGetter={(it) => it.id}
+                    titleGetter={(it) => it.name}
+                    label={t('notificationDevices')}
+                    helperText={t('notificationDeviceSelectorHelp')}
                   />
                 )}
               </AccordionDetails>

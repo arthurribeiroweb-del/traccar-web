@@ -610,6 +610,7 @@
     "notificationType": "Tipo de Notificação",
     "notificationAlways": "Todos os Dispositivos",
     "notificationGeofenceLabel": "Vincule geofences a dispositivos ou grupos para receber esses eventos.",
+    "notificationDeviceSelectorHelp": "Selecione os veículos que devem disparar esta notificação.",
     "notificationNotificators": "Canais",
     "notificationTraccarMissing": "Para ativar Push no Traccar Manager, adicione \"traccar\" em notificator.types e configure notificator.traccar.key no servidor. Depois reinicie o servico.",
     "notificationTraccarMissingUser": "Para receber alertas com o app fechado, ative Push.",
