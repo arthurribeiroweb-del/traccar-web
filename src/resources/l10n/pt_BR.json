@@ -612,6 +612,8 @@
     "notificationGeofenceLabel": "Vincule geofences a dispositivos ou grupos para receber esses eventos.",
     "notificationDeviceSelectorHelp": "Selecione os veículos que devem disparar esta notificação.",
     "notificationNotificators": "Canais",
+    "notificationChannelsHelper": "No app = quando estiver usando. Push = no celular mesmo com app fechado.",
+    "notificationChannelsAppAndPush": "No app + Push (recomendado)",
     "notificationTraccarMissing": "Para ativar Push no Traccar Manager, adicione \"traccar\" em notificator.types e configure notificator.traccar.key no servidor. Depois reinicie o servico.",
     "notificationTraccarMissingUser": "Para receber alertas com o app fechado, ative Push.",
     "notificationSpeedLimitLabel": "Limite (km/h)",

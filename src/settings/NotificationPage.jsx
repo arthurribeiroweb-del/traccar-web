@@ -333,15 +333,42 @@ const NotificationPage = () => {
                     </Box>
                   </>
                 )}
-                <SelectField
-                  multiple
-                  value={item.notificators ? item.notificators.split(/[, ]+/) : []}
-                  onChange={(e) => setItem({ ...item, notificators: e.target.value.join() })}
-                  endpoint="/api/notifications/notificators"
-                  keyGetter={(it) => it.type}
-                  titleGetter={(it) => t(prefixString('notificator', it.type))}
-                  label={t('notificationNotificators')}
-                />
+                <Box>
+                  <SelectField
+                    multiple
+                    value={item.notificators ? item.notificators.split(/[, ]+/) : []}
+                    onChange={(e) => setItem({ ...item, notificators: e.target.value.join() })}
+                    endpoint="/api/notifications/notificators"
+                    keyGetter={(it) => it.type}
+                    titleGetter={(it) => t(prefixString('notificator', it.type))}
+                    label={t('notificationNotificators')}
+                    helperText={t('notificationChannelsHelper')}
+                  />
+                  {notificators && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                      <Chip
+                        label={t('notificationChannelsAppAndPush')}
+                        onClick={() => {
+                          const types = notificators.map((n) => n.type);
+                          const hasWeb = types.includes('web');
+                          const pushType = types.includes('traccar') ? 'traccar' : (types.includes('firebase') ? 'firebase' : null);
+                          const combined = [hasWeb && 'web', pushType].filter(Boolean);
+                          if (combined.length) {
+                            setItem({ ...item, notificators: combined.join(',') });
+                          }
+                        }}
+                        variant={(() => {
+                          const sel = item.notificators?.split(/[, ]+/) || [];
+                          const hasWeb = sel.includes('web');
+                          const hasPush = sel.includes('traccar') || sel.includes('firebase');
+                          return hasWeb && hasPush ? 'filled' : 'outlined';
+                        })()}
+                        color="primary"
+                        size="small"
+                      />
+                    </Box>
+                  )}
+                </Box>
                 {notificators && !hasPushNotificator && (
                   <Alert severity="info">
                     {admin ? (missingTraccarMessage || (

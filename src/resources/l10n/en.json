@@ -614,6 +614,8 @@
     "notificationGeofenceLabel": "Link geofences to devices or groups to receive these events.",
     "notificationDeviceSelectorHelp": "Select the devices that should trigger this notification.",
     "notificationNotificators": "Channels",
+    "notificationChannelsHelper": "In app = when using. Push = on phone even when app is closed.",
+    "notificationChannelsAppAndPush": "In app + Push (recommended)",
     "notificationTraccarMissing": "To enable push notifications in Traccar Manager, add \"traccar\" to notificator.types and set notificator.traccar.key in the server config, then restart the service.",
     "notificationTraccarMissingUser": "Enable Push to receive alerts with the app closed.",
     "notificationSpeedLimitLabel": "Limit (km/h)",

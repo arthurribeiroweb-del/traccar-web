@@ -560,6 +560,8 @@
     "notificationAlways": "Todos os Dispositivos",
     "notificationGeofenceLabel": "Link geofences to devices or groups to receive these events.",
     "notificationDeviceSelectorHelp": "Selecione os veículos que devem disparar esta notificação.",
+    "notificationChannelsHelper": "No app = quando estiver usando. Push = no celular mesmo com app fechado.",
+    "notificationChannelsAppAndPush": "No app + Push (recomendado)",
     "notificationNotificators": "Vias",
     "notificatorCommand": "Command",
     "notificatorWeb": "Web",
