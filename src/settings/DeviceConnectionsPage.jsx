@@ -14,14 +14,19 @@ import { formatNotificationTitle } from '../common/util/formatter';
 import PageLayout from '../common/components/PageLayout';
 import useFeatures from '../common/util/useFeatures';
 import useSettingsStyles from './common/useSettingsStyles';
+import { useAdministrator, useManager } from '../common/util/permissions';
 
 const DeviceConnectionsPage = () => {
   const { classes } = useSettingsStyles();
   const t = useTranslation();
+  const admin = useAdministrator();
+  const manager = useManager();
 
   const { id } = useParams();
 
   const features = useFeatures();
+
+  const allParam = (admin || manager) ? '?all=true' : '';
 
   return (
     <PageLayout
@@ -37,7 +42,7 @@ const DeviceConnectionsPage = () => {
           </AccordionSummary>
           <AccordionDetails className={classes.details}>
             <LinkField
-              endpointAll="/api/geofences"
+              endpointAll={`/api/geofences${allParam}`}
               endpointLinked={`/api/geofences?deviceId=${id}`}
               baseId={id}
               keyBase="deviceId"
@@ -45,7 +50,7 @@ const DeviceConnectionsPage = () => {
               label={t('sharedGeofences')}
             />
             <LinkField
-              endpointAll="/api/notifications"
+              endpointAll={`/api/notifications${allParam}`}
               endpointLinked={`/api/notifications?deviceId=${id}`}
               baseId={id}
               keyBase="deviceId"
@@ -55,7 +60,7 @@ const DeviceConnectionsPage = () => {
             />
             {!features.disableDrivers && (
               <LinkField
-                endpointAll="/api/drivers"
+                endpointAll={`/api/drivers${allParam}`}
                 endpointLinked={`/api/drivers?deviceId=${id}`}
                 baseId={id}
                 keyBase="deviceId"
@@ -66,7 +71,7 @@ const DeviceConnectionsPage = () => {
             )}
             {!features.disableComputedAttributes && (
               <LinkField
-                endpointAll="/api/attributes/computed"
+                endpointAll={`/api/attributes/computed${allParam}`}
                 endpointLinked={`/api/attributes/computed?deviceId=${id}`}
                 baseId={id}
                 keyBase="deviceId"
@@ -77,7 +82,7 @@ const DeviceConnectionsPage = () => {
             )}
             {!features.disableSavedCommands && (
               <LinkField
-                endpointAll="/api/commands"
+                endpointAll={`/api/commands${allParam}`}
                 endpointLinked={`/api/commands?deviceId=${id}`}
                 baseId={id}
                 keyBase="deviceId"
@@ -88,7 +93,7 @@ const DeviceConnectionsPage = () => {
             )}
             {!features.disableMaintenance && (
               <LinkField
-                endpointAll="/api/maintenance"
+                endpointAll={`/api/maintenance${allParam}`}
                 endpointLinked={`/api/maintenance?deviceId=${id}`}
                 baseId={id}
                 keyBase="deviceId"

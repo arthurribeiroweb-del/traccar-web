@@ -610,6 +610,8 @@
     "notificationType": "Tipo de Notificação",
     "notificationAlways": "Todos os Dispositivos",
     "notificationGeofenceLabel": "Vincule geofences a dispositivos ou grupos para receber esses eventos.",
+    "notificationGeofenceSelectLabel": "Selecione dispositivos e cercas abaixo para vincular automaticamente.",
+    "notificationGeofenceSelectHelp": "Obrigatório: escolha em qual(is) cerca(s) o rastreador deve ser monitorado.",
     "notificationDeviceSelectorHelp": "Selecione os veículos que devem disparar esta notificação.",
     "notificationNotificators": "Canais",
     "notificationChannelsHelper": "No app = quando estiver usando. Push = no celular mesmo com app fechado.",

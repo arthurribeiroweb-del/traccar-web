@@ -612,6 +612,8 @@
     "notificationType": "Type of Notification",
     "notificationAlways": "All Devices",
     "notificationGeofenceLabel": "Link geofences to devices or groups to receive these events.",
+    "notificationGeofenceSelectLabel": "Select devices and geofences below to link automatically.",
+    "notificationGeofenceSelectHelp": "Required: choose which geofence(s) the tracker should be monitored in.",
     "notificationDeviceSelectorHelp": "Select the devices that should trigger this notification.",
     "notificationNotificators": "Channels",
     "notificationChannelsHelper": "In app = when using. Push = on phone even when app is closed.",

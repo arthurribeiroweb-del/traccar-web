@@ -71,6 +71,7 @@ const NotificationPage = () => {
   const [notificators, setNotificators] = useState();
   const [speedLimit, setSpeedLimit] = useState('');
   const [selectedDeviceIds, setSelectedDeviceIds] = useState([]);
+  const [selectedGeofenceIds, setSelectedGeofenceIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveLabel, setSaveLabel] = useState('');
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success', retry: null });
@@ -95,6 +96,24 @@ const NotificationPage = () => {
     }
   }, [id, item]);
 
+  useEffectAsync(async () => {
+    if (id && item && selectedDeviceIds.length > 0 && ['geofenceEnter', 'geofenceExit'].includes(item.type)) {
+      try {
+        const geofenceLists = await Promise.all(
+          selectedDeviceIds.slice(0, 5).map(async (deviceId) => {
+            const res = await fetchOrThrow(`/api/geofences?deviceId=${deviceId}`);
+            const list = await res.json();
+            return Array.isArray(list) ? list.map((g) => g.id) : [];
+          }),
+        );
+        const union = [...new Set(geofenceLists.flat())];
+        setSelectedGeofenceIds(union);
+      } catch {
+        setSelectedGeofenceIds([]);
+      }
+    }
+  }, [id, item?.type, selectedDeviceIds.join(',')]);
+
   const alarms = useTranslationKeys((it) => it.startsWith('alarm')).map((it) => ({
     key: unprefixString('alarm', it),
     name: t(it),
@@ -114,11 +133,14 @@ const NotificationPage = () => {
       return Array.isArray(selectedDeviceIds) && selectedDeviceIds.length > 0;
     }
     if (isGeofenceNotification) {
-      if (item.always) return true;
-      return Array.isArray(selectedDeviceIds) && selectedDeviceIds.length > 0;
+      if (item.always) {
+        return Array.isArray(selectedGeofenceIds) && selectedGeofenceIds.length > 0;
+      }
+      return Array.isArray(selectedDeviceIds) && selectedDeviceIds.length > 0
+        && Array.isArray(selectedGeofenceIds) && selectedGeofenceIds.length > 0;
     }
     return true;
-  }, [item, isOverspeed, isGeofenceNotification, limitValid, selectedDeviceIds]);
+  }, [item, isOverspeed, isGeofenceNotification, limitValid, selectedDeviceIds, selectedGeofenceIds]);
 
   const testNotificators = useCatch(async () => {
     await Promise.all(item.notificators.split(/[, ]+/).map(async (notificator) => {
@@ -134,6 +156,19 @@ const NotificationPage = () => {
     const { success, fail } = await applySpeedLimit(deviceIds, limit);
     return { success, fail };
   }, []);
+
+  const applyDeviceGeofenceLinks = useCatch(async (deviceIdsToLink, geofenceIdsToLink) => {
+    const pairs = deviceIdsToLink.flatMap((deviceId) =>
+      geofenceIdsToLink.map((geofenceId) => ({ deviceId, geofenceId })),
+    );
+    await Promise.all(
+      pairs.map(({ deviceId, geofenceId }) => fetchOrThrow('/api/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, geofenceId }),
+      })),
+    );
+  });
 
   const applyDeviceNotificationLinks = useCatch(async (notificationId, deviceIdsToLink) => {
     const allDevices = await fetchDevices();
@@ -175,7 +210,11 @@ const NotificationPage = () => {
         const deviceIds = payload.always
           ? (await fetchDevices()).map((d) => d.id)
           : (Array.isArray(selectedDeviceIds) ? selectedDeviceIds : []);
+        const geofenceIds = Array.isArray(selectedGeofenceIds) ? selectedGeofenceIds : [];
         await applyDeviceNotificationLinks(notificationId, deviceIds);
+        if (geofenceIds.length > 0) {
+          await applyDeviceGeofenceLinks(deviceIds, geofenceIds);
+        }
         setToast({ open: true, message: t('sharedSaved'), severity: 'success', retry: null });
         setSaving(false);
         setSaveLabel('');
@@ -288,7 +327,7 @@ const NotificationPage = () => {
                   keyGetter={(it) => it.type}
                   titleGetter={(it) => t(prefixString('event', it.type))}
                   label={t('sharedType')}
-                  helperText={['geofenceEnter', 'geofenceExit'].includes(item.type) ? t('notificationGeofenceLabel') : null}
+                  helperText={['geofenceEnter', 'geofenceExit'].includes(item.type) ? t('notificationGeofenceSelectLabel') : null}
                 />
                 {item.type === 'alarm' && (
                   <SelectField
@@ -432,6 +471,19 @@ const NotificationPage = () => {
                     titleGetter={(it) => it.name}
                     label={t('notificationDevices')}
                     helperText={t('notificationDeviceSelectorHelp')}
+                  />
+                )}
+                {isGeofenceNotification && (
+                  <SelectField
+                    multiple
+                    fullWidth
+                    value={selectedGeofenceIds}
+                    onChange={(e) => setSelectedGeofenceIds(Array.isArray(e.target.value) ? e.target.value : [])}
+                    endpoint="/api/geofences"
+                    keyGetter={(it) => it.id}
+                    titleGetter={(it) => it.name}
+                    label={t('sharedGeofences')}
+                    helperText={t('notificationGeofenceSelectHelp')}
                   />
                 )}
               </AccordionDetails>
