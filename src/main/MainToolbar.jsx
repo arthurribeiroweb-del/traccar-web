@@ -210,7 +210,6 @@ const MainToolbar = ({
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('whatsappSupport')}
-            sx={{ color: '#25D366', '&:hover': { color: '#1da851' } }}
           >
             <WhatsAppIcon style={{ width: 24, height: 24 }} />
           </IconButton>
