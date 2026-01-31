@@ -56,6 +56,14 @@ const forceReload = (eager) => {
   });
 };
 
+const shouldDisableServiceWorker = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  const host = window.location.hostname;
+  return host === 'traccarpro.com.br' || host === 'www.traccarpro.com.br';
+};
+
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
 const WebUpdateController = ({ swUpdateInterval }) => {
   const t = useTranslation();
@@ -195,9 +203,10 @@ const NativeUpdateController = () => {
 
 const UpdateController = () => {
   const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
+  const disableServiceWorker = nativeEnvironment || shouldDisableServiceWorker();
 
   useEffect(() => {
-    if (!nativeEnvironment || !('serviceWorker' in navigator)) {
+    if (!disableServiceWorker || !('serviceWorker' in navigator)) {
       return undefined;
     }
 
@@ -222,10 +231,10 @@ const UpdateController = () => {
 
     disableServiceWorker();
     return undefined;
-  }, []);
+  }, [disableServiceWorker]);
 
-  if (nativeEnvironment) {
-    // Temporary: disable update banner in native WebView to avoid reload loop.
+  if (disableServiceWorker) {
+    // Avoid SW on native and on landing domain to prevent stale cached shells.
     return null;
   }
 
