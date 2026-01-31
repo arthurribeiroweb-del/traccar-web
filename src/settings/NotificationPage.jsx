@@ -28,21 +28,25 @@ import { useAdministrator } from '../common/util/permissions';
 
 const SPEED_LIMIT_PRESETS = [80, 100, 120];
 
+// Traccar armazena speedLimit em knots; a UI usa km/h
+const KMH_TO_KNOTS = 0.539957;
+
 async function fetchDevices() {
   const res = await fetchOrThrow('/api/devices');
   return res.json();
 }
 
-async function applySpeedLimit(deviceIds, limit) {
-  const limitNum = Number(limit);
+async function applySpeedLimit(deviceIds, limitKmh) {
+  const limitNum = Number(limitKmh);
   if (!Number.isFinite(limitNum) || limitNum <= 0) {
     return { success: [], fail: deviceIds };
   }
+  const limitKnots = Math.round(limitNum * KMH_TO_KNOTS * 100) / 100;
   const results = await Promise.allSettled(
     deviceIds.map(async (deviceId) => {
       const getRes = await fetchOrThrow(`/api/devices/${deviceId}`);
       const device = await getRes.json();
-      const attributes = { ...(device.attributes || {}), speedLimit: limitNum };
+      const attributes = { ...(device.attributes || {}), speedLimit: limitKnots };
       await fetchOrThrow(`/api/devices/${deviceId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
