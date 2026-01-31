@@ -83,7 +83,7 @@ const NotificationPage = () => {
   }, []);
 
   useEffectAsync(async () => {
-    if (id && item && ['geofenceEnter', 'geofenceExit'].includes(item.type)) {
+    if (id && item && (['geofenceEnter', 'geofenceExit'].includes(item.type) || ['overspeed', 'deviceOverspeed'].includes(item.type))) {
       try {
         const res = await fetchOrThrow(`/api/devices?notificationId=${id}`);
         const linked = await res.json();
@@ -239,6 +239,7 @@ const NotificationPage = () => {
           return;
         }
 
+        await applyDeviceNotificationLinks(notificationId, deviceIds);
         const { success, fail } = await doApplyAndHandleResult(deviceIds, limitNum);
         setSaving(false);
         setSaveLabel('');
