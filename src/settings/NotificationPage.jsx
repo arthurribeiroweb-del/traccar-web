@@ -30,6 +30,7 @@ const SPEED_LIMIT_PRESETS = [80, 100, 120];
 
 // Traccar armazena speedLimit em knots; a UI usa km/h
 const KMH_TO_KNOTS = 0.539957;
+const KNOTS_TO_KMH = 1 / KMH_TO_KNOTS;
 
 async function fetchDevices() {
   const res = await fetchOrThrow('/api/devices');
@@ -99,6 +100,27 @@ const NotificationPage = () => {
       }
     }
   }, [id, item]);
+
+  useEffectAsync(async () => {
+    if (!id || !item || !['overspeed', 'deviceOverspeed'].includes(item.type)) return;
+    try {
+      const res = await fetchOrThrow(`/api/devices?notificationId=${id}`);
+      const linked = await res.json();
+      if (!Array.isArray(linked) || linked.length === 0) return;
+      for (const dev of linked.slice(0, 5)) {
+        const devRes = await fetchOrThrow(`/api/devices/${dev.id}`);
+        const full = await devRes.json();
+        const knots = full?.attributes?.speedLimit;
+        if (knots != null && Number.isFinite(Number(knots)) && Number(knots) > 0) {
+          const kmh = Math.round(Number(knots) * KNOTS_TO_KMH);
+          setSpeedLimit(String(kmh));
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [id, item?.type]);
 
   useEffectAsync(async () => {
     if (id && item && selectedDeviceIds.length > 0 && ['geofenceEnter', 'geofenceExit'].includes(item.type)) {
