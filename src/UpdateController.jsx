@@ -215,7 +215,7 @@ const UpdateController = () => {
       return undefined;
     }
 
-    const disableServiceWorker = async () => {
+    const unregisterServiceWorker = async () => {
       try {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map((registration) => registration.unregister()));
@@ -229,7 +229,7 @@ const UpdateController = () => {
       }
     };
 
-    disableServiceWorker();
+    unregisterServiceWorker();
     return undefined;
   }, [disableServiceWorker]);
 
