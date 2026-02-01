@@ -56,14 +56,6 @@ const forceReload = (eager) => {
   });
 };
 
-const shouldDisableServiceWorker = () => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-  const host = window.location.hostname;
-  return host === 'traccarpro.com.br' || host === 'www.traccarpro.com.br';
-};
-
 // Based on https://vite-pwa-org.netlify.app/frameworks/react.html
 const WebUpdateController = ({ swUpdateInterval }) => {
   const t = useTranslation();
@@ -203,41 +195,9 @@ const NativeUpdateController = () => {
 
 const UpdateController = () => {
   const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
-  const disableServiceWorker = nativeEnvironment || shouldDisableServiceWorker();
-
-  useEffect(() => {
-    if (!disableServiceWorker || !('serviceWorker' in navigator)) {
-      return undefined;
-    }
-
-    const disabledFlag = 'traccar.sw.disabled';
-    if (window.sessionStorage.getItem(disabledFlag)) {
-      return undefined;
-    }
-
-    const unregisterServiceWorker = async () => {
-      try {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(registrations.map((registration) => registration.unregister()));
-        if ('caches' in window) {
-          const keys = await caches.keys();
-          await Promise.all(keys.map((key) => caches.delete(key)));
-        }
-      } finally {
-        window.sessionStorage.setItem(disabledFlag, '1');
-        window.location.reload();
-      }
-    };
-
-    unregisterServiceWorker();
-    return undefined;
-  }, [disableServiceWorker]);
-
-  if (disableServiceWorker) {
-    // Avoid SW on native and on landing domain to prevent stale cached shells.
+  if (nativeEnvironment) {
     return null;
   }
-
   return <WebUpdateController swUpdateInterval={swUpdateInterval} />;
 };
 
