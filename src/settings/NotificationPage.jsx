@@ -103,6 +103,11 @@ const NotificationPage = () => {
 
   useEffectAsync(async () => {
     if (!id || !item || !['overspeed', 'deviceOverspeed'].includes(item.type)) return;
+    const savedKmh = item?.attributes?.speedLimitKmh;
+    if (savedKmh != null && savedKmh !== '' && Number.isFinite(Number(savedKmh))) {
+      setSpeedLimit(String(Math.round(Number(savedKmh))));
+      return;
+    }
     try {
       const res = await fetchOrThrow(`/api/devices?notificationId=${id}`);
       const linked = await res.json();
@@ -120,7 +125,7 @@ const NotificationPage = () => {
     } catch {
       // ignore
     }
-  }, [id, item?.type]);
+  }, [id, item?.type, item?.attributes?.speedLimitKmh]);
 
   useEffectAsync(async () => {
     if (id && item && selectedDeviceIds.length > 0 && ['geofenceEnter', 'geofenceExit'].includes(item.type)) {
@@ -221,6 +226,12 @@ const NotificationPage = () => {
     setSaveLabel(t('notificationSavingAlert'));
 
     try {
+      if (isOverspeed && limitValid) {
+        payload = {
+          ...payload,
+          attributes: { ...payload.attributes, speedLimitKmh: String(Math.round(limitNum)) },
+        };
+      }
       const url = id ? `/api/notifications/${id}` : '/api/notifications';
       const method = id ? 'PUT' : 'POST';
       const res = await fetchOrThrow(url, {
