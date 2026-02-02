@@ -9,11 +9,6 @@ import { pollPositionsOnce, requestReconnect } from '../util/realtimeApi';
 const LIVE_THRESHOLD_S = 15;
 const DELAYED_THRESHOLD_S = 120;
 
-const formatClock = (date) => {
-  const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
 export const useRealtimeStatus = (position) => {
   const [now, setNow] = useState(Date.now());
   const socketStatus = useSelector((state) => state.session.socketStatus);
@@ -65,7 +60,7 @@ export const useRealtimeStatus = (position) => {
   const showActions = status === 'delayed' || status === 'offline' || status === 'error';
 
   const updatedText = fixTime
-    ? `Atualizado há ${ageSec}s • ${formatClock(fixTime)}`
+    ? `Atualizado há ${ageSec}s`
     : '--';
 
   return {
