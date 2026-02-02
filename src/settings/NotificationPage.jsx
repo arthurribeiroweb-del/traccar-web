@@ -30,10 +30,22 @@ const SPEED_LIMIT_PRESETS = [80, 100, 120];
 
 // Traccar stores speedLimit in knots, while this UI collects km/h.
 const KNOTS_PER_KPH = 0.539956803;
-const SPEED_LIMIT_TOLERANCE_KNOTS = 0.05;
+const SPEED_LIMIT_TOLERANCE_KNOTS = 0.6;
+const SPEED_LIMIT_READBACK_ATTEMPTS = 4;
+const SPEED_LIMIT_READBACK_DELAY_MS = 250;
 const kphToKnots = (kph) => Number(kph) * KNOTS_PER_KPH;
 const knotsToKph = (knots) => Number(knots) / KNOTS_PER_KPH;
 const normalizeOverspeedType = (type) => (type === 'overspeed' ? 'deviceOverspeed' : type);
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const parseSpeedLimitValue = (value) => {
+  if (value == null) return Number.NaN;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const normalized = value.replace(',', '.').trim();
+    return Number(normalized);
+  }
+  return Number(value);
+};
 
 async function fetchDevices() {
   const res = await fetchOrThrow('/api/devices');
@@ -65,9 +77,24 @@ async function applySpeedLimit(deviceIds, limitKmh) {
           body: JSON.stringify({ ...device, attributes }),
         });
 
-        const readBackRes = await fetchOrThrow(`/api/devices/${deviceId}`);
-        const readBackDevice = await readBackRes.json();
-        const readBackKnots = Number(readBackDevice?.attributes?.speedLimit);
+        let readBackKnots = Number.NaN;
+        let readBackRaw;
+        let attempt = 0;
+        while (attempt < SPEED_LIMIT_READBACK_ATTEMPTS) {
+          attempt += 1;
+          const readBackRes = await fetchOrThrow(`/api/devices/${deviceId}`);
+          const readBackDevice = await readBackRes.json();
+          readBackRaw = readBackDevice?.attributes?.speedLimit;
+          readBackKnots = parseSpeedLimitValue(readBackRaw);
+
+          if (Number.isFinite(readBackKnots)) {
+            break;
+          }
+          if (attempt < SPEED_LIMIT_READBACK_ATTEMPTS) {
+            await wait(SPEED_LIMIT_READBACK_DELAY_MS);
+          }
+        }
+
         const diff = Number.isFinite(readBackKnots)
           ? Math.abs(readBackKnots - limitKnots)
           : Number.NaN;
@@ -76,6 +103,8 @@ async function applySpeedLimit(deviceIds, limitKmh) {
           deviceId,
           expectedKnots: limitKnots,
           readBackKnots,
+          readBackRaw,
+          attempts: attempt,
           toleranceKnots: SPEED_LIMIT_TOLERANCE_KNOTS,
           diffKnots: diff,
         });
