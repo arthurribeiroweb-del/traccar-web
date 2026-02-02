@@ -35,3 +35,7 @@ root.render(
     </Provider>
   </ErrorBoundary>,
 );
+
+if (typeof window !== 'undefined' && typeof window.__traccarBootReady === 'function') {
+  window.__traccarBootReady();
+}

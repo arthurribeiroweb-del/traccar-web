@@ -1,8 +1,7 @@
 import { Snackbar, IconButton } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useTranslation } from './common/components/LocalizationProvider';
 import { nativeEnvironment } from './common/components/NativeInterface';
 
@@ -17,7 +16,7 @@ const buildCacheBustUrl = () => {
   return url.toString();
 };
 
-const clearCaches = async () => {
+const clearServiceWorkerState = async () => {
   try {
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -36,111 +35,40 @@ const clearCaches = async () => {
   }
 };
 
-const navigateWithCacheBust = () => {
-  const url = buildCacheBustUrl();
-  try {
-    window.location.replace(url);
-  } catch {
-    window.location.href = url;
-  }
-};
-
-const forceReload = (eager) => {
-  if (eager) {
-    clearCaches();
-    navigateWithCacheBust();
-    return;
-  }
-  clearCaches().finally(() => {
-    navigateWithCacheBust();
-  });
-};
-
-// Based on https://vite-pwa-org.netlify.app/frameworks/react.html
-const WebUpdateController = ({ swUpdateInterval }) => {
-  const t = useTranslation();
-  const [updating, setUpdating] = useState(false);
-
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisteredSW(swUrl, swRegistration) {
-      if (swUpdateInterval > 0 && swRegistration) {
-        setInterval(async () => {
-          if (!(!swRegistration.installing && navigator)) {
-            return;
-          }
-
-          if (('connection' in navigator) && !navigator.onLine) {
-            return;
-          }
-
-          const newSW = await fetch(swUrl, {
-            cache: 'no-store',
-            headers: {
-              cache: 'no-store',
-              'cache-control': 'no-cache',
-            },
-          });
-
-          if (newSW?.status === 200) {
-            await swRegistration.update();
-          }
-        }, swUpdateInterval);
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (needRefresh) {
-      const timer = setTimeout(() => updateServiceWorker(true), 1000);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [needRefresh, updateServiceWorker]);
-
-  const handleReload = async () => {
-    if (updating) {
-      return;
-    }
-    setUpdating(true);
-    setTimeout(() => setUpdating(false), 4000);
+const forceReload = () => {
+  clearServiceWorkerState().finally(() => {
+    const url = buildCacheBustUrl();
     try {
-      await updateServiceWorker(true);
+      window.location.replace(url);
     } catch {
-      // ignore
+      window.location.href = url;
     }
-    forceReload(false);
-  };
-
-  return (
-    <Snackbar
-      open={needRefresh}
-      message={updating ? t('settingsUpdating') : t('settingsUpdateAvailable')}
-      action={(
-        <IconButton color="inherit" onClick={handleReload} disabled={updating}>
-          <RefreshIcon />
-        </IconButton>
-      )}
-      onClick={handleReload}
-      ContentProps={{ onClick: handleReload, style: { cursor: updating ? 'default' : 'pointer' } }}
-    />
-  );
+  });
 };
 
-const NativeUpdateController = () => {
+const UpdateController = () => {
   const t = useTranslation();
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updating, setUpdating] = useState(false);
-  const appVersion = import.meta.env.VITE_APP_VERSION
-    || (typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
+  const updateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
+  const appVersion = import.meta.env.VITE_APP_VERSION || 'unknown';
+  const cleanedRef = useRef(false);
 
   useEffect(() => {
-    if (!nativeEnvironment || !appVersion) {
+    if (nativeEnvironment || cleanedRef.current) {
+      return;
+    }
+    cleanedRef.current = true;
+    clearServiceWorkerState();
+  }, []);
+
+  useEffect(() => {
+    if (nativeEnvironment || updateInterval <= 0 || appVersion === 'unknown') {
       return undefined;
     }
+
     let cancelled = false;
+
     const checkVersion = async () => {
       try {
         const response = await fetch(`/version.json?ts=${Date.now()}`, {
@@ -158,16 +86,22 @@ const NativeUpdateController = () => {
           setUpdateAvailable(true);
         }
       } catch {
-        // ignore fetch errors
+        // ignore
       }
     };
+
+    const timer = setInterval(checkVersion, updateInterval);
     checkVersion();
-    const interval = setInterval(checkVersion, 5 * 60 * 1000);
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(timer);
     };
-  }, [appVersion]);
+  }, [appVersion, updateInterval]);
+
+  if (nativeEnvironment) {
+    return null;
+  }
 
   const handleReload = () => {
     if (updating) {
@@ -175,7 +109,7 @@ const NativeUpdateController = () => {
     }
     setUpdating(true);
     setTimeout(() => setUpdating(false), 4000);
-    forceReload(true);
+    forceReload();
   };
 
   return (
@@ -191,14 +125,6 @@ const NativeUpdateController = () => {
       ContentProps={{ onClick: handleReload, style: { cursor: updating ? 'default' : 'pointer' } }}
     />
   );
-};
-
-const UpdateController = () => {
-  const swUpdateInterval = useSelector((state) => state.session.server.attributes.serviceWorkerUpdateInterval || 3600000);
-  if (nativeEnvironment) {
-    return null;
-  }
-  return <WebUpdateController swUpdateInterval={swUpdateInterval} />;
 };
 
 export default UpdateController;

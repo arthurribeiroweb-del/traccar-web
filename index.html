@@ -7,7 +7,6 @@
     <meta name="description" content="${description}" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" sizes="180x180" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css">
     <title>TraccarPro</title>
     <style>
@@ -16,6 +15,55 @@
         width: 50px; aspect-ratio: 1; box-sizing: content-box; animation: ll 1s infinite linear;
         border-radius: 50%; border: 8px solid lightgray; border-right-color: black;
       }
+      .boot-fallback {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: #101014;
+        color: #ffffff;
+        z-index: 9999;
+        padding: 24px;
+        text-align: center;
+      }
+      .boot-fallback[aria-hidden="false"] {
+        display: flex;
+      }
+      .boot-fallback__panel {
+        max-width: 420px;
+      }
+      .boot-fallback__title {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .boot-fallback__text {
+        margin: 0 0 16px;
+        color: #d6d6dc;
+      }
+      .boot-fallback__actions {
+        display: inline-flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
+      .boot-fallback__button {
+        border: 1px solid #6366f1;
+        color: #ffffff;
+        background: #4f46e5;
+        border-radius: 8px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font: inherit;
+      }
+      .boot-fallback__link {
+        border: 1px solid #3f3f46;
+        color: #ffffff;
+        text-decoration: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+      }
       @keyframes ll {to{transform: rotate(1turn)}}
     </style>
   </head>
@@ -23,6 +71,80 @@
     <noscript>Enable JavaScript to use ${description}.</noscript>
     <div id="root" class="root"></div>
     <div class="loader"></div>
-    <script type="module" src="/src/index.jsx" onerror="alert('Loading error.')"></script>
+    <div id="boot-fallback" class="boot-fallback" aria-hidden="true">
+      <div class="boot-fallback__panel">
+        <p class="boot-fallback__title">Nao carregou o painel?</p>
+        <p class="boot-fallback__text">O carregamento demorou alem do esperado.</p>
+        <div class="boot-fallback__actions">
+          <button type="button" class="boot-fallback__button" onclick="window.location.reload()">Recarregar</button>
+          <a class="boot-fallback__link" href="https://traccarpro.com.br/login">Abrir novamente</a>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function bootGuard() {
+        var root = document.getElementById('root');
+        var fallback = document.getElementById('boot-fallback');
+        var resolved = false;
+        var timer;
+
+        window.__traccarBootReady = function () {
+          if (resolved) {
+            return;
+          }
+          resolved = true;
+          clearTimeout(timer);
+          fallback.setAttribute('aria-hidden', 'true');
+        };
+
+        window.__traccarShowBootFallback = function () {
+          fallback.setAttribute('aria-hidden', 'false');
+        };
+
+        timer = setTimeout(function () {
+          if (!resolved && root && root.childElementCount === 0) {
+            window.__traccarShowBootFallback();
+          }
+        }, 8000);
+
+        if (root) {
+          var observer = new MutationObserver(function () {
+            if (root.childElementCount > 0) {
+              observer.disconnect();
+              window.__traccarBootReady();
+            }
+          });
+          observer.observe(root, { childList: true, subtree: true });
+        }
+
+        var cleanupKey = 'traccar-sw-cleanup-v2';
+        try {
+          if (!localStorage.getItem(cleanupKey)) {
+            localStorage.setItem(cleanupKey, '1');
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations()
+                .then(function (registrations) {
+                  return Promise.all(registrations.map(function (registration) {
+                    return registration.unregister();
+                  }));
+                })
+                .catch(function () {});
+            }
+            if ('caches' in window) {
+              caches.keys()
+                .then(function (keys) {
+                  return Promise.all(keys.map(function (key) {
+                    return caches.delete(key);
+                  }));
+                })
+                .catch(function () {});
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }());
+    </script>
+    <script type="module" src="/src/index.jsx" onerror="window.__traccarShowBootFallback && window.__traccarShowBootFallback()"></script>
   </body>
 </html>
