@@ -28,9 +28,12 @@ import { useAdministrator } from '../common/util/permissions';
 
 const SPEED_LIMIT_PRESETS = [80, 100, 120];
 
-// Traccar armazena speedLimit em knots; a UI usa km/h
-const KMH_TO_KNOTS = 0.539957;
-const KNOTS_TO_KMH = 1 / KMH_TO_KNOTS;
+// Traccar stores speedLimit in knots, while this UI collects km/h.
+const KNOTS_PER_KPH = 0.539956803;
+const SPEED_LIMIT_TOLERANCE_KNOTS = 0.05;
+const kphToKnots = (kph) => Number(kph) * KNOTS_PER_KPH;
+const knotsToKph = (knots) => Number(knots) / KNOTS_PER_KPH;
+const normalizeOverspeedType = (type) => (type === 'overspeed' ? 'deviceOverspeed' : type);
 
 async function fetchDevices() {
   const res = await fetchOrThrow('/api/devices');
@@ -42,18 +45,50 @@ async function applySpeedLimit(deviceIds, limitKmh) {
   if (!Number.isFinite(limitNum) || limitNum <= 0) {
     return { success: [], fail: deviceIds };
   }
-  const limitKnots = Math.round(limitNum * KMH_TO_KNOTS * 100) / 100;
+  const limitKnots = Number(kphToKnots(limitNum).toFixed(6));
   const results = await Promise.allSettled(
     deviceIds.map(async (deviceId) => {
-      const getRes = await fetchOrThrow(`/api/devices/${deviceId}`);
-      const device = await getRes.json();
-      const attributes = { ...(device.attributes || {}), speedLimit: limitKnots };
-      await fetchOrThrow(`/api/devices/${deviceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...device, attributes }),
-      });
-      return deviceId;
+      try {
+        const getRes = await fetchOrThrow(`/api/devices/${deviceId}`);
+        const device = await getRes.json();
+        const attributes = { ...(device.attributes || {}), speedLimit: limitKnots };
+
+        console.info('[NotificationPage] Overspeed save payload', {
+          deviceId,
+          speedLimitKmh: limitNum,
+          speedLimitKnots: limitKnots,
+        });
+
+        await fetchOrThrow(`/api/devices/${deviceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...device, attributes }),
+        });
+
+        const readBackRes = await fetchOrThrow(`/api/devices/${deviceId}`);
+        const readBackDevice = await readBackRes.json();
+        const readBackKnots = Number(readBackDevice?.attributes?.speedLimit);
+        const diff = Number.isFinite(readBackKnots)
+          ? Math.abs(readBackKnots - limitKnots)
+          : Number.NaN;
+
+        console.info('[NotificationPage] Overspeed read-back', {
+          deviceId,
+          expectedKnots: limitKnots,
+          readBackKnots,
+          toleranceKnots: SPEED_LIMIT_TOLERANCE_KNOTS,
+          diffKnots: diff,
+        });
+
+        if (!Number.isFinite(readBackKnots) || diff > SPEED_LIMIT_TOLERANCE_KNOTS) {
+          throw new Error(`speedLimit read-back mismatch for device ${deviceId}`);
+        }
+
+        return deviceId;
+      } catch (error) {
+        console.warn('[NotificationPage] Overspeed save/read-back failed', { deviceId, error });
+        throw error;
+      }
     }),
   );
   const success = [];
@@ -81,6 +116,7 @@ const NotificationPage = () => {
   const [saveLabel, setSaveLabel] = useState('');
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success', retry: null });
   const [failedDeviceIds, setFailedDeviceIds] = useState([]);
+  const [applyStatus, setApplyStatus] = useState('editing');
 
   useEffectAsync(async () => {
     const response = await fetchOrThrow('/api/notifications/notificators');
@@ -117,7 +153,7 @@ const NotificationPage = () => {
         const full = await devRes.json();
         const knots = full?.attributes?.speedLimit;
         if (knots != null && Number.isFinite(Number(knots)) && Number(knots) > 0) {
-          const kmh = Math.round(Number(knots) * KNOTS_TO_KMH);
+          const kmh = Math.round(knotsToKph(Number(knots)));
           setSpeedLimit(String(kmh));
           return;
         }
@@ -223,10 +259,32 @@ const NotificationPage = () => {
 
   const customSave = useCatch(async (payload) => {
     setSaving(true);
-    setSaveLabel(t('notificationSavingAlert'));
+    if (isOverspeed) {
+      setApplyStatus('saving');
+      setSaveLabel(t('notificationApplyingLimit'));
+    } else {
+      setSaveLabel(t('notificationSavingAlert'));
+    }
 
     try {
+      const normalizedType = normalizeOverspeedType(payload.type);
+      if (normalizedType !== payload.type) {
+        console.info('[NotificationPage] Normalizing notification type', {
+          from: payload.type,
+          to: normalizedType,
+        });
+      }
+
+      payload = { ...payload, type: normalizedType };
+
       if (isOverspeed && limitValid) {
+        const speedLimitKnots = Number(kphToKnots(limitNum).toFixed(6));
+        console.info('[NotificationPage] Overspeed save request', {
+          notificationId: id || null,
+          type: normalizedType,
+          speedLimitKmh: limitNum,
+          speedLimitKnots,
+        });
         payload = {
           ...payload,
           attributes: { ...payload.attributes, speedLimitKmh: String(Math.round(limitNum)) },
@@ -243,7 +301,7 @@ const NotificationPage = () => {
       const notificationId = saved.id;
 
       if (isGeofenceNotification) {
-        setSaveLabel(t('notificationApplyingLimit'));
+        setSaveLabel(t('notificationSavingAlert'));
         const deviceIds = payload.always
           ? (await fetchDevices()).map((d) => d.id)
           : (Array.isArray(selectedDeviceIds) ? selectedDeviceIds : []);
@@ -255,6 +313,7 @@ const NotificationPage = () => {
         setToast({ open: true, message: t('sharedSaved'), severity: 'success', retry: null });
         setSaving(false);
         setSaveLabel('');
+        setApplyStatus('editing');
         navigate(-1);
         return;
       }
@@ -272,7 +331,8 @@ const NotificationPage = () => {
           setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', '0'), severity: 'success', retry: null });
           setSaving(false);
           setSaveLabel('');
-          navigate(-1);
+          setFailedDeviceIds([]);
+          setApplyStatus('saved');
           return;
         }
 
@@ -283,10 +343,12 @@ const NotificationPage = () => {
 
         if (fail.length === 0) {
           setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', String(success.length)), severity: 'success', retry: null });
-          navigate(-1);
+          setFailedDeviceIds([]);
+          setApplyStatus('saved');
           return;
         }
         setFailedDeviceIds(fail);
+        setApplyStatus('failed');
         setToast({
           open: true,
           message: t('notificationOverspeedPartialFailure').replace('{{n}}', String(fail.length)),
@@ -295,11 +357,15 @@ const NotificationPage = () => {
         });
       } else {
         setSaving(false);
+        setApplyStatus('editing');
         navigate(-1);
       }
     } catch (e) {
       setSaving(false);
       setSaveLabel('');
+      if (isOverspeed) {
+        setApplyStatus('failed');
+      }
       throw e;
     }
   });
@@ -308,6 +374,7 @@ const NotificationPage = () => {
     if (failedDeviceIds.length === 0 || !limitValid) return;
     setToast((prev) => ({ ...prev, open: false }));
     setSaving(true);
+    setApplyStatus('saving');
     setSaveLabel(t('notificationApplyingLimit'));
     try {
       const { success, fail } = await doApplyAndHandleResult(failedDeviceIds, limitNum);
@@ -315,10 +382,11 @@ const NotificationPage = () => {
       setSaveLabel('');
       setFailedDeviceIds(fail);
       if (fail.length === 0) {
+        setApplyStatus('saved');
         setToast({ open: true, message: t('notificationOverspeedSuccess').replace('{{n}}', String(success.length)), severity: 'success', retry: null });
-        navigate(-1);
         return;
       }
+      setApplyStatus('failed');
       setToast({
         open: true,
         message: t('notificationOverspeedPartialFailure').replace('{{n}}', String(fail.length)),
@@ -328,6 +396,7 @@ const NotificationPage = () => {
     } catch (e) {
       setSaving(false);
       setSaveLabel('');
+      setApplyStatus('failed');
       throw e;
     }
   });
@@ -360,34 +429,66 @@ const NotificationPage = () => {
               <AccordionDetails className={classes.details}>
                 <SelectField
                   value={item.type}
-                  onChange={(e) => setItem({ ...item, type: e.target.value })}
+                  onChange={(e) => {
+                    const nextType = normalizeOverspeedType(e.target.value);
+                    setItem({ ...item, type: nextType });
+                    setApplyStatus('editing');
+                  }}
                   endpoint="/api/notifications/types"
                   keyGetter={(it) => it.type}
-                  titleGetter={(it) => t(prefixString('event', it.type))}
+                  titleGetter={(it) => t(prefixString('event', normalizeOverspeedType(it.type)))}
                   label={t('sharedType')}
                   helperText={['geofenceEnter', 'geofenceExit'].includes(item.type) ? t('notificationGeofenceSelectLabel') : null}
+                  disabled={saving}
                 />
                 {item.type === 'alarm' && (
                   <SelectField
                     multiple
                     value={item.attributes?.alarms ? item.attributes.alarms.split(/[, ]+/) : []}
-                    onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, alarms: e.target.value.join() } })}
+                    onChange={(e) => {
+                      setItem({ ...item, attributes: { ...item.attributes, alarms: e.target.value.join() } });
+                      setApplyStatus('editing');
+                    }}
                     data={alarms}
                     keyGetter={(it) => it.key}
                     label={t('sharedAlarms')}
+                    disabled={saving}
                   />
                 )}
                 {isOverspeed && (
                   <>
+                    {applyStatus !== 'editing' && (
+                      <Alert
+                        severity={applyStatus === 'saved' ? 'success' : (applyStatus === 'failed' ? 'error' : 'info')}
+                        action={applyStatus === 'failed' ? (
+                          <Button
+                            color="inherit"
+                            size="small"
+                            onClick={handleRetry}
+                            disabled={saving || failedDeviceIds.length === 0 || !limitValid}
+                          >
+                            {t('notificationRetry')}
+                          </Button>
+                        ) : null}
+                      >
+                        {applyStatus === 'saving' && t('notificationApplyingLimit')}
+                        {applyStatus === 'saved' && t('notificationLimitApplied')}
+                        {applyStatus === 'failed' && t('notificationLimitApplyFailed')}
+                      </Alert>
+                    )}
                     <TextField
                       label={t('notificationSpeedLimitLabel')}
                       type="number"
                       required
                       fullWidth
                       value={speedLimit}
-                      onChange={(e) => setSpeedLimit(e.target.value)}
+                      onChange={(e) => {
+                        setSpeedLimit(e.target.value);
+                        setApplyStatus('editing');
+                      }}
                       error={speedLimit.length > 0 && !limitValid}
                       helperText={t('notificationSpeedLimitHelper')}
+                      disabled={saving}
                       inputProps={{
                         min: 1,
                         step: 1,
@@ -401,9 +502,13 @@ const NotificationPage = () => {
                         <Chip
                           key={preset}
                           label={`${preset} km/h`}
-                          onClick={() => setSpeedLimit(String(preset))}
+                          onClick={() => {
+                            setSpeedLimit(String(preset));
+                            setApplyStatus('editing');
+                          }}
                           variant={limitNum === preset ? 'filled' : 'outlined'}
                           color="primary"
+                          disabled={saving}
                           sx={{ minHeight: 44, minWidth: 44 }}
                         />
                       ))}
@@ -430,6 +535,7 @@ const NotificationPage = () => {
                       const val = e.target.value || [];
                       const expanded = val.flatMap((v) => (v.includes(',') ? v.split(',') : [v]));
                       setItem({ ...item, notificators: expanded.join(',') });
+                      setApplyStatus('editing');
                     }}
                     data={notificators ? (() => {
                       const types = notificators.map((n) => n.type);
@@ -443,6 +549,7 @@ const NotificationPage = () => {
                     titleGetter={(it) => it.name || t(prefixString('notificator', it.type))}
                     label={t('notificationNotificators')}
                     helperText={t('notificationChannelsHelper')}
+                    disabled={saving}
                   />
                 </Box>
                 {notificators && !hasPushNotificator && (
@@ -458,19 +565,23 @@ const NotificationPage = () => {
                   </Alert>
                 )}
                 {item.notificators?.includes('command') && (
-                  <SelectField
-                    value={item.commandId}
-                    onChange={(e) => setItem({ ...item, commandId: Number(e.target.value) })}
-                    endpoint="/api/commands"
-                    titleGetter={(it) => it.description}
-                    label={t('sharedSavedCommand')}
-                  />
+                    <SelectField
+                      value={item.commandId}
+                      onChange={(e) => {
+                        setItem({ ...item, commandId: Number(e.target.value) });
+                        setApplyStatus('editing');
+                      }}
+                      endpoint="/api/commands"
+                      titleGetter={(it) => it.description}
+                      label={t('sharedSavedCommand')}
+                      disabled={saving}
+                    />
                 )}
                 <Button
                   variant="outlined"
                   color="primary"
                   onClick={testNotificators}
-                  disabled={!item.notificators}
+                  disabled={saving || !item.notificators}
                 >
                   {t('sharedTestNotificators')}
                 </Button>
@@ -479,9 +590,14 @@ const NotificationPage = () => {
                     control={(
                       <Checkbox
                         checked={item.always}
-                        onChange={(e) => setItem({ ...item, always: e.target.checked })}
+                        onChange={(e) => {
+                          setItem({ ...item, always: e.target.checked });
+                          setApplyStatus('editing');
+                        }}
+                        disabled={saving}
                       />
                     )}
+                    disabled={saving}
                     label={t('notificationAlways')}
                   />
                 </FormGroup>
@@ -490,12 +606,16 @@ const NotificationPage = () => {
                     multiple
                     fullWidth
                     value={selectedDeviceIds}
-                    onChange={(e) => setSelectedDeviceIds(Array.isArray(e.target.value) ? e.target.value : [])}
+                    onChange={(e) => {
+                      setSelectedDeviceIds(Array.isArray(e.target.value) ? e.target.value : []);
+                      setApplyStatus('editing');
+                    }}
                     endpoint="/api/devices"
                     keyGetter={(it) => it.id}
                     titleGetter={(it) => it.name}
                     label={t('notificationDevices')}
                     helperText={t('sharedRequired')}
+                    disabled={saving}
                   />
                 )}
                 {isGeofenceNotification && !item.always && (
@@ -503,12 +623,16 @@ const NotificationPage = () => {
                     multiple
                     fullWidth
                     value={selectedDeviceIds}
-                    onChange={(e) => setSelectedDeviceIds(Array.isArray(e.target.value) ? e.target.value : [])}
+                    onChange={(e) => {
+                      setSelectedDeviceIds(Array.isArray(e.target.value) ? e.target.value : []);
+                      setApplyStatus('editing');
+                    }}
                     endpoint="/api/devices"
                     keyGetter={(it) => it.id}
                     titleGetter={(it) => it.name}
                     label={t('notificationDevices')}
                     helperText={t('notificationDeviceSelectorHelp')}
+                    disabled={saving}
                   />
                 )}
                 {isGeofenceNotification && (
@@ -516,12 +640,16 @@ const NotificationPage = () => {
                     multiple
                     fullWidth
                     value={selectedGeofenceIds}
-                    onChange={(e) => setSelectedGeofenceIds(Array.isArray(e.target.value) ? e.target.value : [])}
+                    onChange={(e) => {
+                      setSelectedGeofenceIds(Array.isArray(e.target.value) ? e.target.value : []);
+                      setApplyStatus('editing');
+                    }}
                     endpoint="/api/geofences"
                     keyGetter={(it) => it.id}
                     titleGetter={(it) => it.name}
                     label={t('sharedGeofences')}
                     helperText={t('notificationGeofenceSelectHelp')}
+                    disabled={saving}
                   />
                 )}
               </AccordionDetails>
@@ -535,23 +663,36 @@ const NotificationPage = () => {
               <AccordionDetails className={classes.details}>
                 <TextField
                   value={item.description || ''}
-                  onChange={(e) => setItem({ ...item, description: e.target.value })}
+                  onChange={(e) => {
+                    setItem({ ...item, description: e.target.value });
+                    setApplyStatus('editing');
+                  }}
                   label={t('sharedDescription')}
+                  disabled={saving}
                 />
                 <SelectField
                   value={item.calendarId}
-                  onChange={(e) => setItem({ ...item, calendarId: Number(e.target.value) })}
+                  onChange={(e) => {
+                    setItem({ ...item, calendarId: Number(e.target.value) });
+                    setApplyStatus('editing');
+                  }}
                   endpoint="/api/calendars"
                   label={t('sharedCalendar')}
+                  disabled={saving}
                 />
                 <FormGroup>
                   <FormControlLabel
                     control={(
                       <Checkbox
                         checked={item.attributes?.priority}
-                        onChange={(e) => setItem({ ...item, attributes: { ...item.attributes, priority: e.target.checked } })}
+                        onChange={(e) => {
+                          setItem({ ...item, attributes: { ...item.attributes, priority: e.target.checked } });
+                          setApplyStatus('editing');
+                        }}
+                        disabled={saving}
                       />
                     )}
+                    disabled={saving}
                     label={t('sharedPriority')}
                   />
                 </FormGroup>
