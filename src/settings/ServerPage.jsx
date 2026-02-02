@@ -68,10 +68,10 @@ const ServerPage = () => {
     navigate(-1);
   });
 
-  const defaultActiveMapStyles = ['locationIqStreets', 'locationIqDark', 'openFreeMap'];
+  const defaultActiveMapStyles = ['googleSatellite', 'googleRoad', 'googleHybrid', 'locationIqStreets', 'locationIqDark', 'openFreeMap'];
   const googleMaps = ['googleRoad', 'googleSatellite', 'googleHybrid'];
   const googleKey = item?.attributes?.googleKey;
-  const defaultMap = item?.map || 'locationIqStreets';
+  const defaultMap = item?.map || 'googleSatellite';
   const activeMapStyles = item?.attributes?.activeMapStyles
     ? item.attributes.activeMapStyles.split(',')
     : defaultActiveMapStyles;

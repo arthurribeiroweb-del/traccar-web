@@ -2,10 +2,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
 import { googleProtocol } from 'maplibre-google-maps';
 import React, {
-  useRef, useLayoutEffect, useEffect, useState,
-  useMemo,
+  useRef, useLayoutEffect, useEffect, useState, useMemo,
 } from 'react';
 import { useTheme } from '@mui/material';
+import { useSelector } from 'react-redux';
 import { SwitcherControl } from '../switcher/switcher';
 import { useAttributePreference, usePreference } from '../../common/util/preferences';
 import usePersistedState, { savePersistedState } from '../../common/util/usePersistedState';
@@ -17,6 +17,9 @@ const element = document.createElement('div');
 element.style.width = '100%';
 element.style.height = '100%';
 element.style.boxSizing = 'initial';
+
+const DEFAULT_MAP_STYLE = 'googleSatellite';
+const LEGACY_MAP_STYLE_KEY = 'selectedMapStyle';
 
 maplibregl.addProtocol('google', googleProtocol);
 
@@ -61,14 +64,36 @@ const MapView = ({ children }) => {
   const [mapReady, setMapReady] = useState(false);
 
   const mapStyles = useMapStyles();
-  const activeMapStyles = useAttributePreference('activeMapStyles', 'locationIqStreets,locationIqDark,openFreeMap');
-  const [defaultMapStyle] = usePersistedState('selectedMapStyle', usePreference('map', 'locationIqStreets'));
+  const currentUserId = useSelector((state) => state.session.user?.id || 'guest');
+  const preferredMapStyle = usePreference('map', DEFAULT_MAP_STYLE);
+  const activeMapStyles = useAttributePreference('activeMapStyles', 'googleSatellite,googleRoad,googleHybrid,locationIqStreets,locationIqDark,openFreeMap');
+  const scopedMapStyleKey = `selectedMapStyle:${currentUserId}`;
+  const [defaultMapStyle, setDefaultMapStyle] = usePersistedState(scopedMapStyleKey, preferredMapStyle);
+  const scopedMapStyleKeyRef = useRef(scopedMapStyleKey);
   const mapboxAccessToken = useAttributePreference('mapboxAccessToken');
   const maxZoom = useAttributePreference('web.maxZoom');
 
+  useEffect(() => {
+    scopedMapStyleKeyRef.current = scopedMapStyleKey;
+    const stickyValue = window.localStorage.getItem(scopedMapStyleKey);
+    if (stickyValue) {
+      try {
+        setDefaultMapStyle(JSON.parse(stickyValue));
+      } catch {
+        setDefaultMapStyle(preferredMapStyle);
+      }
+    } else {
+      setDefaultMapStyle(preferredMapStyle);
+    }
+  }, [scopedMapStyleKey, preferredMapStyle, setDefaultMapStyle]);
+
+  useEffect(() => {
+    window.localStorage.removeItem(LEGACY_MAP_STYLE_KEY);
+  }, []);
+
   const switcher = useMemo(() => new SwitcherControl(
     () => updateReadyValue(false),
-    (styleId) => savePersistedState('selectedMapStyle', styleId),
+    (styleId) => savePersistedState(scopedMapStyleKeyRef.current, styleId),
     () => {
       map.once('styledata', () => {
         const waiting = () => {
@@ -114,10 +139,20 @@ const MapView = ({ children }) => {
   }, [mapboxAccessToken]);
 
   useEffect(() => {
-    const filteredStyles = mapStyles.filter((s) => s.available && activeMapStyles.includes(s.id));
+    const activeMapStyleIds = Array.isArray(activeMapStyles)
+      ? activeMapStyles
+      : String(activeMapStyles).split(',').map((id) => id.trim()).filter(Boolean);
+    const activeMapStyleSet = new Set(activeMapStyleIds);
+    const filteredStyles = mapStyles.filter((style) => style.available && activeMapStyleSet.has(style.id));
+    const preferredStyle = mapStyles.find((style) => style.available && style.id === preferredMapStyle);
+
+    if (preferredStyle && !filteredStyles.some((style) => style.id === preferredStyle.id)) {
+      filteredStyles.unshift(preferredStyle);
+    }
+
     const styles = filteredStyles.length ? filteredStyles : mapStyles.filter((s) => s.id === 'osm');
     switcher.updateStyles(styles, defaultMapStyle);
-  }, [mapStyles, defaultMapStyle, activeMapStyles, switcher]);
+  }, [mapStyles, defaultMapStyle, activeMapStyles, preferredMapStyle, switcher]);
 
   useEffect(() => {
     const listener = (ready) => setMapReady(ready);

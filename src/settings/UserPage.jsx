@@ -106,7 +106,7 @@ const UserPage = () => {
       }
     };
 
-    applyField('map', server.map);
+    applyField('map', server.map || 'googleSatellite');
     applyField('coordinateFormat', server.coordinateFormat);
     applyField('poiLayer', server.poiLayer);
 
@@ -314,7 +314,7 @@ const UserPage = () => {
                     <InputLabel>{t('mapDefault')}</InputLabel>
                     <Select
                       label={t('mapDefault')}
-                      value={item.map || 'locationIqStreets'}
+                      value={item.map || 'googleSatellite'}
                       onChange={(e) => setItem({ ...item, map: e.target.value })}
                       disabled={forceSettings}
                     >
