@@ -6,6 +6,7 @@ const { reducer, actions } = createSlice({
     server: null,
     user: null,
     socket: null,
+    socketStatus: null,
     includeLogs: false,
     logs: [],
     positions: {},
@@ -20,6 +21,9 @@ const { reducer, actions } = createSlice({
     },
     updateSocket(state, action) {
       state.socket = action.payload;
+    },
+    updateSocketStatus(state, action) {
+      state.socketStatus = action.payload;
     },
     enableLogs(state, action) {
       state.includeLogs = action.payload;

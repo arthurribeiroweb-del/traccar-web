@@ -13,8 +13,31 @@ import useFeatures from './common/util/useFeatures';
 import { useAttributePreference } from './common/util/preferences';
 import { handleNativeNotificationListeners, nativePostMessage } from './common/components/NativeInterface';
 import fetchOrThrow from './common/util/fetchOrThrow';
+import { pollPositionsOnce, REALTIME_RECONNECT_EVENT } from './common/util/realtimeApi';
 
 const logoutCode = 4000;
+const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000, 60000];
+const FALLBACK_POLL_INTERVAL_MS = 5000;
+
+const pollOnceWithAuth = async (dispatch, navigate) => {
+  try {
+    const [devicesRes, positionsRes] = await Promise.all([
+      fetch('/api/devices'),
+      fetch('/api/positions'),
+    ]);
+    if (devicesRes.ok) {
+      dispatch(devicesActions.update(await devicesRes.json()));
+    }
+    if (positionsRes.ok) {
+      dispatch(sessionActions.updatePositions(await positionsRes.json()));
+    }
+    if (devicesRes.status === 401 || positionsRes.status === 401) {
+      navigate('/login');
+    }
+  } catch {
+    // ignore
+  }
+};
 
 const SocketController = () => {
   const dispatch = useDispatch();
@@ -26,13 +49,29 @@ const SocketController = () => {
 
   const socketRef = useRef();
   const reconnectTimeoutRef = useRef();
+  const fallbackPollRef = useRef();
+  const backoffIndexRef = useRef(0);
 
-  const clearReconnectTimeout = () => {
+  const clearReconnectTimeout = useCallback(() => {
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
-  };
+  }, []);
+
+  const stopFallbackPoll = useCallback(() => {
+    if (fallbackPollRef.current) {
+      clearInterval(fallbackPollRef.current);
+      fallbackPollRef.current = null;
+    }
+  }, []);
+
+  const startFallbackPoll = useCallback(() => {
+    stopFallbackPoll();
+    fallbackPollRef.current = setInterval(() => {
+      pollOnceWithAuth(dispatch, navigate);
+    }, FALLBACK_POLL_INTERVAL_MS);
+  }, [dispatch, navigate, stopFallbackPoll]);
 
   const [notifications, setNotifications] = useState([]);
 
@@ -46,53 +85,57 @@ const SocketController = () => {
       dispatch(eventsActions.add({ events, userId }));
     }
     if (events.some((e) => soundEvents.includes(e.type)
-        || (e.type === 'alarm' && soundAlarms.includes(e.attributes.alarm)))) {
+        || (e.type === 'alarm' && soundAlarms.includes(e.attributes?.alarm)))) {
       new Audio(alarm).play();
     }
     setNotifications(events.map((event) => ({
       id: event.id,
-      message: event.attributes.message,
+      message: event.attributes?.message,
       show: true,
     })));
   }, [features, dispatch, soundEvents, soundAlarms, userId]);
 
-  const connectSocket = () => {
+  const scheduleReconnect = useCallback(() => {
     clearReconnectTimeout();
+    const delay = BACKOFF_MS[Math.min(backoffIndexRef.current, BACKOFF_MS.length - 1)];
+    backoffIndexRef.current += 1;
+    dispatch(sessionActions.updateSocketStatus('reconnecting'));
+    reconnectTimeoutRef.current = setTimeout(() => {
+      reconnectTimeoutRef.current = null;
+      connectSocket();
+    }, delay);
+  }, [clearReconnectTimeout, dispatch]);
+
+  const connectSocket = useCallback(() => {
+    clearReconnectTimeout();
+    stopFallbackPoll();
     if (socketRef.current && socketRef.current.readyState !== WebSocket.CLOSED) {
       socketRef.current.close();
     }
+    dispatch(sessionActions.updateSocketStatus('connecting'));
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socket = new WebSocket(`${protocol}//${window.location.host}/api/socket`);
     socketRef.current = socket;
 
     socket.onopen = () => {
+      backoffIndexRef.current = 0;
       dispatch(sessionActions.updateSocket(true));
+      dispatch(sessionActions.updateSocketStatus('live'));
+      pollOnceWithAuth(dispatch, navigate);
     };
 
     socket.onclose = async (event) => {
       dispatch(sessionActions.updateSocket(false));
       if (event.code !== logoutCode) {
-        try {
-          const devicesResponse = await fetch('/api/devices');
-          if (devicesResponse.ok) {
-            dispatch(devicesActions.update(await devicesResponse.json()));
-          }
-          const positionsResponse = await fetch('/api/positions');
-          if (positionsResponse.ok) {
-            dispatch(sessionActions.updatePositions(await positionsResponse.json()));
-          }
-          if (devicesResponse.status === 401 || positionsResponse.status === 401) {
-            navigate('/login');
-          }
-        } catch {
-          // ignore errors
-        }
-        clearReconnectTimeout();
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          connectSocket();
-        }, 60000);
+        dispatch(sessionActions.updateSocketStatus('offline'));
+        await pollOnceWithAuth(dispatch, navigate);
+        startFallbackPoll();
+        scheduleReconnect();
       }
+    };
+
+    socket.onerror = () => {
+      dispatch(sessionActions.updateSocketStatus('error'));
     };
 
     socket.onmessage = (event) => {
@@ -102,6 +145,7 @@ const SocketController = () => {
       }
       if (data.positions) {
         dispatch(sessionActions.updatePositions(data.positions));
+        dispatch(sessionActions.updateSocketStatus('live'));
       }
       if (data.events) {
         handleEvents(data.events);
@@ -110,7 +154,15 @@ const SocketController = () => {
         dispatch(sessionActions.updateLogs(data.logs));
       }
     };
-  };
+  }, [
+    clearReconnectTimeout,
+    stopFallbackPoll,
+    startFallbackPoll,
+    scheduleReconnect,
+    dispatch,
+    navigate,
+    handleEvents,
+  ]);
 
   useEffect(() => {
     socketRef.current?.send(JSON.stringify({ logs: includeLogs }));
@@ -124,6 +176,7 @@ const SocketController = () => {
       connectSocket();
       return () => {
         clearReconnectTimeout();
+        stopFallbackPoll();
         socketRef.current?.close(logoutCode);
       };
     }
@@ -131,14 +184,14 @@ const SocketController = () => {
   }, [authenticated]);
 
   const handleNativeNotification = useCatchCallback(async (message) => {
-    const eventId = message.data.eventId;
+    const eventId = message.data?.eventId;
     if (eventId) {
       const response = await fetch(`/api/events/${eventId}`);
       if (response.ok) {
         const event = await response.json();
         const eventWithMessage = {
           ...event,
-          attributes: { ...event.attributes, message: message.notification.body },
+          attributes: { ...event.attributes, message: message.notification?.body },
         };
         handleEvents([eventWithMessage]);
       }
@@ -155,6 +208,7 @@ const SocketController = () => {
     const reconnectIfNeeded = () => {
       const socket = socketRef.current;
       if (!socket || socket.readyState === WebSocket.CLOSED) {
+        backoffIndexRef.current = 0;
         connectSocket();
       } else if (socket.readyState === WebSocket.OPEN) {
         try {
@@ -169,13 +223,19 @@ const SocketController = () => {
         reconnectIfNeeded();
       }
     };
+    const onReconnectRequest = () => {
+      backoffIndexRef.current = 0;
+      connectSocket();
+    };
     window.addEventListener('online', reconnectIfNeeded);
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener(REALTIME_RECONNECT_EVENT, onReconnectRequest);
     return () => {
       window.removeEventListener('online', reconnectIfNeeded);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener(REALTIME_RECONNECT_EVENT, onReconnectRequest);
     };
-  }, [authenticated]);
+  }, [authenticated, connectSocket]);
 
   return (
     <>

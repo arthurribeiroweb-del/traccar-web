@@ -13,6 +13,7 @@ import { useTranslation } from '../common/components/LocalizationProvider';
 import { useAttributePreference } from '../common/util/preferences';
 import { speedFromKnots, speedUnitString } from '../common/util/converter';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
+import RealtimeStatusChip from '../common/components/RealtimeStatusChip';
 
 const swipeThresholdPx = 24;
 
@@ -162,9 +163,12 @@ const BottomPeekCard = ({
         {isLoading ? (
           <Skeleton variant="text" width="70%" />
         ) : (
-          <Typography variant="body2" color="textPrimary" className={classes.text}>
-            {lineText}
-          </Typography>
+          <>
+            <Typography variant="body2" color="textPrimary" className={classes.text}>
+              {lineText}
+            </Typography>
+            <RealtimeStatusChip position={position} compact />
+          </>
         )}
         <div className={classes.actions}>
           <KeyboardArrowUpIcon fontSize="small" color="action" />

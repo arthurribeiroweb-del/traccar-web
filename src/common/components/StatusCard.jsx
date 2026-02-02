@@ -40,6 +40,7 @@ import { useCatch, useCatchCallback } from '../../reactHelper';
 import { useAttributePreference } from '../util/preferences';
 import fetchOrThrow from '../util/fetchOrThrow';
 import { snackBarDurationShortMs } from '../util/duration';
+import RealtimeStatusChip from './RealtimeStatusChip';
 
 const useStyles = makeStyles()((theme, { desktopPadding, actionTone }) => ({
   card: {
@@ -812,6 +813,7 @@ const StatusCard = ({
                       <PowerSettingsNewIcon fontSize="inherit" />
                       <span>{statusInfo.label}</span>
                     </div>
+                    <RealtimeStatusChip position={position} />
                   </div>
                 </div>
                 <div className={classes.headerActions}>
