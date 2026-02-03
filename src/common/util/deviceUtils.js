@@ -6,5 +6,5 @@
 export const getDeviceDisplayName = (device) => {
   if (!device) return '';
   const dn = device.attributes?.displayName?.trim();
-  return dn || device.name || '';
+  return device.name || dn || '';
 };
