@@ -10,8 +10,6 @@ import { sessionActions } from '../../store';
 import {
   Box,
   Button,
-  ButtonBase,
-  Chip,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from './LocalizationProvider';
@@ -84,45 +82,13 @@ export const useRealtimeStatus = (position) => {
   }, [ageSec, fixTimeMs, socketConnected, socketStatus]);
 
   const isAdmin = user?.administrator === true;
-
-  const statusLabel = useMemo(() => {
-    switch (connectionState) {
-      case 'DELAYED':
-        return 'realtimeUpdating';
-      case 'RECONNECTING':
-        return 'realtimeNoSignalReconnecting';
-      case 'OFFLINE_HARD':
-        return isAdmin ? 'realtimeNoSignalTapRetry' : 'realtimeNoSignal';
-      default:
-        return null;
-    }
-  }, [connectionState, isAdmin]);
-
-  const chipColor = useMemo(() => {
-    switch (connectionState) {
-      case 'DELAYED':
-        return 'warning';
-      case 'OFFLINE_HARD':
-        return 'error';
-      case 'RECONNECTING':
-      default:
-        return 'default';
-    }
-  }, [connectionState]);
-
-  const showStatusChip = connectionState !== 'ONLINE';
-  const canManualRetry = isAdmin && connectionState === 'OFFLINE_HARD';
   const updatedText = Number.isFinite(ageSec) ? `Atualizado h\u00e1 ${ageSec}s` : '--';
 
   return {
     ageSec,
-    canManualRetry,
-    chipColor,
     connectionState,
     isAdmin,
-    showStatusChip,
     socketConnected,
-    statusLabel,
     updatedText,
   };
 };
@@ -135,13 +101,9 @@ const RealtimeStatusChip = ({
   const t = useTranslation();
   const {
     ageSec,
-    canManualRetry,
-    chipColor,
     connectionState,
     isAdmin,
-    showStatusChip,
     socketConnected,
-    statusLabel,
     updatedText,
   } = useRealtimeStatus(position);
 
@@ -217,31 +179,16 @@ const RealtimeStatusChip = ({
     stopReconnectLoop();
   }, [stopReconnectLoop]);
 
-  const label = statusLabel ? t(statusLabel) : '';
   const showUpdatedText = !compact;
-  const showAdminActions = isAdmin && !compact && showStatusChip;
-  const chipNode = showStatusChip ? (
-    <Chip
-      size="small"
-      color={chipColor}
-      label={label}
-      clickable={canManualRetry}
-      sx={{ fontWeight: 500 }}
-    />
-  ) : null;
+  const showAdminActions = isAdmin && !compact && connectionState !== 'ONLINE';
+
+  if (!showUpdatedText && !showAdminActions) {
+    return null;
+  }
 
   return (
     <>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-        {canManualRetry && chipNode ? (
-          <ButtonBase
-            onClick={forceReconnect}
-            aria-label="Tentar reconectar"
-            sx={{ minHeight: 44, borderRadius: 999 }}
-          >
-            {chipNode}
-          </ButtonBase>
-        ) : chipNode}
         {showUpdatedText && (
           <Box component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
             {updatedText}
