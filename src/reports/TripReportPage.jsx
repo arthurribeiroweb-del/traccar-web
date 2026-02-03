@@ -1,9 +1,21 @@
-import { useState } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useTheme } from '@mui/material/styles';
 import {
-  IconButton, Table, TableBody, TableCell, TableHead, TableRow,
+  Alert,
+  Button,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  useMediaQuery,
 } from '@mui/material';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import LocationSearchingIcon from '@mui/icons-material/LocationSearching';
@@ -32,6 +44,7 @@ import scheduleReport from './common/scheduleReport';
 import MapScale from '../map/MapScale';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import exportExcel from '../common/util/exportExcel';
+import TripCardList from './components/TripCardList';
 
 const columnsArray = [
   ['startTime', 'reportStartTime'],
@@ -54,6 +67,7 @@ const TripReportPage = () => {
   const { classes } = useReportStyles();
   const t = useTranslation();
   const theme = useTheme();
+  const isMobile = useMediaQuery('(max-width:768px)');
 
   const devices = useSelector((state) => state.devices.items);
 
@@ -64,6 +78,9 @@ const TripReportPage = () => {
   const [columns, setColumns] = usePersistedState('tripColumns', ['startTime', 'endTime', 'distance', 'averageSpeed']);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
+  const [lastReportParams, setLastReportParams] = useState(null);
+  const [range, setRange] = useState({ from: null, to: null });
   const [selectedItem, setSelectedItem] = useState(null);
   const [route, setRoute] = useState(null);
 
@@ -96,18 +113,32 @@ const TripReportPage = () => {
     }
   }, [selectedItem]);
 
-  const onShow = useCatch(async ({ deviceIds, groupIds, from, to }) => {
+  const loadReport = useCallback(async ({ deviceIds, groupIds, from, to }) => {
     const query = new URLSearchParams({ from, to });
     deviceIds.forEach((deviceId) => query.append('deviceId', deviceId));
     groupIds.forEach((groupId) => query.append('groupId', groupId));
+    setLastReportParams({ deviceIds, groupIds, from, to });
+    setRange({ from, to });
+    setLoadingError(false);
     setLoading(true);
     try {
       const response = await fetchOrThrow(`/api/reports/trips?${query.toString()}`, {
         headers: { Accept: 'application/json' },
       });
       setItems(await response.json());
+    } catch {
+      setItems([]);
+      setLoadingError(true);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const onShow = useCatch(loadReport);
+
+  const onRetry = useCatch(async () => {
+    if (lastReportParams) {
+      await loadReport(lastReportParams);
     }
   });
 
@@ -179,6 +210,30 @@ const TripReportPage = () => {
     }
   };
 
+  const showDateInCards = useMemo(() => (
+    Boolean(range.from && range.to)
+    && formatTime(range.from, 'date') !== formatTime(range.to, 'date')
+  ), [range.from, range.to]);
+
+  const showDeviceNameInCards = useMemo(
+    () => new Set(items.map((item) => item.deviceId)).size > 1,
+    [items],
+  );
+
+  const cardItems = useMemo(() => items.map((item) => ({
+    ...item,
+    deviceName: getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId]?.name,
+  })), [devices, items]);
+
+  const getDistanceLabel = useCallback((item) => formatDistance(item.distance, distanceUnit, t), [distanceUnit, t]);
+  const getDurationLabel = useCallback((item) => formatNumericHours(item.duration, t), [t]);
+  const getAverageSpeedLabel = useCallback((item) => (
+    item.averageSpeed > 0 ? formatSpeed(item.averageSpeed, speedUnit, t) : '--'
+  ), [speedUnit, t]);
+  const getMaxSpeedLabel = useCallback((item) => (
+    item.maxSpeed > 0 ? formatSpeed(item.maxSpeed, speedUnit, t) : '--'
+  ), [speedUnit, t]);
+
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportTrips']}>
       <div className={classes.container}>
@@ -203,43 +258,71 @@ const TripReportPage = () => {
               <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
             </ReportFilter>
           </div>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell className={classes.columnAction} />
-                <TableCell>{t('sharedDevice')}</TableCell>
-                {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!loading ? items.map((item) => (
-                <TableRow key={item.startPositionId}>
-                  <TableCell className={classes.columnAction} padding="none">
-                    <div className={classes.columnActionContainer}>
-                      {selectedItem === item ? (
-                        <IconButton size="small" onClick={() => setSelectedItem(null)}>
-                          <GpsFixedIcon fontSize="small" />
-                        </IconButton>
-                      ) : (
-                        <IconButton size="small" onClick={() => setSelectedItem(item)}>
-                          <LocationSearchingIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                      <IconButton size="small" onClick={() => navigateToReplay(item)}>
-                        <RouteIcon fontSize="small" />
-                      </IconButton>
-                    </div>
-                  </TableCell>
-                  <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
-                  {columns.map((key) => (
-                    <TableCell key={key}>
-                      {formatValue(item, key)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              )) : (<TableShimmer columns={columns.length + 2} startAction />)}
-            </TableBody>
-          </Table>
+          {isMobile ? (
+            <TripCardList
+              items={cardItems}
+              loading={loading}
+              error={loadingError}
+              onRetry={lastReportParams ? onRetry : undefined}
+              onFocusMap={(item) => setSelectedItem(item)}
+              onReplay={navigateToReplay}
+              showDate={showDateInCards}
+              showDeviceName={showDeviceNameInCards}
+              getDistanceLabel={getDistanceLabel}
+              getDurationLabel={getDurationLabel}
+              getAverageSpeedLabel={getAverageSpeedLabel}
+              getMaxSpeedLabel={getMaxSpeedLabel}
+            />
+          ) : (
+            <>
+              {loadingError && (
+                <Alert
+                  severity="error"
+                  action={lastReportParams ? <Button color="inherit" size="small" onClick={onRetry}>{t('reportRetry')}</Button> : null}
+                  sx={{ mx: 2, mt: 1 }}
+                >
+                  {t('reportEventsLoadError')}
+                </Alert>
+              )}
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell className={classes.columnAction} />
+                    <TableCell>{t('sharedDevice')}</TableCell>
+                    {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!loading ? items.map((item) => (
+                    <TableRow key={item.startPositionId}>
+                      <TableCell className={classes.columnAction} padding="none">
+                        <div className={classes.columnActionContainer}>
+                          {selectedItem === item ? (
+                            <IconButton size="small" onClick={() => setSelectedItem(null)}>
+                              <GpsFixedIcon fontSize="small" />
+                            </IconButton>
+                          ) : (
+                            <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                              <LocationSearchingIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                          <IconButton size="small" onClick={() => navigateToReplay(item)}>
+                            <RouteIcon fontSize="small" />
+                          </IconButton>
+                        </div>
+                      </TableCell>
+                      <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
+                      {columns.map((key) => (
+                        <TableCell key={key}>
+                          {formatValue(item, key)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )) : (<TableShimmer columns={columns.length + 2} startAction />)}
+                </TableBody>
+              </Table>
+            </>
+          )}
         </div>
       </div>
     </PageLayout>
