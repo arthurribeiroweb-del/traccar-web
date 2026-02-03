@@ -1,7 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  FormControl, InputLabel, Select, MenuItem, Table, TableHead, TableRow, TableCell, TableBody, Link, IconButton,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Link,
+  IconButton,
+  Button,
+  Alert,
+  useMediaQuery,
 } from '@mui/material';
 import GpsFixedIcon from '@mui/icons-material/GpsFixed';
 import LocationSearchingIcon from '@mui/icons-material/LocationSearching';
@@ -30,6 +48,8 @@ import SelectField from '../common/components/SelectField';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import exportExcel from '../common/util/exportExcel';
 import AddressValue from '../common/components/AddressValue';
+import EventCardList from './components/EventCardList';
+import { getEventTitle } from './common/eventLabels';
 
 const columnsArray = [
   ['eventTime', 'positionFixTime'],
@@ -46,6 +66,7 @@ const EventReportPage = () => {
   const { classes } = useReportStyles();
   const t = useTranslation();
   const theme = useTheme();
+  const isMobile = useMediaQuery('(max-width:768px)');
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -66,7 +87,11 @@ const EventReportPage = () => {
   const alarmTypes = useMemo(() => searchParams.getAll('alarmType'), [searchParams]);
   const [items, setItems] = useState([]);
   const [positions, setPositions] = useState({});
+  const [commandsById, setCommandsById] = useState({});
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
+  const [lastReportParams, setLastReportParams] = useState(null);
+  const [range, setRange] = useState({ from: null, to: null });
   const [selectedItem, setSelectedItem] = useState(null);
   const [position, setPosition] = useState(null);
 
@@ -90,7 +115,26 @@ const EventReportPage = () => {
     setAllEventTypes([...allEventTypes, ...types.map((it) => [it.type, prefixString('event', it.type)])]);
   }, []);
 
-  const onShow = useCatch(async ({ deviceIds, groupIds, from, to }) => {
+  const loadCommandsMap = useCallback(async (events) => {
+    const hasCommandEvents = events.some((event) => event.type === 'commandResult' || event.type === 'commandFailure');
+    if (!hasCommandEvents) {
+      setCommandsById({});
+      return;
+    }
+    try {
+      const response = await fetchOrThrow('/api/commands');
+      const commands = await response.json();
+      const map = {};
+      commands.forEach((command) => {
+        map[command.id] = command;
+      });
+      setCommandsById(map);
+    } catch {
+      setCommandsById({});
+    }
+  }, []);
+
+  const loadReport = useCallback(async ({ deviceIds, groupIds, from, to }) => {
     const query = new URLSearchParams({ from, to });
     deviceIds.forEach((deviceId) => query.append('deviceId', deviceId));
     groupIds.forEach((groupId) => query.append('groupId', groupId));
@@ -98,8 +142,11 @@ const EventReportPage = () => {
     if (eventTypes[0] !== 'allEvents' && eventTypes.includes('alarm')) {
       alarmTypes.forEach((it) => query.append('alarm', it));
     }
+    setLastReportParams({ deviceIds, groupIds, from, to });
+    setRange({ from, to });
     setSelectedItem(null);
     setPosition(null);
+    setLoadingError(false);
     setLoading(true);
     try {
       const response = await fetchOrThrow(`/api/reports/events?${query.toString()}`, {
@@ -107,6 +154,7 @@ const EventReportPage = () => {
       });
       const events = await response.json();
       setItems(events);
+      await loadCommandsMap(events);
       const positionIds = Array.from(new Set(events
         .map((event) => event.positionId)
         .filter((id) => id)));
@@ -119,8 +167,21 @@ const EventReportPage = () => {
         positionsArray.forEach((p) => positionsMap[p.id] = p);
       }
       setPositions(positionsMap);
+    } catch {
+      setItems([]);
+      setPositions({});
+      setCommandsById({});
+      setLoadingError(true);
     } finally {
       setLoading(false);
+    }
+  }, [alarmTypes, eventTypes, loadCommandsMap]);
+
+  const onShow = useCatch(loadReport);
+
+  const onRetry = useCatch(async () => {
+    if (lastReportParams) {
+      await loadReport(lastReportParams);
     }
   });
 
@@ -164,7 +225,7 @@ const EventReportPage = () => {
       case 'eventTime':
         return formatTime(value, 'seconds');
       case 'type':
-        return t(prefixString('event', value));
+        return getEventTitle(item, t);
       case 'geofenceId':
         if (value > 0) {
           const geofence = geofences[value];
@@ -205,6 +266,27 @@ const EventReportPage = () => {
         return value;
     }
   };
+
+  const showDateInCards = useMemo(() => (
+    Boolean(range.from && range.to)
+    && formatTime(range.from, 'date') !== formatTime(range.to, 'date')
+  ), [range.from, range.to]);
+
+  const showDeviceNameInCards = useMemo(
+    () => new Set(items.map((item) => item.deviceId)).size > 1,
+    [items],
+  );
+
+  const cardItems = useMemo(() => items.map((event) => {
+    const geofenceId = event.geofenceId || event.attributes?.geofenceId;
+    return {
+      event,
+      position: positions[event.positionId] || null,
+      geofenceName: geofenceId ? geofences[geofenceId]?.name : null,
+      deviceName: getDeviceDisplayName(devices[event.deviceId]) || devices[event.deviceId]?.name,
+      showDeviceName: showDeviceNameInCards,
+    };
+  }), [devices, geofences, items, positions, showDeviceNameInCards]);
 
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportEvents']}>
@@ -260,38 +342,61 @@ const EventReportPage = () => {
               <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
             </ReportFilter>
           </div>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell className={classes.columnAction} />
-                <TableCell>{t('sharedDevice')}</TableCell>
-                {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {!loading ? items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className={classes.columnAction} padding="none">
-                    {(item.positionId && (selectedItem === item ? (
-                      <IconButton size="small" onClick={() => setSelectedItem(null)}>
-                        <GpsFixedIcon fontSize="small" />
-                      </IconButton>
-                    ) : (
-                      <IconButton size="small" onClick={() => setSelectedItem(item)}>
-                        <LocationSearchingIcon fontSize="small" />
-                      </IconButton>
-                    ))) || ''}
-                  </TableCell>
-                  <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
-                  {columns.map((key) => (
-                    <TableCell key={key}>
-                      {formatValue(item, key)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              )) : (<TableShimmer columns={columns.length + 2} />)}
-            </TableBody>
-          </Table>
+          {isMobile ? (
+            <EventCardList
+              events={cardItems}
+              loading={loading}
+              error={loadingError}
+              onRetry={lastReportParams ? onRetry : undefined}
+              onFocusMap={(item) => setSelectedItem(item.event)}
+              showDate={showDateInCards}
+              commandsById={commandsById}
+            />
+          ) : (
+            <>
+              {loadingError && (
+                <Alert
+                  severity="error"
+                  action={lastReportParams ? <Button color="inherit" size="small" onClick={onRetry}>{t('reportRetry')}</Button> : null}
+                  sx={{ mx: 2, mt: 1 }}
+                >
+                  {t('reportEventsLoadError')}
+                </Alert>
+              )}
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell className={classes.columnAction} />
+                    <TableCell>{t('sharedDevice')}</TableCell>
+                    {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {!loading ? items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className={classes.columnAction} padding="none">
+                        {(item.positionId && (selectedItem === item ? (
+                          <IconButton size="small" onClick={() => setSelectedItem(null)}>
+                            <GpsFixedIcon fontSize="small" />
+                          </IconButton>
+                        ) : (
+                          <IconButton size="small" onClick={() => setSelectedItem(item)}>
+                            <LocationSearchingIcon fontSize="small" />
+                          </IconButton>
+                        ))) || ''}
+                      </TableCell>
+                      <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
+                      {columns.map((key) => (
+                        <TableCell key={key}>
+                          {formatValue(item, key)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )) : (<TableShimmer columns={columns.length + 2} />)}
+                </TableBody>
+              </Table>
+            </>
+          )}
         </div>
       </div>
     </PageLayout>

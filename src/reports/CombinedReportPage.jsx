@@ -9,7 +9,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { makeStyles } from 'tss-react/mui';
-import LocationSearchingIcon from '@mui/icons-material/LocationSearching';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import CloseFullscreenIcon from '@mui/icons-material/CloseFullscreen';
 import dayjs from 'dayjs';
@@ -25,7 +24,6 @@ import MapCamera from '../map/MapCamera';
 import MapGeofence from '../map/MapGeofence';
 import { formatDistance, formatSpeed, formatTime } from '../common/util/formatter';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
-import { prefixString } from '../common/util/stringUtils';
 import MapMarkers from '../map/MapMarkers';
 import MapRouteCoordinates from '../map/MapRouteCoordinates';
 import MapScale from '../map/MapScale';
@@ -33,6 +31,7 @@ import MapReplayMarkers from '../map/MapReplayMarkers';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import { speedFromKnots } from '../common/util/converter';
 import { useAttributePreference } from '../common/util/preferences';
+import EventCardList from './components/EventCardList';
 
 const useStyles = makeStyles()((theme, { mapExpanded }) => ({
   mapPanel: {
@@ -64,56 +63,6 @@ const useStyles = makeStyles()((theme, { mapExpanded }) => ({
   },
   periodLabel: {
     marginTop: theme.spacing(0.5),
-    color: theme.palette.text.secondary,
-  },
-  eventsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing(1),
-    padding: theme.spacing(2),
-    [theme.breakpoints.down('md')]: {
-      padding: theme.spacing(1.5),
-    },
-  },
-  eventCard: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing(1.5),
-    padding: theme.spacing(1.25, 1.5),
-    borderRadius: theme.spacing(1),
-    backgroundColor: theme.palette.background.paper,
-  },
-  eventInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: theme.spacing(0.25),
-    minWidth: 0,
-    flex: 1,
-  },
-  eventMeta: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: theme.spacing(1),
-    color: theme.palette.text.secondary,
-    fontSize: '0.75rem',
-  },
-  eventTime: {
-    fontWeight: 600,
-    fontVariantNumeric: 'tabular-nums',
-  },
-  eventType: {
-    fontWeight: 500,
-  },
-  eventSub: {
-    color: theme.palette.text.secondary,
-    fontSize: '0.75rem',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  emptyState: {
-    padding: theme.spacing(2),
     color: theme.palette.text.secondary,
   },
 }));
@@ -293,7 +242,7 @@ const CombinedReportPage = () => {
         event,
         position,
         deviceId: item.deviceId,
-        deviceName: devices[item.deviceId]?.name,
+        deviceName: getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId]?.name,
       };
     });
   }), [items, devices]);
@@ -329,6 +278,21 @@ const CombinedReportPage = () => {
 
   const deviceCount = useMemo(() => new Set(items.map((item) => item.deviceId)).size, [items]);
   const showDevice = deviceCount > 1;
+  const showDateInCards = useMemo(() => {
+    if (!range.from || !range.to) {
+      return false;
+    }
+    return dayjs(range.from).format('YYYY-MM-DD') !== dayjs(range.to).format('YYYY-MM-DD');
+  }, [range.from, range.to]);
+
+  const cardItems = useMemo(() => eventItems.map((item) => {
+    const geofenceId = item.event.geofenceId || item.event.attributes?.geofenceId;
+    return {
+      ...item,
+      geofenceName: geofenceId ? geofences[geofenceId]?.name : null,
+      showDeviceName: showDevice,
+    };
+  }), [eventItems, geofences, showDevice]);
 
   useEffect(() => {
     if (items.length && isMobile) {
@@ -421,51 +385,13 @@ const CombinedReportPage = () => {
               </Box>
             </div>
           )}
-          <div className={localClasses.eventsList}>
-            {loading && (
-              <Typography variant="body2" className={localClasses.emptyState}>
-                {t('sharedLoading')}
-              </Typography>
-            )}
-            {!loading && eventItems.length === 0 && (
-              <Typography variant="body2" className={localClasses.emptyState}>
-                {t('sharedNoData')}
-              </Typography>
-            )}
-            {!loading && eventItems.map(({ event, position, deviceName }) => {
-              const geofenceId = event.geofenceId || event.attributes?.geofenceId;
-              const geofenceName = geofenceId ? geofences[geofenceId]?.name : null;
-              return (
-                <div key={event.id} className={localClasses.eventCard}>
-                  <div className={localClasses.eventInfo}>
-                    <div className={localClasses.eventMeta}>
-                      <span className={localClasses.eventTime}>{formatClock(event.eventTime)}</span>
-                      {showDevice && (
-                        <span>{deviceName}</span>
-                      )}
-                    </div>
-                    <Typography variant="body2" className={localClasses.eventType}>
-                      {t(prefixString('event', event.type))}
-                    </Typography>
-                    {geofenceName && (
-                      <div className={localClasses.eventSub}>
-                        {geofenceName}
-                      </div>
-                    )}
-                  </div>
-                  {position && (
-                    <IconButton
-                      size="small"
-                      onClick={() => setSelectedEventPosition(position)}
-                      aria-label={t('replayViewOnMap')}
-                    >
-                      <LocationSearchingIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <EventCardList
+            events={cardItems}
+            loading={loading}
+            error={false}
+            onFocusMap={(item) => setSelectedEventPosition(item.position)}
+            showDate={showDateInCards}
+          />
         </div>
       </div>
     </PageLayout>
