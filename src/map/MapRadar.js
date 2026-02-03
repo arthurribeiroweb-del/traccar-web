@@ -6,10 +6,11 @@ import {
 } from 'react';
 import circle from '@turf/circle';
 import maplibregl from 'maplibre-gl';
+import { useTheme } from '@mui/material/styles';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { map } from './core/MapView';
-import { findFonts } from './core/mapUtil';
+import { findFonts, geofenceToFeature } from './core/mapUtil';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { useAdministrator } from '../common/util/permissions';
 import {
@@ -21,7 +22,42 @@ import {
 
 const RADAR_COLOR = '#E11D48';
 
+const collectCoordinates = (coordinates, result = []) => {
+  if (Array.isArray(coordinates) && coordinates.length === 2
+      && Number.isFinite(coordinates[0]) && Number.isFinite(coordinates[1])) {
+    result.push(coordinates);
+    return result;
+  }
+  if (Array.isArray(coordinates)) {
+    coordinates.forEach((coordinate) => collectCoordinates(coordinate, result));
+  }
+  return result;
+};
+
+const getGeometryCenter = (geometry) => {
+  const coordinates = collectCoordinates(geometry?.coordinates);
+  if (!coordinates.length) {
+    return null;
+  }
+  const bounds = coordinates.reduce((currentBounds, coordinate) => ({
+    minLng: Math.min(currentBounds.minLng, coordinate[0]),
+    maxLng: Math.max(currentBounds.maxLng, coordinate[0]),
+    minLat: Math.min(currentBounds.minLat, coordinate[1]),
+    maxLat: Math.max(currentBounds.maxLat, coordinate[1]),
+  }), {
+    minLng: coordinates[0][0],
+    maxLng: coordinates[0][0],
+    minLat: coordinates[0][1],
+    maxLat: coordinates[0][1],
+  });
+  return [
+    (bounds.minLng + bounds.maxLng) / 2,
+    (bounds.minLat + bounds.maxLat) / 2,
+  ];
+};
+
 const MapRadar = ({ enabled }) => {
+  const theme = useTheme();
   const id = useId();
   const areaLayerId = `${id}-radar-area`;
   const borderLayerId = `${id}-radar-border`;
@@ -45,12 +81,18 @@ const MapRadar = ({ enabled }) => {
       .filter((geofence) => !geofence.attributes?.hide && isRadarActive(geofence))
       .forEach((geofence) => {
         const circleArea = parseCircleArea(geofence.area);
-        if (!circleArea) {
+        const baseFeature = geofenceToFeature(theme, geofence);
+        const geometry = circleArea
+          ? circle([circleArea.longitude, circleArea.latitude], getRadarRadiusMeters(geofence), { steps: 40, units: 'meters' }).geometry
+          : baseFeature.geometry;
+        const markerCoordinates = circleArea
+          ? [circleArea.longitude, circleArea.latitude]
+          : getGeometryCenter(baseFeature.geometry);
+        if (!geometry || !markerCoordinates) {
           return;
         }
         const radius = getRadarRadiusMeters(geofence);
         const speedLimit = getRadarSpeedLimitKph(geofence);
-        const polygon = circle([circleArea.longitude, circleArea.latitude], radius, { steps: 40, units: 'meters' });
         const sharedProperties = {
           radarId: geofence.id,
           radarName: geofence.name || '-',
@@ -59,7 +101,7 @@ const MapRadar = ({ enabled }) => {
         };
         features.push({
           type: 'Feature',
-          geometry: polygon.geometry,
+          geometry,
           properties: {
             ...sharedProperties,
             featureType: 'area',
@@ -69,7 +111,7 @@ const MapRadar = ({ enabled }) => {
           type: 'Feature',
           geometry: {
             type: 'Point',
-            coordinates: [circleArea.longitude, circleArea.latitude],
+            coordinates: markerCoordinates,
           },
           properties: {
             ...sharedProperties,
@@ -81,7 +123,7 @@ const MapRadar = ({ enabled }) => {
       type: 'FeatureCollection',
       features,
     };
-  }, [geofences]);
+  }, [geofences, theme]);
 
   const clearPopup = () => {
     if (popupRef.current) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Accordion,
@@ -13,7 +13,6 @@ import {
   FormLabel,
   RadioGroup,
   Radio,
-  FormHelperText,
   Snackbar,
   Alert,
 } from '@mui/material';
@@ -27,6 +26,7 @@ import SelectField from '../common/components/SelectField';
 import { geofencesActions } from '../store';
 import useSettingsStyles from './common/useSettingsStyles';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useAdministrator, useManager } from '../common/util/permissions';
 import {
   buildCircleArea,
   parseCircleArea,
@@ -57,6 +57,9 @@ const GeofencePage = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const t = useTranslation();
+  const isAdmin = useAdministrator();
+  const canManageUsers = useManager();
+  const userId = useSelector((state) => state.session.user.id);
 
   const geofenceAttributes = useGeofenceAttributes(t);
 
@@ -84,13 +87,13 @@ const GeofencePage = () => {
   const radarRadius = toNumber(radarRadiusValue);
 
   const nameValid = Boolean(item?.name && item.name.trim());
-  const radarSpeedValid = !isRadar || (Number.isFinite(radarSpeedLimit) && radarSpeedLimit > 0);
-  const radarRadiusValid = !isRadar || (
+  const radarSpeedValid = !isRadar || !isAdmin || (Number.isFinite(radarSpeedLimit) && radarSpeedLimit > 0);
+  const radarRadiusValid = !isRadar || !isAdmin || (
     Number.isFinite(radarRadius)
     && radarRadius >= RADAR_MIN_RADIUS_METERS
     && radarRadius <= RADAR_MAX_RADIUS_METERS
   );
-  const radarAreaValid = !isRadar || Boolean(circleArea);
+  const radarAreaValid = !isRadar || !isAdmin || Boolean(item?.area);
 
   const validate = () => nameValid && radarSpeedValid && radarRadiusValid && radarAreaValid;
 
@@ -190,6 +193,40 @@ const GeofencePage = () => {
       });
 
       const saved = await response.json();
+      if (attributes.radar && canManageUsers && Number.isFinite(saved?.id) && Number.isFinite(userId)) {
+        const visited = new Set([userId]);
+        const queue = [userId];
+        const managedUsers = [];
+
+        while (queue.length) {
+          const currentUserId = queue.shift();
+          const managedResponse = await fetchOrThrow(`/api/users?userId=${currentUserId}&excludeAttributes=true`);
+          const managedItems = await managedResponse.json();
+          managedItems.forEach((managedUser) => {
+            if (!visited.has(managedUser.id)) {
+              visited.add(managedUser.id);
+              managedUsers.push(managedUser);
+              queue.push(managedUser.id);
+            }
+          });
+        }
+
+        if (managedUsers.length) {
+          const linkedResponse = await fetchOrThrow(`/api/users?geofenceId=${saved.id}&excludeAttributes=true`);
+          const linkedUsers = await linkedResponse.json();
+          const linkedIds = new Set(linkedUsers.map((linkedUser) => linkedUser.id));
+          const toLink = managedUsers.filter((managedUser) => !linkedIds.has(managedUser.id));
+
+          await Promise.allSettled(toLink.map((managedUser) => fetchOrThrow('/api/permissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: managedUser.id,
+              geofenceId: saved.id,
+            }),
+          })));
+        }
+      }
       onItemSaved(saved);
       setToast({
         open: true,
@@ -247,10 +284,10 @@ const GeofencePage = () => {
                     onChange={handleRadarTypeChange}
                   >
                     <FormControlLabel value="normal" control={<Radio />} label={t('geofenceTypeNormal')} />
-                    <FormControlLabel value="radar" control={<Radio />} label={t('geofenceTypeRadar')} />
+                    {isAdmin && <FormControlLabel value="radar" control={<Radio />} label={t('geofenceTypeRadar')} />}
                   </RadioGroup>
                 </FormControl>
-                {isRadar && (
+                {isAdmin && isRadar && (
                   <>
                     <TextField
                       value={radarSpeedLimitValue}
@@ -271,11 +308,6 @@ const GeofencePage = () => {
                       helperText={!radarRadiusValid ? t('radarRadiusRange') : t('radarRadiusHelper')}
                       inputProps={{ min: RADAR_MIN_RADIUS_METERS, max: RADAR_MAX_RADIUS_METERS, step: 1, inputMode: 'numeric' }}
                     />
-                    {!radarAreaValid && (
-                      <FormHelperText error>
-                        {t('radarCircleRequired')}
-                      </FormHelperText>
-                    )}
                     <FormControlLabel
                       control={(
                         <Checkbox
