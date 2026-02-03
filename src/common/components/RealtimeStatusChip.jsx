@@ -1,75 +1,130 @@
-import { useMemo, useState, useEffect } from 'react';
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { sessionActions } from '../../store';
-import { Chip, Button, Box } from '@mui/material';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  Chip,
+  Snackbar,
+} from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from './LocalizationProvider';
 import { pollPositionsOnce, requestReconnect } from '../util/realtimeApi';
 
-const LIVE_THRESHOLD_S = 15;
-const DELAYED_THRESHOLD_S = 120;
+const DELAYED_THRESHOLD_S = 15;
+const RECONNECTING_THRESHOLD_S = 90;
+const OFFLINE_HARD_THRESHOLD_S = 300;
+const RECENT_UPDATE_THRESHOLD_S = 30;
+const RECONNECT_TOAST_MS = 1500;
+const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000, 30000];
+
+const debugReconnectLog = (payload) => {
+  window.dispatchEvent(new CustomEvent('traccar-reconnect-debug', { detail: payload }));
+};
+
+const getFixTimeMs = (position) => {
+  const value = position?.fixTime || position?.deviceTime;
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export const useRealtimeStatus = (position) => {
   const [now, setNow] = useState(Date.now());
+  const user = useSelector((state) => state.session.user);
   const socketStatus = useSelector((state) => state.session.socketStatus);
-  const socket = useSelector((state) => state.session.socket);
+  const socketConnected = useSelector((state) => Boolean(state.session.socket));
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
   }, []);
 
-  const fixTime = position?.fixTime || position?.deviceTime;
-  const ageMs = fixTime ? now - new Date(fixTime).getTime() : Infinity;
-  const ageSec = Math.floor(ageMs / 1000);
+  const fixTimeMs = getFixTimeMs(position);
+  const ageMs = fixTimeMs == null ? Infinity : now - fixTimeMs;
+  const ageSec = Number.isFinite(ageMs)
+    ? Math.max(0, Math.floor(ageMs / 1000))
+    : Infinity;
 
-  const status = useMemo(() => {
-    if (socketStatus === 'connecting') return 'connecting';
-    if (socketStatus === 'reconnecting') return 'reconnecting';
-    if (socketStatus === 'error') return 'error';
-    if (!socket) return 'offline';
-    if (ageSec > DELAYED_THRESHOLD_S) return 'offline';
-    if (ageSec > LIVE_THRESHOLD_S) return 'delayed';
-    return 'live';
-  }, [socketStatus, socket, ageSec]);
+  const connectionState = useMemo(() => {
+    if (fixTimeMs == null) {
+      if (
+        !socketConnected
+        || socketStatus === 'connecting'
+        || socketStatus === 'reconnecting'
+        || socketStatus === 'error'
+      ) {
+        return 'RECONNECTING';
+      }
+      return 'DELAYED';
+    }
+    if (ageSec > OFFLINE_HARD_THRESHOLD_S) {
+      return 'OFFLINE_HARD';
+    }
+    if (
+      !socketConnected
+      || socketStatus === 'connecting'
+      || socketStatus === 'reconnecting'
+      || socketStatus === 'error'
+      || ageSec > RECONNECTING_THRESHOLD_S
+    ) {
+      return 'RECONNECTING';
+    }
+    if (ageSec > DELAYED_THRESHOLD_S) {
+      return 'DELAYED';
+    }
+    return 'ONLINE';
+  }, [ageSec, fixTimeMs, socketConnected, socketStatus]);
 
   const statusLabel = useMemo(() => {
-    switch (status) {
-      case 'connecting': return 'realtimeConnecting';
-      case 'live': return 'realtimeLive';
-      case 'delayed': return 'realtimeDelayed';
-      case 'offline': return 'realtimeOffline';
-      case 'reconnecting': return 'realtimeReconnecting';
-      case 'error': return 'realtimeError';
-      default: return 'realtimeLive';
+    switch (connectionState) {
+      case 'DELAYED':
+        return 'realtimeUpdating';
+      case 'RECONNECTING':
+        return 'realtimeNoSignalReconnecting';
+      case 'OFFLINE_HARD':
+        return 'realtimeNoSignalTapRetry';
+      default:
+        return null;
     }
-  }, [status]);
+  }, [connectionState]);
 
   const chipColor = useMemo(() => {
-    switch (status) {
-      case 'live': return 'success';
-      case 'connecting':
-      case 'reconnecting': return 'info';
-      case 'delayed': return 'warning';
-      case 'offline':
-      case 'error': return 'error';
-      default: return 'default';
+    switch (connectionState) {
+      case 'DELAYED':
+        return 'warning';
+      case 'OFFLINE_HARD':
+        return 'error';
+      case 'RECONNECTING':
+      default:
+        return 'default';
     }
-  }, [status]);
+  }, [connectionState]);
 
-  const showActions = status === 'delayed' || status === 'offline' || status === 'error';
-
-  const updatedText = fixTime
-    ? `Atualizado há ${ageSec}s`
-    : '--';
+  const isAdmin = user?.administrator === true;
+  const showStatusChip = connectionState !== 'ONLINE';
+  const canManualRetry = connectionState === 'OFFLINE_HARD';
+  const updatedText = Number.isFinite(ageSec) ? `Atualizado h\u00e1 ${ageSec}s` : '--';
 
   return {
-    status,
-    statusLabel,
-    chipColor,
     ageSec,
+    canManualRetry,
+    chipColor,
+    connectionState,
+    isAdmin,
+    showStatusChip,
+    socketConnected,
+    statusLabel,
     updatedText,
-    showActions,
   };
 };
 
@@ -80,61 +135,159 @@ const RealtimeStatusChip = ({
   const dispatch = useDispatch();
   const t = useTranslation();
   const {
-    statusLabel,
+    ageSec,
+    canManualRetry,
     chipColor,
+    connectionState,
+    isAdmin,
+    showStatusChip,
+    socketConnected,
+    statusLabel,
     updatedText,
-    showActions,
   } = useRealtimeStatus(position);
-  const showActionsResolved = !compact && showActions;
 
-  const handleReconnect = () => {
-    requestReconnect();
-  };
+  const [showReconnectToast, setShowReconnectToast] = useState(false);
+  const timerRef = useRef(null);
+  const retryIndexRef = useRef(0);
+  const latestStateRef = useRef({ connectionState, ageSec, socketConnected });
+  const previousStateRef = useRef(connectionState);
 
-  const handleRefresh = async () => {
+  useEffect(() => {
+    latestStateRef.current = { connectionState, ageSec, socketConnected };
+  }, [connectionState, ageSec, socketConnected]);
+
+  const stopReconnectLoop = useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    retryIndexRef.current = 0;
+  }, []);
+
+  const retryOnce = useCallback(async (reason = 'auto') => {
     dispatch(sessionActions.updateSocketStatus('reconnecting'));
-    await pollPositionsOnce(dispatch);
-    dispatch(sessionActions.updateSocketStatus('live'));
-  };
+    debugReconnectLog({
+      type: 'retry',
+      reason,
+      state: latestStateRef.current.connectionState,
+      ageSec: latestStateRef.current.ageSec,
+    });
+    requestReconnect();
+    await pollPositionsOnce(dispatch, { silent: true });
+  }, [dispatch]);
 
-  const ageSecForLabel = position
-    ? Math.floor((Date.now() - new Date(position?.fixTime || position?.deviceTime).getTime()) / 1000)
-    : 0;
-  const label = statusLabel === 'realtimeDelayed'
-    ? (t(statusLabel) || '').replace('{{s}}', String(ageSecForLabel))
-    : t(statusLabel);
+  const scheduleRetry = useCallback(() => {
+    if (timerRef.current) {
+      return;
+    }
+    const delay = BACKOFF_MS[Math.min(retryIndexRef.current, BACKOFF_MS.length - 1)];
+    timerRef.current = setTimeout(async () => {
+      timerRef.current = null;
+      retryIndexRef.current += 1;
+      await retryOnce('backoff');
+      const latest = latestStateRef.current;
+      const recovered = latest.socketConnected && latest.ageSec <= RECENT_UPDATE_THRESHOLD_S;
+      if (!recovered && (latest.connectionState === 'RECONNECTING' || latest.connectionState === 'OFFLINE_HARD')) {
+        scheduleRetry();
+      } else {
+        retryIndexRef.current = 0;
+      }
+    }, delay);
+  }, [retryOnce]);
+
+  const forceReconnect = useCallback(async () => {
+    stopReconnectLoop();
+    await retryOnce('manual');
+    const latest = latestStateRef.current;
+    if (latest.connectionState === 'RECONNECTING' || latest.connectionState === 'OFFLINE_HARD') {
+      scheduleRetry();
+    }
+  }, [retryOnce, scheduleRetry, stopReconnectLoop]);
+
+  const handleRefresh = useCallback(async () => {
+    await pollPositionsOnce(dispatch, { silent: true });
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (connectionState === 'RECONNECTING' || connectionState === 'OFFLINE_HARD') {
+      scheduleRetry();
+    } else {
+      stopReconnectLoop();
+    }
+  }, [connectionState, scheduleRetry, stopReconnectLoop]);
+
+  useEffect(() => () => {
+    stopReconnectLoop();
+  }, [stopReconnectLoop]);
+
+  useEffect(() => {
+    const previous = previousStateRef.current;
+    if (
+      (previous === 'RECONNECTING' || previous === 'OFFLINE_HARD')
+      && connectionState === 'ONLINE'
+    ) {
+      setShowReconnectToast(true);
+    }
+    previousStateRef.current = connectionState;
+  }, [connectionState]);
+
+  const label = statusLabel ? t(statusLabel) : '';
+  const showUpdatedText = !compact;
+  const showAdminActions = isAdmin && !compact && showStatusChip;
+  const chipNode = showStatusChip ? (
+    <Chip
+      size="small"
+      color={chipColor}
+      label={label}
+      clickable={canManualRetry}
+      sx={{ fontWeight: 500 }}
+    />
+  ) : null;
 
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-      <Chip
-        size="small"
-        color={chipColor}
-        label={label}
-        sx={{ fontWeight: 500 }}
-      />
-      <Box component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-        {updatedText}
+    <>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+        {canManualRetry && chipNode ? (
+          <ButtonBase
+            onClick={forceReconnect}
+            aria-label="Tentar reconectar"
+            sx={{ minHeight: 44, borderRadius: 999 }}
+          >
+            {chipNode}
+          </ButtonBase>
+        ) : chipNode}
+        {showUpdatedText && (
+          <Box component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+            {updatedText}
+          </Box>
+        )}
+        {showAdminActions && (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={forceReconnect}
+            >
+              {t('realtimeReconnect')}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleRefresh}
+            >
+              {t('realtimeRefreshNow')}
+            </Button>
+          </Box>
+        )}
       </Box>
-      {showActionsResolved && (
-        <Box sx={{ display: 'flex', gap: 0.5 }}>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={handleReconnect}
-          >
-            {t('realtimeReconnect')}
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={handleRefresh}
-          >
-            {t('realtimeRefreshNow')}
-          </Button>
-        </Box>
-      )}
-    </Box>
+      <Snackbar
+        open={showReconnectToast}
+        autoHideDuration={RECONNECT_TOAST_MS}
+        message={t('realtimeReconnected')}
+        onClose={() => setShowReconnectToast(false)}
+      />
+    </>
   );
 };
 

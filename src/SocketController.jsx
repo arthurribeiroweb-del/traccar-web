@@ -13,10 +13,10 @@ import useFeatures from './common/util/useFeatures';
 import { useAttributePreference } from './common/util/preferences';
 import { handleNativeNotificationListeners, nativePostMessage } from './common/components/NativeInterface';
 import fetchOrThrow from './common/util/fetchOrThrow';
-import { pollPositionsOnce, REALTIME_RECONNECT_EVENT } from './common/util/realtimeApi';
+import { REALTIME_RECONNECT_EVENT } from './common/util/realtimeApi';
 
 const logoutCode = 4000;
-const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000, 60000];
+const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000, 30000];
 const FALLBACK_POLL_INTERVAL_MS = 5000;
 
 const pollOnceWithAuth = async (dispatch, navigate) => {
