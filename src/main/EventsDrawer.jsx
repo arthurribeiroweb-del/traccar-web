@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,6 +31,7 @@ import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import { eventsActions } from '../store';
 import useFeatures from '../common/util/useFeatures';
+import { radarOverspeedInfoFromEvent } from '../common/util/radar';
 
 const useStyles = makeStyles()((theme) => ({
   drawer: {
@@ -66,9 +72,19 @@ const EventsDrawer = ({ open, onClose }) => {
   const formatType = (event) => formatNotificationTitle(t, {
     type: event.type,
     attributes: {
-      alarms: event.attributes.alarm,
+      ...event.attributes,
+      alarms: event.attributes?.alarm,
     },
   });
+
+  const formatSecondary = (event) => {
+    const radarInfo = radarOverspeedInfoFromEvent(event);
+    if (!radarInfo) {
+      return formatTime(event.eventTime, 'seconds');
+    }
+    const radarSuffix = radarInfo.radarName ? ` — ${t('radarLabel')} ${radarInfo.radarName}` : '';
+    return `${formatTime(event.eventTime, 'seconds')} • ${radarInfo.speedKph} km/h (${t('radarOverspeedLimit')} ${radarInfo.limitKph} km/h)${radarSuffix}`;
+  };
 
   useEffect(() => {
     const ids = deviceIdsKey ? deviceIdsKey.split(',') : [];
@@ -141,7 +157,7 @@ const EventsDrawer = ({ open, onClose }) => {
     try {
       dispatch(eventsActions.dismiss({ event: item, userId: user?.id }));
       setToast({ open: true, message: 'Notificação removida.', severity: 'success' });
-    } catch (error) {
+    } catch {
       setToast({ open: true, message: 'Não foi possível remover. Tentar novamente.', severity: 'error' });
     } finally {
       setRemovingId(null);
@@ -156,7 +172,7 @@ const EventsDrawer = ({ open, onClose }) => {
     try {
       dispatch(eventsActions.dismissAll({ userId: user?.id, dismissedBefore: Date.now() }));
       setToast({ open: true, message: 'Notificações limpas.', severity: 'success' });
-    } catch (error) {
+    } catch {
       setToast({ open: true, message: 'Não foi possível limpar. Tentar novamente.', severity: 'error' });
     } finally {
       setConfirmClear(false);
@@ -203,7 +219,7 @@ const EventsDrawer = ({ open, onClose }) => {
           >
             <ListItemText
               primary={`${(devices[event.deviceId] && (getDeviceDisplayName(devices[event.deviceId]) || devices[event.deviceId].name)) || event.deviceId} - ${formatType(event)}`}
-              secondary={formatTime(event.eventTime, 'seconds')}
+              secondary={formatSecondary(event)}
             />
             <IconButton
               size="small"

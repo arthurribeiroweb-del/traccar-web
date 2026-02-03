@@ -4,6 +4,7 @@ import { useTheme } from '@mui/material/styles';
 import { map } from './core/MapView';
 import { findFonts, geofenceToFeature } from './core/mapUtil';
 import { useAttributePreference } from '../common/util/preferences';
+import { isRadarGeofence } from '../common/util/radar';
 
 const MapGeofence = () => {
   const id = useId();
@@ -85,7 +86,7 @@ const MapGeofence = () => {
       map.getSource(id)?.setData({
         type: 'FeatureCollection',
         features: Object.values(geofences)
-          .filter((geofence) => !geofence.attributes.hide)
+          .filter((geofence) => !geofence.attributes?.hide && !isRadarGeofence(geofence))
           .map((geofence) => geofenceToFeature(theme, geofence)),
       });
     }

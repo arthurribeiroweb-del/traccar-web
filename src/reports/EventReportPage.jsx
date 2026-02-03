@@ -49,7 +49,7 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import exportExcel from '../common/util/exportExcel';
 import AddressValue from '../common/components/AddressValue';
 import EventCardList from './components/EventCardList';
-import { getEventTitle } from './common/eventLabels';
+import { getEventTitle, getRadarOverspeedSubtitle } from './common/eventLabels';
 
 const columnsArray = [
   ['eventTime', 'positionFixTime'],
@@ -251,8 +251,19 @@ const EventReportPage = () => {
         switch (item.type) {
           case 'alarm':
             return t(prefixString('alarm', item.attributes.alarm));
-          case 'deviceOverspeed':
+          case 'deviceOverspeed': {
+            const radarSubtitle = getRadarOverspeedSubtitle({
+              event: item,
+              geofenceName: geofences[item.geofenceId]?.name,
+              deviceName: getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId]?.name,
+              t,
+              includeDeviceName: false,
+            });
+            if (radarSubtitle) {
+              return radarSubtitle;
+            }
             return formatSpeed(item.attributes.speed, speedUnit, t);
+          }
           case 'driverChanged':
             return item.attributes.driverUniqueId;
           case 'media':

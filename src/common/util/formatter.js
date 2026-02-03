@@ -14,6 +14,7 @@ import {
   volumeUnitString,
 } from './converter';
 import { prefixString } from './stringUtils';
+import { radarOverspeedInfoFromEvent } from './radar';
 
 dayjs.extend(duration);
 dayjs.extend(relativeTime);
@@ -150,9 +151,12 @@ export const formatNotificationTitle = (t, notification, includeId) => {
   if (notification.description) {
     return notification.description;
   }
+  if (radarOverspeedInfoFromEvent(notification)) {
+    return t('eventRadarOverspeed');
+  }
   let title = t(prefixString('event', notification.type));
   if (notification.type === 'alarm') {
-    const alarmString = notification.attributes.alarms;
+    const alarmString = notification.attributes?.alarms;
     if (alarmString) {
       const alarms = alarmString.split(',');
       if (alarms.length > 1) {

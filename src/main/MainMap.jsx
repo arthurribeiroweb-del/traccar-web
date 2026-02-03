@@ -6,6 +6,7 @@ import MapView from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
 import MapGeofence from '../map/MapGeofence';
+import MapRadar from '../map/MapRadar';
 import MapCurrentLocation from '../map/MapCurrentLocation';
 import PoiMap from '../map/main/PoiMap';
 import MapPadding from '../map/MapPadding';
@@ -29,7 +30,12 @@ const HIDE_MAP_SHORTCUTS = {
   geolocate: true,
 };
 
-const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
+const MainMap = ({
+  filteredPositions,
+  selectedPosition,
+  onEventsClick,
+  showRadars,
+}) => {
   const theme = useTheme();
   const dispatch = useDispatch();
   const t = useTranslation();
@@ -68,6 +74,7 @@ const MainMap = ({ filteredPositions, selectedPosition, onEventsClick }) => {
       <MapView>
         <MapOverlay />
         <MapGeofence />
+        <MapRadar enabled={showRadars} />
         <MapAccuracy positions={filteredPositions} />
         <MapLiveRoutes deviceIds={filteredPositions.map((p) => p.deviceId)} />
         <MapPositions

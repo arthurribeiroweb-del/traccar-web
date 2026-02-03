@@ -101,6 +101,7 @@ const MainPage = () => {
   });
   const [filterSort, setFilterSort] = usePersistedState('filterSort', '');
   const [filterMap, setFilterMap] = usePersistedState('filterMap', false);
+  const [showRadars, setShowRadars] = usePersistedState('mapRadars', true);
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
@@ -171,6 +172,7 @@ const MainPage = () => {
           filteredPositions={filteredPositions}
           selectedPosition={selectedPosition}
           onEventsClick={onEventsClick}
+          showRadars={showRadars}
         />
       )}
       <div className={classes.sidebar}>
@@ -187,6 +189,8 @@ const MainPage = () => {
             setFilterSort={setFilterSort}
             filterMap={filterMap}
             setFilterMap={setFilterMap}
+            showRadars={showRadars}
+            setShowRadars={setShowRadars}
             onEventsClick={onEventsClick}
           />
         </Paper>
@@ -197,6 +201,7 @@ const MainPage = () => {
                 filteredPositions={filteredPositions}
                 selectedPosition={selectedPosition}
                 onEventsClick={onEventsClick}
+                showRadars={showRadars}
               />
             </div>
           )}

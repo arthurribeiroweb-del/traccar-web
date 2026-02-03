@@ -1,4 +1,5 @@
 import { prefixString } from '../../common/util/stringUtils';
+import { radarOverspeedInfoFromEvent } from '../../common/util/radar';
 
 const TITLE_KEYS = {
   deviceOnline: 'reportEventDeviceOnline',
@@ -23,11 +24,30 @@ const resolveCommandTypeLabel = (commandType) => {
 };
 
 export const getEventTitle = (event, t) => {
+  if (radarOverspeedInfoFromEvent(event)) {
+    return t('reportEventRadarOverspeed');
+  }
   const titleKey = TITLE_KEYS[event.type];
   if (titleKey) {
     return t(titleKey);
   }
   return t(prefixString('event', event.type));
+};
+
+export const getRadarOverspeedSubtitle = ({
+  event,
+  geofenceName,
+  deviceName,
+  t,
+  includeDeviceName = true,
+}) => {
+  const radarInfo = radarOverspeedInfoFromEvent(event, geofenceName);
+  if (!radarInfo) {
+    return null;
+  }
+  const devicePrefix = includeDeviceName && deviceName ? `${deviceName} ` : '';
+  const radarSuffix = radarInfo.radarName ? ` — ${t('radarLabel')} ${radarInfo.radarName}` : '';
+  return `${devicePrefix}${t('radarOverspeedPassed')} ${radarInfo.speedKph} km/h (${t('radarOverspeedLimit')} ${radarInfo.limitKph} km/h)${radarSuffix}`;
 };
 
 export const getCommandResultText = (event) => {
@@ -106,6 +126,17 @@ export const getEventSubtitle = ({
     return geofenceName || (showDeviceName ? deviceName : '');
   }
 
+  const radarSubtitle = getRadarOverspeedSubtitle({
+    event,
+    geofenceName,
+    deviceName,
+    t,
+    includeDeviceName: true,
+  });
+  if (radarSubtitle) {
+    return radarSubtitle;
+  }
+
   if (event.type === 'commandResult' || event.type === 'commandFailure') {
     const commandName = getCommandName(event, commandsById, t);
     const resultText = getCommandResultText(event);
@@ -114,4 +145,3 @@ export const getEventSubtitle = ({
 
   return showDeviceName ? deviceName : '';
 };
-
