@@ -23,10 +23,14 @@ import { useTranslation } from '../common/components/LocalizationProvider';
 import usePositionAttributes from '../common/attributes/usePositionAttributes';
 import SettingsMenu from './components/SettingsMenu';
 import useSettingsStyles from './common/useSettingsStyles';
+import { useAdministrator } from '../common/util/permissions';
+
+const COMMON_USER_MAINTENANCE_TYPES = new Set(['totalDistance', 'odometer', 'hours', 'fixTime', 'batteryLevel']);
 
 const MaintenancePage = () => {
   const { classes } = useSettingsStyles();
   const t = useTranslation();
+  const isAdmin = useAdministrator();
 
   const positionAttributes = usePositionAttributes(t);
 
@@ -40,8 +44,14 @@ const MaintenancePage = () => {
     const otherList = [];
     Object.keys(attributes).forEach((key) => {
       const value = attributes[key];
+      if (!isAdmin && !COMMON_USER_MAINTENANCE_TYPES.has(key)) {
+        return;
+      }
       if (value.type === 'number' || key.endsWith('Time')) {
-        otherList.push({ key, name: value.name, type: value.type });
+        const name = !isAdmin && key === 'batteryLevel'
+          ? `${t('positionBatteryLevel')} (${t('sharedDevice')})`
+          : value.name;
+        otherList.push({ key, name, type: value.type });
       }
     });
     return otherList;
