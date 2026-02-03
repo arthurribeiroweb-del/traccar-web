@@ -201,6 +201,7 @@
     "realtimeRefreshNow": "Update now",
     "realtimeUpdating": "Atualizando\u2026",
     "realtimeNoSignalReconnecting": "Sem sinal \u2022 tentando reconectar",
+    "realtimeNoSignal": "No signal",
     "realtimeNoSignalTapRetry": "Sem sinal \u2022 toque para tentar agora",
     "realtimeReconnected": "Reconectado",
     "errorZero": "Can't be zero",

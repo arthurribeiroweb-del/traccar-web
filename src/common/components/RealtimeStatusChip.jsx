@@ -12,7 +12,6 @@ import {
   Button,
   ButtonBase,
   Chip,
-  Snackbar,
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useTranslation } from './LocalizationProvider';
@@ -22,7 +21,6 @@ const DELAYED_THRESHOLD_S = 15;
 const RECONNECTING_THRESHOLD_S = 90;
 const OFFLINE_HARD_THRESHOLD_S = 300;
 const RECENT_UPDATE_THRESHOLD_S = 30;
-const RECONNECT_TOAST_MS = 1500;
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000, 30000];
 
 const debugReconnectLog = (payload) => {
@@ -85,6 +83,8 @@ export const useRealtimeStatus = (position) => {
     return 'ONLINE';
   }, [ageSec, fixTimeMs, socketConnected, socketStatus]);
 
+  const isAdmin = user?.administrator === true;
+
   const statusLabel = useMemo(() => {
     switch (connectionState) {
       case 'DELAYED':
@@ -92,11 +92,11 @@ export const useRealtimeStatus = (position) => {
       case 'RECONNECTING':
         return 'realtimeNoSignalReconnecting';
       case 'OFFLINE_HARD':
-        return 'realtimeNoSignalTapRetry';
+        return isAdmin ? 'realtimeNoSignalTapRetry' : 'realtimeNoSignal';
       default:
         return null;
     }
-  }, [connectionState]);
+  }, [connectionState, isAdmin]);
 
   const chipColor = useMemo(() => {
     switch (connectionState) {
@@ -110,9 +110,8 @@ export const useRealtimeStatus = (position) => {
     }
   }, [connectionState]);
 
-  const isAdmin = user?.administrator === true;
   const showStatusChip = connectionState !== 'ONLINE';
-  const canManualRetry = connectionState === 'OFFLINE_HARD';
+  const canManualRetry = isAdmin && connectionState === 'OFFLINE_HARD';
   const updatedText = Number.isFinite(ageSec) ? `Atualizado h\u00e1 ${ageSec}s` : '--';
 
   return {
@@ -146,11 +145,9 @@ const RealtimeStatusChip = ({
     updatedText,
   } = useRealtimeStatus(position);
 
-  const [showReconnectToast, setShowReconnectToast] = useState(false);
   const timerRef = useRef(null);
   const retryIndexRef = useRef(0);
   const latestStateRef = useRef({ connectionState, ageSec, socketConnected });
-  const previousStateRef = useRef(connectionState);
 
   useEffect(() => {
     latestStateRef.current = { connectionState, ageSec, socketConnected };
@@ -220,17 +217,6 @@ const RealtimeStatusChip = ({
     stopReconnectLoop();
   }, [stopReconnectLoop]);
 
-  useEffect(() => {
-    const previous = previousStateRef.current;
-    if (
-      (previous === 'RECONNECTING' || previous === 'OFFLINE_HARD')
-      && connectionState === 'ONLINE'
-    ) {
-      setShowReconnectToast(true);
-    }
-    previousStateRef.current = connectionState;
-  }, [connectionState]);
-
   const label = statusLabel ? t(statusLabel) : '';
   const showUpdatedText = !compact;
   const showAdminActions = isAdmin && !compact && showStatusChip;
@@ -281,12 +267,6 @@ const RealtimeStatusChip = ({
           </Box>
         )}
       </Box>
-      <Snackbar
-        open={showReconnectToast}
-        autoHideDuration={RECONNECT_TOAST_MS}
-        message={t('realtimeReconnected')}
-        onClose={() => setShowReconnectToast(false)}
-      />
     </>
   );
 };
