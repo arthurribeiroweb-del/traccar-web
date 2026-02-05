@@ -53,6 +53,9 @@ const columnsArray = [
 ];
 const columnsMap = new Map(columnsArray);
 
+/** Coluna oculta para usuario comum (Gasto combustivel - nao teremos estes dados) */
+const HIDDEN_COLUMNS_FOR_USER = ['spentFuel'];
+
 const SummaryReportPage = () => {
   const navigate = useNavigate();
   const { classes } = useReportStyles();
@@ -63,12 +66,20 @@ const SummaryReportPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const devices = useSelector((state) => state.devices.items);
+  const administrator = useSelector((state) => state.session.user?.administrator);
 
   const distanceUnit = useAttributePreference('distanceUnit');
   const speedUnit = useAttributePreference('speedUnit');
   const volumeUnit = useAttributePreference('volumeUnit');
 
   const [columns, setColumns] = usePersistedState('summaryColumns', ['startTime', 'distance', 'averageSpeed']);
+
+  const displayColumns = useMemo(() => (
+    administrator
+      ? columns
+      : columnsArray.map(([key]) => key).filter((key) => !HIDDEN_COLUMNS_FOR_USER.includes(key))
+  ), [administrator, columns]);
+
   const daily = searchParams.get('daily') === 'true';
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -108,7 +119,7 @@ const SummaryReportPage = () => {
     const deviceHeader = t('sharedDevice');
     items.forEach((item) => {
       const row = { [deviceHeader]: getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name };
-      columns.forEach((key) => {
+      displayColumns.forEach((key) => {
         const header = t(columnsMap.get(key));
         row[header] = formatValue(item, key);
       });
@@ -202,7 +213,9 @@ const SummaryReportPage = () => {
               </Select>
             </FormControl>
           </div>
-          <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+          {administrator && (
+            <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+          )}
         </ReportFilter>
       </div>
       {isMobile ? (
@@ -232,20 +245,20 @@ const SummaryReportPage = () => {
             <TableHead>
               <TableRow>
                 <TableCell>{t('sharedDevice')}</TableCell>
-                {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
+                {displayColumns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
               </TableRow>
             </TableHead>
             <TableBody>
               {!loading ? items.map((item) => (
                 <TableRow key={(`${item.deviceId}_${Date.parse(item.startTime)}`)}>
                   <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
-                  {columns.map((key) => (
+                  {displayColumns.map((key) => (
                     <TableCell key={key}>
                       {formatValue(item, key)}
                     </TableCell>
                   ))}
                 </TableRow>
-              )) : (<TableShimmer columns={columns.length + 1} />)}
+              )) : (<TableShimmer columns={displayColumns.length + 1} />)}
             </TableBody>
           </Table>
         </>

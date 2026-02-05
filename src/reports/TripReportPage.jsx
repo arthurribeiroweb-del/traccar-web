@@ -62,6 +62,9 @@ const columnsArray = [
 ];
 const columnsMap = new Map(columnsArray);
 
+/** Colunas ocultas para usuario comum (Gasto combustivel, Motorista) */
+const HIDDEN_COLUMNS_FOR_USER = ['spentFuel', 'driverName'];
+
 const TripReportPage = () => {
   const navigate = useNavigate();
   const { classes } = useReportStyles();
@@ -70,12 +73,20 @@ const TripReportPage = () => {
   const isMobile = useMediaQuery('(max-width:768px)');
 
   const devices = useSelector((state) => state.devices.items);
+  const administrator = useSelector((state) => state.session.user?.administrator);
 
   const distanceUnit = useAttributePreference('distanceUnit');
   const speedUnit = useAttributePreference('speedUnit');
   const volumeUnit = useAttributePreference('volumeUnit');
 
   const [columns, setColumns] = usePersistedState('tripColumns', ['startTime', 'endTime', 'distance', 'averageSpeed']);
+
+  const displayColumns = useMemo(() => (
+    administrator
+      ? columns
+      : columnsArray.map(([key]) => key).filter((key) => !HIDDEN_COLUMNS_FOR_USER.includes(key))
+  ), [administrator, columns]);
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -150,7 +161,7 @@ const TripReportPage = () => {
         sheets.set(deviceName, []);
       }
       const row = {};
-      columns.forEach((key) => {
+      displayColumns.forEach((key) => {
         const header = t(columnsMap.get(key));
         if (key === 'startAddress') {
           row[header] = item.startAddress || '';
@@ -255,7 +266,9 @@ const TripReportPage = () => {
         <div className={classes.containerMain}>
           <div className={classes.header}>
             <ReportFilter onShow={onShow} onExport={onExport} onSchedule={onSchedule} deviceType="multiple" loading={loading}>
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+              {administrator && (
+                <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+              )}
             </ReportFilter>
           </div>
           {isMobile ? (
@@ -289,7 +302,7 @@ const TripReportPage = () => {
                   <TableRow>
                     <TableCell className={classes.columnAction} />
                     <TableCell>{t('sharedDevice')}</TableCell>
-                    {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
+                    {displayColumns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -312,13 +325,13 @@ const TripReportPage = () => {
                         </div>
                       </TableCell>
                       <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
-                      {columns.map((key) => (
+                      {displayColumns.map((key) => (
                         <TableCell key={key}>
                           {formatValue(item, key)}
                         </TableCell>
                       ))}
                     </TableRow>
-                  )) : (<TableShimmer columns={columns.length + 2} startAction />)}
+                  )) : (<TableShimmer columns={displayColumns.length + 2} startAction />)}
                 </TableBody>
               </Table>
             </>

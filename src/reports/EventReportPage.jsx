@@ -61,6 +61,12 @@ const columnsArray = [
 ];
 const columnsMap = new Map(columnsArray);
 
+/** Eventos ocultos para usuario comum (visiveis apenas para administrador) */
+const HIDDEN_EVENT_TYPES_FOR_USER = [
+  'deviceUnknown', 'queuedCommandSent', 'deviceFuelDrop', 'deviceFuelIncrease',
+  'driverChanged', 'media',
+];
+
 const EventReportPage = () => {
   const navigate = useNavigate();
   const { classes } = useReportStyles();
@@ -72,6 +78,7 @@ const EventReportPage = () => {
 
   const devices = useSelector((state) => state.devices.items);
   const geofences = useSelector((state) => state.geofences.items);
+  const administrator = useSelector((state) => state.session.user?.administrator);
 
   const speedUnit = useAttributePreference('speedUnit');
 
@@ -114,6 +121,15 @@ const EventReportPage = () => {
     const types = await response.json();
     setAllEventTypes([...allEventTypes, ...types.map((it) => [it.type, prefixString('event', it.type)])]);
   }, []);
+
+  const visibleEventTypes = useMemo(() => {
+    if (administrator) return allEventTypes;
+    return allEventTypes.filter(([key]) => !HIDDEN_EVENT_TYPES_FOR_USER.includes(key));
+  }, [allEventTypes, administrator]);
+
+  const displayColumns = useMemo(() => (
+    administrator ? columns : columnsArray.map(([key]) => key)
+  ), [administrator, columns]);
 
   const loadCommandsMap = useCallback(async (events) => {
     const hasCommandEvents = events.some((event) => event.type === 'commandResult' || event.type === 'commandFailure');
@@ -193,7 +209,7 @@ const EventReportPage = () => {
         sheets.set(deviceName, []);
       }
       const row = {};
-      columns.forEach((key) => {
+      displayColumns.forEach((key) => {
         const header = t(columnsMap.get(key));
         if (key === 'attributes' && item.type === 'media') {
           row[header] = item.attributes.file;
@@ -331,7 +347,7 @@ const EventReportPage = () => {
                     }}
                     multiple
                   >
-                    {allEventTypes.map(([key, string]) => (
+                    {visibleEventTypes.map(([key, string]) => (
                       <MenuItem key={key} value={key}>{t(string)}</MenuItem>
                     ))}
                   </Select>
@@ -350,7 +366,9 @@ const EventReportPage = () => {
                   />
                 </div>
               )}
-              <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+              {administrator && (
+                <ColumnSelect columns={columns} setColumns={setColumns} columnsArray={columnsArray} />
+              )}
             </ReportFilter>
           </div>
           {isMobile ? (
@@ -379,7 +397,7 @@ const EventReportPage = () => {
                   <TableRow>
                     <TableCell className={classes.columnAction} />
                     <TableCell>{t('sharedDevice')}</TableCell>
-                    {columns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
+                    {displayColumns.map((key) => (<TableCell key={key}>{t(columnsMap.get(key))}</TableCell>))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -397,13 +415,13 @@ const EventReportPage = () => {
                         ))) || ''}
                       </TableCell>
                       <TableCell>{getDeviceDisplayName(devices[item.deviceId]) || devices[item.deviceId].name}</TableCell>
-                      {columns.map((key) => (
+                      {displayColumns.map((key) => (
                         <TableCell key={key}>
                           {formatValue(item, key)}
                         </TableCell>
                       ))}
                     </TableRow>
-                  )) : (<TableShimmer columns={columns.length + 2} />)}
+                  )) : (<TableShimmer columns={displayColumns.length + 2} />)}
                 </TableBody>
               </Table>
             </>
