@@ -12,7 +12,7 @@ const useStyles = makeStyles()((theme) => ({
   list: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing(1),
+    gap: theme.spacing(1.5),
     padding: theme.spacing(2),
     [theme.breakpoints.down('md')]: {
       padding: theme.spacing(1.5),
@@ -20,24 +20,23 @@ const useStyles = makeStyles()((theme) => ({
   },
   card: {
     display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: theme.spacing(1.25),
-    padding: theme.spacing(1.25, 1.5),
-    borderRadius: theme.spacing(1),
+    flexDirection: 'column',
+    padding: theme.spacing(1.5, 1.75),
+    borderRadius: theme.spacing(1.25),
     backgroundColor: theme.palette.background.paper,
     border: `1px solid ${theme.palette.divider}`,
+    boxShadow: theme.shadows[1],
   },
   info: {
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing(0.5),
+    gap: theme.spacing(1),
     minWidth: 0,
-    flex: 1,
   },
   meta: {
     display: 'flex',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: theme.spacing(1),
     color: theme.palette.text.secondary,
     fontSize: '0.75rem',
@@ -46,16 +45,31 @@ const useStyles = makeStyles()((theme) => ({
     fontWeight: 600,
     fontVariantNumeric: 'tabular-nums',
   },
-  title: {
+  primary: {
     fontWeight: 600,
+    fontSize: '1rem',
+    color: theme.palette.text.primary,
   },
-  subtitle: {
+  metricsGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(0.5),
+  },
+  metricRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
     color: theme.palette.text.secondary,
     fontSize: '0.8rem',
-    lineHeight: 1.35,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    lineHeight: 1.5,
+    wordBreak: 'break-word',
+  },
+  metricLabel: {
+    color: theme.palette.text.secondary,
+    marginRight: theme.spacing(0.5),
+  },
+  metricValue: {
+    color: theme.palette.text.primary,
+    fontWeight: 500,
   },
   stateCard: {
     padding: theme.spacing(2),
@@ -74,8 +88,7 @@ const SummaryCardList = ({
   showDeviceName = false,
   getDateLabel,
   getPrimaryLabel,
-  getSecondaryLabel,
-  getTertiaryLabel,
+  getDetailRows,
 }) => {
   const { classes } = useStyles();
   const t = useTranslation();
@@ -119,29 +132,28 @@ const SummaryCardList = ({
   return (
     <div className={classes.list}>
       {items.map((item) => {
-        const secondary = getSecondaryLabel(item);
-        const tertiary = getTertiaryLabel(item);
+        const detailRows = getDetailRows ? getDetailRows(item) : [];
         return (
           <div key={`${item.deviceId}-${item.startTime}`} className={classes.card}>
             <div className={classes.info}>
               <div className={classes.meta}>
                 <span className={classes.date}>{getDateLabel(item)}</span>
                 {showDeviceName && (
-                  <span className={classes.subtitle} title={item.deviceName}>{item.deviceName}</span>
+                  <span>{item.deviceName}</span>
                 )}
               </div>
-              <Typography variant="body2" className={classes.title}>
+              <Typography variant="body2" className={classes.primary}>
                 {getPrimaryLabel(item)}
               </Typography>
-              {secondary && (
-                <Typography className={classes.subtitle} title={secondary}>
-                  {secondary}
-                </Typography>
-              )}
-              {tertiary && (
-                <Typography className={classes.subtitle} title={tertiary}>
-                  {tertiary}
-                </Typography>
+              {detailRows.length > 0 && (
+                <div className={classes.metricsGrid}>
+                  {detailRows.map((row, idx) => (
+                    <div key={row.key || idx} className={classes.metricRow}>
+                      <span className={classes.metricLabel}>{row.label}:</span>
+                      <span className={classes.metricValue}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>

@@ -183,18 +183,27 @@ const SummaryReportPage = () => {
     return `${distance} • ${avgSpeed}`;
   }, [distanceUnit, speedUnit, t]);
 
-  const getSecondaryLabel = useCallback((item) => {
-    const maxSpeed = item.maxSpeed > 0 ? formatSpeed(item.maxSpeed, speedUnit, t) : '--';
-    const engineHours = item.engineHours > 0 ? formatNumericHours(item.engineHours, t) : '--';
-    return `${t('reportMaximumSpeed')}: ${maxSpeed} • ${t('reportEngineHours')}: ${engineHours}`;
-  }, [speedUnit, t]);
-
-  const getTertiaryLabel = useCallback((item) => {
-    const startOdometer = formatDistance(item.startOdometer, distanceUnit, t);
-    const endOdometer = formatDistance(item.endOdometer, distanceUnit, t);
-    const spentFuel = item.spentFuel > 0 ? formatVolume(item.spentFuel, volumeUnit, t) : '--';
-    return `${t('reportStartOdometer')}: ${startOdometer} • ${t('reportEndOdometer')}: ${endOdometer} • ${t('reportSpentFuel')}: ${spentFuel}`;
-  }, [distanceUnit, volumeUnit, t]);
+  const getDetailRows = useCallback((item) => {
+    const rows = [];
+    if (item.maxSpeed > 0) {
+      rows.push({ key: 'maxSpeed', label: t('reportMaximumSpeed'), value: formatSpeed(item.maxSpeed, speedUnit, t) });
+    }
+    if (item.engineHours > 0) {
+      rows.push({ key: 'engineHours', label: t('reportEngineHours'), value: formatNumericHours(item.engineHours, t) });
+    }
+    rows.push(
+      { key: 'startOdometer', label: t('reportStartOdometer'), value: formatDistance(item.startOdometer, distanceUnit, t) },
+      { key: 'endOdometer', label: t('reportEndOdometer'), value: formatDistance(item.endOdometer, distanceUnit, t) },
+    );
+    if (administrator) {
+      rows.push({
+        key: 'spentFuel',
+        label: t('reportSpentFuel'),
+        value: item.spentFuel > 0 ? formatVolume(item.spentFuel, volumeUnit, t) : '--',
+      });
+    }
+    return rows;
+  }, [administrator, distanceUnit, speedUnit, volumeUnit, t]);
 
   return (
     <PageLayout menu={<ReportsMenu />} breadcrumbs={['reportTitle', 'reportSummary']}>
@@ -227,8 +236,7 @@ const SummaryReportPage = () => {
           showDeviceName={showDeviceNameInCards}
           getDateLabel={getDateLabel}
           getPrimaryLabel={getPrimaryLabel}
-          getSecondaryLabel={getSecondaryLabel}
-          getTertiaryLabel={getTertiaryLabel}
+          getDetailRows={getDetailRows}
         />
       ) : (
         <>
