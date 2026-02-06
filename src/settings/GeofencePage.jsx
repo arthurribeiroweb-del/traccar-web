@@ -78,6 +78,7 @@ const GeofencePage = () => {
   };
 
   const isRadar = Boolean(item?.attributes?.radar);
+  const readOnlyRadar = isRadar && !isAdmin;
   const circleArea = useMemo(() => parseCircleArea(item?.area), [item?.area]);
 
   const radarSpeedLimitValue = item?.attributes?.radarSpeedLimitKph ?? '';
@@ -95,7 +96,8 @@ const GeofencePage = () => {
   );
   const radarAreaValid = !isRadar || !isAdmin || Boolean(item?.area);
 
-  const validate = () => nameValid && radarSpeedValid && radarRadiusValid && radarAreaValid;
+  const validate = () => (!readOnlyRadar && nameValid && radarSpeedValid && radarRadiusValid && radarAreaValid);
+  const fieldDisabled = saving || readOnlyRadar;
 
   const handleRadarTypeChange = (event) => {
     if (!item) {
@@ -275,6 +277,7 @@ const GeofencePage = () => {
                   placeholder={isRadar ? t('radarNamePlaceholder') : ''}
                   error={!nameValid}
                   helperText={!nameValid ? t('radarNameRequired') : null}
+                  disabled={fieldDisabled}
                 />
                 <FormControl>
                   <FormLabel>{t('sharedType')}</FormLabel>
@@ -283,8 +286,8 @@ const GeofencePage = () => {
                     value={isRadar ? 'radar' : 'normal'}
                     onChange={handleRadarTypeChange}
                   >
-                    <FormControlLabel value="normal" control={<Radio />} label={t('geofenceTypeNormal')} />
-                    {isAdmin && <FormControlLabel value="radar" control={<Radio />} label={t('geofenceTypeRadar')} />}
+                    <FormControlLabel value="normal" control={<Radio />} label={t('geofenceTypeNormal')} disabled={fieldDisabled} />
+                    {isAdmin && <FormControlLabel value="radar" control={<Radio />} label={t('geofenceTypeRadar')} disabled={fieldDisabled} />}
                   </RadioGroup>
                 </FormControl>
                 {isAdmin && isRadar && (
@@ -298,6 +301,7 @@ const GeofencePage = () => {
                       error={!radarSpeedValid}
                       helperText={!radarSpeedValid ? t('radarSpeedLimitRequired') : null}
                       inputProps={{ min: 1, step: 1, inputMode: 'numeric' }}
+                      disabled={fieldDisabled}
                     />
                     <TextField
                       value={radarRadiusValue}
@@ -307,6 +311,7 @@ const GeofencePage = () => {
                       error={!radarRadiusValid}
                       helperText={!radarRadiusValid ? t('radarRadiusRange') : t('radarRadiusHelper')}
                       inputProps={{ min: RADAR_MIN_RADIUS_METERS, max: RADAR_MAX_RADIUS_METERS, step: 1, inputMode: 'numeric' }}
+                      disabled={fieldDisabled}
                     />
                     <FormControlLabel
                       control={(
@@ -319,6 +324,7 @@ const GeofencePage = () => {
                               radarActive: event.target.checked,
                             },
                           })}
+                          disabled={fieldDisabled}
                         />
                       )}
                       label={t('radarActive')}
@@ -338,12 +344,14 @@ const GeofencePage = () => {
                   value={item.description || ''}
                   onChange={(event) => setItem({ ...item, description: event.target.value })}
                   label={t('sharedDescription')}
+                  disabled={fieldDisabled}
                 />
                 <SelectField
                   value={item.calendarId}
                   onChange={(event) => setItem({ ...item, calendarId: Number(event.target.value) })}
                   endpoint="/api/calendars"
                   label={t('sharedCalendar')}
+                  disabled={fieldDisabled}
                 />
                 <FormControlLabel
                   control={(
@@ -356,17 +364,20 @@ const GeofencePage = () => {
                           hide: event.target.checked,
                         },
                       })}
+                      disabled={fieldDisabled}
                     />
                   )}
                   label={t('sharedFilterMap')}
                 />
               </AccordionDetails>
             </Accordion>
-            <EditAttributesAccordion
-              attributes={item.attributes || {}}
-              setAttributes={(attributes) => setItem({ ...item, attributes })}
-              definitions={geofenceAttributes}
-            />
+            {!readOnlyRadar && (
+              <EditAttributesAccordion
+                attributes={item.attributes || {}}
+                setAttributes={(attributes) => setItem({ ...item, attributes })}
+                definitions={geofenceAttributes}
+              />
+            )}
           </>
         )}
       </EditItemView>

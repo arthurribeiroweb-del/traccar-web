@@ -9,6 +9,7 @@ import { geofencesActions } from '../store';
 import CollectionActions from '../settings/components/CollectionActions';
 import { useCatchCallback } from '../reactHelper';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import { useAdministrator } from '../common/util/permissions';
 
 const useStyles = makeStyles()(() => ({
   list: {
@@ -25,6 +26,7 @@ const useStyles = makeStyles()(() => ({
 const GeofencesList = ({ onGeofenceSelected }) => {
   const { classes } = useStyles();
   const dispatch = useDispatch();
+  const admin = useAdministrator();
 
   const items = useSelector((state) => state.geofences.items);
 
@@ -39,7 +41,14 @@ const GeofencesList = ({ onGeofenceSelected }) => {
         <Fragment key={item.id}>
           <ListItemButton key={item.id} onClick={() => onGeofenceSelected(item.id)}>
             <ListItemText primary={item.name} />
-            <CollectionActions itemId={item.id} editPath="/settings/geofence" endpoint="geofences" setTimestamp={refreshGeofences} />
+            {(!item.attributes?.radar || admin) && (
+              <CollectionActions
+                itemId={item.id}
+                editPath="/settings/geofence"
+                endpoint="geofences"
+                setTimestamp={refreshGeofences}
+              />
+            )}
           </ListItemButton>
           {index < list.length - 1 ? <Divider /> : null}
         </Fragment>

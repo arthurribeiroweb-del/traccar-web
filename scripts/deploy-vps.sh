@@ -1,9 +1,9 @@
 #!/bin/bash
-# Deploy Traccar na VPS: backup → frontend (traccar-web) → backend (tracker-server) → restart
-# Uso: no servidor, após git pull em traccar-web-src:
+# Deploy Traccar na VPS: backup -> frontend (traccar-web) -> backend (tracker-server) -> restart
+# Uso no servidor (exemplo):
 #   sudo bash /opt/traccar-web-src/scripts/deploy-vps.sh
-# Ou, na pasta do fonte:
-#   sudo bash scripts/deploy-vps.sh
+# Observacao: este script espera os fontes em /opt/traccar-web-src e /opt/traccar-server-src.
+# Ajuste as variaveis WEB_SRC e SERVER_SRC abaixo se sua VPS usar outro caminho.
 
 set -e
 
@@ -11,6 +11,32 @@ WEB_SRC="/opt/traccar-web-src"
 SERVER_SRC="/opt/traccar-server-src"
 TRACCAR="/opt/traccar"
 BACKUP_DIR="/root"
+
+if [ ! -d "$WEB_SRC" ]; then
+  echo "ERRO: WEB_SRC nao encontrado: $WEB_SRC"
+  echo "Ajuste o caminho do fonte do traccar-web."
+  exit 1
+fi
+
+if [ ! -d "$SERVER_SRC" ]; then
+  echo "ERRO: SERVER_SRC nao encontrado: $SERVER_SRC"
+  echo "Ajuste o caminho do fonte do traccar-server."
+  exit 1
+fi
+
+if [ ! -d "$TRACCAR" ]; then
+  echo "ERRO: TRACCAR nao encontrado: $TRACCAR"
+  echo "Ajuste o caminho da instalacao."
+  exit 1
+fi
+
+# Aviso de duplicados do traccar-web em /opt (evita deploy no lugar errado)
+DUPLICATES=$(find /opt -maxdepth 3 -type d -name "traccar-web" ! -path "$WEB_SRC" 2>/dev/null || true)
+if [ -n "$DUPLICATES" ]; then
+  echo "ATENCAO: encontrei possiveis clones duplicados do traccar-web em /opt:" 
+  echo "$DUPLICATES"
+  echo "Confirme se o deploy deve usar apenas $WEB_SRC."
+fi
 
 # Carregar nvm (node/npm) quando o script roda com sudo
 export NVM_DIR="${NVM_DIR:-/root/.nvm}"

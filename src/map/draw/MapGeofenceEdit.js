@@ -13,6 +13,7 @@ import { useCatchCallback } from '../../reactHelper';
 import drawTheme from './theme';
 import { useTranslation } from '../../common/components/LocalizationProvider';
 import fetchOrThrow from '../../common/util/fetchOrThrow';
+import { useAdministrator } from '../../common/util/permissions';
 
 MapboxDraw.constants.classes.CONTROL_BASE = 'maplibregl-ctrl';
 MapboxDraw.constants.classes.CONTROL_PREFIX = 'maplibregl-ctrl-';
@@ -23,6 +24,7 @@ const MapGeofenceEdit = ({ selectedGeofenceId }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const t = useTranslation();
+  const admin = useAdministrator();
 
   const draw = useMemo(() => new MapboxDraw({
     displayControlsDefault: false,
@@ -87,6 +89,12 @@ const MapGeofenceEdit = ({ selectedGeofenceId }) => {
   useEffect(() => {
     const listener = async (event) => {
       const feature = event.features[0];
+      const item = Object.values(geofences).find((i) => i.id === feature.id);
+      if (item?.attributes?.radar && !admin) {
+        refreshGeofences();
+        dispatch(errorsActions.push(t('serverReadonly')));
+        return;
+      }
       try {
         await fetchOrThrow(`/api/geofences/${feature.id}`, { method: 'DELETE' });
         refreshGeofences();
@@ -97,13 +105,18 @@ const MapGeofenceEdit = ({ selectedGeofenceId }) => {
 
     map.on('draw.delete', listener);
     return () => map.off('draw.delete', listener);
-  }, [dispatch, refreshGeofences]);
+  }, [admin, dispatch, geofences, refreshGeofences, t]);
 
   useEffect(() => {
     const listener = async (event) => {
       const feature = event.features[0];
       const item = Object.values(geofences).find((i) => i.id === feature.id);
       if (item) {
+        if (item.attributes?.radar && !admin) {
+          refreshGeofences();
+          dispatch(errorsActions.push(t('serverReadonly')));
+          return;
+        }
         const updatedItem = { ...item, area: geometryToArea(feature.geometry) };
         try {
           await fetchOrThrow(`/api/geofences/${feature.id}`, {
@@ -120,7 +133,7 @@ const MapGeofenceEdit = ({ selectedGeofenceId }) => {
 
     map.on('draw.update', listener);
     return () => map.off('draw.update', listener);
-  }, [dispatch, geofences, refreshGeofences]);
+  }, [admin, dispatch, geofences, refreshGeofences, t]);
 
   useEffect(() => {
     draw.deleteAll();
