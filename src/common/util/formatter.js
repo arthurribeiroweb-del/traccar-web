@@ -147,14 +147,39 @@ export const getBatteryStatus = (batteryLevel) => {
   return 'error';
 };
 
+const normalizeOverspeedType = (type) => (type === 'overspeed' ? 'deviceOverspeed' : type);
+
+const formatNotificationDescription = (t, notification, includeId) => {
+  const rawDescription = notification?.description?.trim();
+  if (!rawDescription) {
+    return null;
+  }
+
+  const eventType = normalizeOverspeedType(rawDescription);
+  const eventKey = prefixString('event', eventType);
+  const translatedEvent = t(eventKey);
+  if (translatedEvent !== eventKey) {
+    return includeId ? `${translatedEvent} [${notification.id}]` : translatedEvent;
+  }
+
+  const translatedKey = t(rawDescription);
+  if (translatedKey !== rawDescription) {
+    return includeId ? `${translatedKey} [${notification.id}]` : translatedKey;
+  }
+
+  return includeId ? `${rawDescription} [${notification.id}]` : rawDescription;
+};
+
 export const formatNotificationTitle = (t, notification, includeId) => {
-  if (notification.description) {
-    return notification.description;
+  const formattedDescription = formatNotificationDescription(t, notification, includeId);
+  if (formattedDescription) {
+    return formattedDescription;
   }
   if (radarOverspeedInfoFromEvent(notification)) {
     return t('eventRadarOverspeed');
   }
-  let title = t(prefixString('event', notification.type));
+  const eventType = normalizeOverspeedType(notification.type);
+  let title = t(prefixString('event', eventType));
   if (notification.type === 'alarm') {
     const alarmString = notification.attributes?.alarms;
     if (alarmString) {

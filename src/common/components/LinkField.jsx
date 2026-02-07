@@ -5,6 +5,20 @@ import { snackBarDurationShortMs } from '../util/duration';
 import { useTranslation } from './LocalizationProvider';
 import fetchOrThrow from '../util/fetchOrThrow';
 
+const uniqueByKey = (list, keyGetter) => {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const map = new Map();
+  list.forEach((item) => {
+    const key = keyGetter(item);
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+};
+
 const LinkField = ({
   label,
   endpointAll,
@@ -25,14 +39,14 @@ const LinkField = ({
   useEffectAsync(async () => {
     if (active) {
       const response = await fetchOrThrow(endpointAll);
-      setItems(await response.json());
+      setItems(uniqueByKey(await response.json(), keyGetter));
     }
   }, [active]);
 
   useEffectAsync(async () => {
     if (active) {
       const response = await fetchOrThrow(endpointLinked);
-      setLinked(await response.json());
+      setLinked(uniqueByKey(await response.json(), keyGetter));
     }
   }, [active]);
 
@@ -64,7 +78,7 @@ const LinkField = ({
       });
       await Promise.all(results);
       setUpdated(results.length > 0);
-      setLinked(value);
+      setLinked(uniqueByKey(value, keyGetter));
     }
   }, [linked, setUpdated, setLinked]);
 
