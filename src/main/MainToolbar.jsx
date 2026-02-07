@@ -14,14 +14,19 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import { useTranslation } from '../common/components/LocalizationProvider';
 import WhatsAppIcon from '../resources/images/whatsapp.svg?react';
 import useFeatures from '../common/util/useFeatures';
-import { useDeviceReadonly } from '../common/util/permissions';
+import { useDeviceReadonly, getUserRole, canAddDevice } from '../common/util/permissions';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import DeviceRow from './DeviceRow';
+import TrafficButton from './TrafficButton';
 
 const useStyles = makeStyles()((theme) => ({
   toolbar: {
     display: 'flex',
     gap: theme.spacing(1),
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
   },
   filterPanel: {
     display: 'flex',
@@ -47,6 +52,8 @@ const MainToolbar = ({
   showRadars,
   setShowRadars,
   onEventsClick,
+  onTrafficClick,
+  trafficOpen,
 }) => {
   const { classes } = useStyles();
   const theme = useTheme();
@@ -56,6 +63,7 @@ const MainToolbar = ({
 
   const deviceReadonly = useDeviceReadonly();
 
+  const user = useSelector((state) => state.session.user);
   const groups = useSelector((state) => state.groups.items);
   const devices = useSelector((state) => state.devices.items);
   const events = useSelector((state) => state.events.items);
@@ -74,6 +82,11 @@ const MainToolbar = ({
   const deviceStatusCount = (status) => Object.values(devices).filter((d) => d.status === status).length;
   const displayValue = keyword || (searchFocused ? '' : (selectedDevice ? (getDeviceDisplayName(selectedDevice) || selectedDevice.name) : ''));
   const whatsappUrl = import.meta.env.VITE_WHATSAPP_URL || 'https://wa.me/559491796309';
+  const role = getUserRole(user);
+  // Permission rule: ROLE_USER must not render the add button in the topbar.
+  const showAddButton = canAddDevice(role);
+  const showTrafficButton = true;
+  const addTooltip = !deviceReadonly && Object.keys(devices).length === 0 ? t('deviceRegisterFirst') : t('sharedAdd');
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
@@ -201,7 +214,7 @@ const MainToolbar = ({
       </Popover>
       {!features.disableEvents && (
         <Tooltip title={t('reportEvents')}>
-          <IconButton onClick={onEventsClick}>
+          <IconButton onClick={onEventsClick} className={classes.actionButton}>
             <Badge color="error" badgeContent={events.length} invisible={!events.length}>
               <NotificationsIcon />
             </Badge>
@@ -211,6 +224,7 @@ const MainToolbar = ({
       {whatsappUrl && (
         <Tooltip title={t('whatsappSupport')}>
           <IconButton
+            className={classes.actionButton}
             component="a"
             href={whatsappUrl}
             target="_blank"
@@ -221,11 +235,24 @@ const MainToolbar = ({
           </IconButton>
         </Tooltip>
       )}
-      <IconButton edge="end" onClick={() => navigate('/settings/device')} disabled={deviceReadonly}>
-        <Tooltip open={!deviceReadonly && Object.keys(devices).length === 0} title={t('deviceRegisterFirst')} arrow>
-          <AddIcon />
+      {showTrafficButton && (
+        <TrafficButton active={trafficOpen} onClick={onTrafficClick} />
+      )}
+      {showAddButton && (
+        <Tooltip title={addTooltip} arrow>
+          <span>
+            <IconButton
+              edge="end"
+              className={classes.actionButton}
+              onClick={() => navigate('/settings/device')}
+              disabled={deviceReadonly}
+              aria-label={t('sharedAdd')}
+            >
+              <AddIcon />
+            </IconButton>
+          </span>
         </Tooltip>
-      </IconButton>
+      )}
     </Toolbar>
   );
 };

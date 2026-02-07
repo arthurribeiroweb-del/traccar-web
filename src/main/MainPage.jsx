@@ -17,7 +17,8 @@ import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import BottomPeekCard from './BottomPeekCard';
 import EditDeviceSheet from './EditDeviceSheet';
-import { useAttributePreference } from '../common/util/preferences';
+import { useAttributePreference, usePreference } from '../common/util/preferences';
+import TrafficView from './TrafficView';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -82,6 +83,8 @@ const MainPage = () => {
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const mapOnSelect = useAttributePreference('mapOnSelect', true);
+  const defaultLatitude = usePreference('latitude');
+  const defaultLongitude = usePreference('longitude');
 
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
   const selectTime = useSelector((state) => state.devices.selectTime);
@@ -89,6 +92,9 @@ const MainPage = () => {
   const devices = useSelector((state) => state.devices.items);
   const [filteredPositions, setFilteredPositions] = useState([]);
   const selectedPosition = filteredPositions.find((position) => selectedDeviceId && position.deviceId === selectedDeviceId);
+  const selectedPositionForTraffic = selectedDeviceId
+    ? (positions[selectedDeviceId] || selectedPosition)
+    : selectedPosition;
 
   const [filteredDevices, setFilteredDevices] = useState([]);
   const totalDevices = Object.keys(devices).length;
@@ -105,6 +111,7 @@ const MainPage = () => {
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [trafficOpen, setTrafficOpen] = useState(false);
   const [panelState, setPanelState] = useState('closed');
   const [editOpen, setEditOpen] = useState(false);
 
@@ -112,6 +119,7 @@ const MainPage = () => {
   const previousSelectTime = usePrevious(selectTime);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), [setEventsOpen]);
+  const onTrafficClick = useCallback(() => setTrafficOpen(true), [setTrafficOpen]);
 
   useEffect(() => {
     if (!desktop && mapOnSelect && selectedDeviceId) {
@@ -192,6 +200,8 @@ const MainPage = () => {
             showRadars={showRadars}
             setShowRadars={setShowRadars}
             onEventsClick={onEventsClick}
+            onTrafficClick={onTrafficClick}
+            trafficOpen={trafficOpen}
           />
         </Paper>
         <div className={classes.middle}>
@@ -216,6 +226,12 @@ const MainPage = () => {
         )}
       </div>
       <EventsDrawer open={eventsOpen} onClose={() => setEventsOpen(false)} />
+      <TrafficView
+        open={trafficOpen}
+        onClose={() => setTrafficOpen(false)}
+        selectedPosition={selectedPositionForTraffic}
+        fallbackCoordinates={{ latitude: defaultLatitude, longitude: defaultLongitude }}
+      />
       {selectedDeviceId && panelState === 'peek' && (
         <BottomPeekCard
           device={devices[selectedDeviceId]}
