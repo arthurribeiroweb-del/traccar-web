@@ -129,7 +129,7 @@ const MapPendingReports = ({
           imageIds.QUEBRA_MOLAS,
           imageIds.RADAR,
         ],
-        'icon-size': 0.6,
+        'icon-size': ['*', 0.6, ['match', ['get', 'type'], 'RADAR', 1.1, 1]],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-padding': 8,
