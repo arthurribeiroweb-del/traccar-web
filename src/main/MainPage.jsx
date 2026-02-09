@@ -17,8 +17,7 @@ import MainToolbar from './MainToolbar';
 import MainMap from './MainMap';
 import BottomPeekCard from './BottomPeekCard';
 import EditDeviceSheet from './EditDeviceSheet';
-import { useAttributePreference, usePreference } from '../common/util/preferences';
-import TrafficView from './TrafficView';
+import { useAttributePreference } from '../common/util/preferences';
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -83,18 +82,12 @@ const MainPage = () => {
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
 
   const mapOnSelect = useAttributePreference('mapOnSelect', true);
-  const defaultLatitude = usePreference('latitude');
-  const defaultLongitude = usePreference('longitude');
-
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
   const selectTime = useSelector((state) => state.devices.selectTime);
   const positions = useSelector((state) => state.session.positions);
   const devices = useSelector((state) => state.devices.items);
   const [filteredPositions, setFilteredPositions] = useState([]);
   const selectedPosition = filteredPositions.find((position) => selectedDeviceId && position.deviceId === selectedDeviceId);
-  const selectedPositionForTraffic = selectedDeviceId
-    ? (positions[selectedDeviceId] || selectedPosition)
-    : selectedPosition;
 
   const [filteredDevices, setFilteredDevices] = useState([]);
   const totalDevices = Object.keys(devices).length;
@@ -111,7 +104,9 @@ const MainPage = () => {
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
-  const [trafficOpen, setTrafficOpen] = useState(false);
+  const [reportRequestId, setReportRequestId] = useState(0);
+  const [reportPanelOpen, setReportPanelOpen] = useState(false);
+  const [pendingCommunityCount, setPendingCommunityCount] = useState(0);
   const [panelState, setPanelState] = useState('closed');
   const [editOpen, setEditOpen] = useState(false);
 
@@ -119,7 +114,7 @@ const MainPage = () => {
   const previousSelectTime = usePrevious(selectTime);
 
   const onEventsClick = useCallback(() => setEventsOpen(true), [setEventsOpen]);
-  const onTrafficClick = useCallback(() => setTrafficOpen(true), [setTrafficOpen]);
+  const onReportClick = useCallback(() => setReportRequestId((value) => value + 1), []);
 
   useEffect(() => {
     if (!desktop && mapOnSelect && selectedDeviceId) {
@@ -181,6 +176,9 @@ const MainPage = () => {
           selectedPosition={selectedPosition}
           onEventsClick={onEventsClick}
           showRadars={showRadars}
+          reportRequestId={reportRequestId}
+          onReportPanelOpenChange={setReportPanelOpen}
+          onPendingCommunityCountChange={setPendingCommunityCount}
         />
       )}
       <div className={classes.sidebar}>
@@ -200,8 +198,9 @@ const MainPage = () => {
             showRadars={showRadars}
             setShowRadars={setShowRadars}
             onEventsClick={onEventsClick}
-            onTrafficClick={onTrafficClick}
-            trafficOpen={trafficOpen}
+            onReportClick={onReportClick}
+            reportOpen={reportPanelOpen}
+            pendingCommunityCount={pendingCommunityCount}
           />
         </Paper>
         <div className={classes.middle}>
@@ -212,6 +211,9 @@ const MainPage = () => {
                 selectedPosition={selectedPosition}
                 onEventsClick={onEventsClick}
                 showRadars={showRadars}
+                reportRequestId={reportRequestId}
+                onReportPanelOpenChange={setReportPanelOpen}
+                onPendingCommunityCountChange={setPendingCommunityCount}
               />
             </div>
           )}
@@ -226,12 +228,6 @@ const MainPage = () => {
         )}
       </div>
       <EventsDrawer open={eventsOpen} onClose={() => setEventsOpen(false)} />
-      <TrafficView
-        open={trafficOpen}
-        onClose={() => setTrafficOpen(false)}
-        selectedPosition={selectedPositionForTraffic}
-        fallbackCoordinates={{ latitude: defaultLatitude, longitude: defaultLongitude }}
-      />
       {selectedDeviceId && panelState === 'peek' && (
         <BottomPeekCard
           device={devices[selectedDeviceId]}

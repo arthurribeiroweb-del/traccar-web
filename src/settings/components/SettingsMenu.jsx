@@ -17,6 +17,7 @@ import PaymentIcon from '@mui/icons-material/Payment';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import BackupIcon from '@mui/icons-material/Backup';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import { useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { useTranslation } from '../../common/components/LocalizationProvider';
@@ -165,6 +166,12 @@ const SettingsMenu = () => {
                   link="/settings/backup"
                   icon={<BackupIcon />}
                   selected={location.pathname === '/settings/backup'}
+                />
+                <MenuItem
+                  title={t('communityReportsPendingMenu') || 'Avisos da Comunidade'}
+                  link="/settings/community-reports-pending"
+                  icon={<WarningAmberIcon />}
+                  selected={location.pathname === '/settings/community-reports-pending'}
                 />
               </>
             )}

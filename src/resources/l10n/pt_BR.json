@@ -804,5 +804,7 @@
     "radarOverspeedPassed": "passou a",
     "radarOverspeedLimit": "limite",
     "radarPopupLimit": "Limite",
-    "radarPopupRadius": "Raio"
+    "radarPopupRadius": "Raio",
+    "communityReportButton": "Reportar",
+    "communityReportsPendingMenu": "Avisos da Comunidade"
 }

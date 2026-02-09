@@ -806,5 +806,7 @@
     "eventRadarOverspeed": "Radar: speed limit exceeded",
     "reportEventRadarOverspeed": "Radar: speed limit exceeded",
     "radarOverspeedPassed": "passed at",
-    "radarOverspeedLimit": "limit"
+    "radarOverspeedLimit": "limit",
+    "communityReportButton": "Report",
+    "communityReportsPendingMenu": "Community Reports"
 }

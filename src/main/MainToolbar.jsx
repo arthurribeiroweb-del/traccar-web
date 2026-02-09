@@ -17,7 +17,7 @@ import useFeatures from '../common/util/useFeatures';
 import { useDeviceReadonly, getUserRole, canAddDevice } from '../common/util/permissions';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import DeviceRow from './DeviceRow';
-import TrafficButton from './TrafficButton';
+import ReportButton from './ReportButton';
 
 const useStyles = makeStyles()((theme) => ({
   toolbar: {
@@ -52,8 +52,9 @@ const MainToolbar = ({
   showRadars,
   setShowRadars,
   onEventsClick,
-  onTrafficClick,
-  trafficOpen,
+  onReportClick,
+  reportOpen,
+  pendingCommunityCount,
 }) => {
   const { classes } = useStyles();
   const theme = useTheme();
@@ -83,9 +84,10 @@ const MainToolbar = ({
   const displayValue = keyword || (searchFocused ? '' : (selectedDevice ? (getDeviceDisplayName(selectedDevice) || selectedDevice.name) : ''));
   const whatsappUrl = import.meta.env.VITE_WHATSAPP_URL || 'https://wa.me/559491796309';
   const role = getUserRole(user);
+  const eventsBadgeCount = events.length + (user?.administrator ? (pendingCommunityCount || 0) : 0);
   // Permission rule: ROLE_USER must not render the add button in the topbar.
   const showAddButton = canAddDevice(role);
-  const showTrafficButton = true;
+  const showReportButton = true;
   const addTooltip = !deviceReadonly && Object.keys(devices).length === 0 ? t('deviceRegisterFirst') : t('sharedAdd');
 
   return (
@@ -215,7 +217,7 @@ const MainToolbar = ({
       {!features.disableEvents && (
         <Tooltip title={t('reportEvents')}>
           <IconButton onClick={onEventsClick} className={classes.actionButton}>
-            <Badge color="error" badgeContent={events.length} invisible={!events.length}>
+            <Badge color="error" badgeContent={eventsBadgeCount} invisible={!eventsBadgeCount}>
               <NotificationsIcon />
             </Badge>
           </IconButton>
@@ -235,8 +237,8 @@ const MainToolbar = ({
           </IconButton>
         </Tooltip>
       )}
-      {showTrafficButton && (
-        <TrafficButton active={trafficOpen} onClick={onTrafficClick} />
+      {showReportButton && (
+        <ReportButton active={reportOpen} onClick={onReportClick} />
       )}
       {showAddButton && (
         <Tooltip title={addTooltip} arrow>

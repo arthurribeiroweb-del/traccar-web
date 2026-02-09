@@ -65,6 +65,7 @@ import { useLocalization } from './common/components/LocalizationProvider';
 import fetchOrThrow from './common/util/fetchOrThrow';
 import AuditPage from './reports/AuditPage';
 import { useReportsAccess, useSettingsAccess } from './common/util/permissions';
+import CommunityReportsPendingPage from './settings/CommunityReportsPendingPage';
 
 const RestrictedReportRoute = ({ children }) => {
   const reportsAccess = useReportsAccess();
@@ -151,6 +152,7 @@ const Navigation = () => {
           />
           <Route path="announcement" element={<AnnouncementPage />} />
           <Route path="backup" element={<BackupPage />} />
+          <Route path="community-reports-pending" element={<CommunityReportsPendingPage />} />
           <Route
             path="calendars"
             element={(
