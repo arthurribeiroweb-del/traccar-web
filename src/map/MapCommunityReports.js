@@ -79,6 +79,7 @@ const MapCommunityReports = ({
             status: report.status,
             pending: report.pending,
             createdAt: report.createdAt,
+            radarSpeedLimit: report.radarSpeedLimit,
             cancelable: Boolean(report.cancelable),
           },
         })),
@@ -184,6 +185,7 @@ const MapCommunityReports = ({
       const type = feature.properties.type;
       const status = feature.properties.status;
       const createdAt = feature.properties.createdAt;
+      const radarSpeedLimit = Number(feature.properties.radarSpeedLimit);
       const pending = feature.properties.pending === true || feature.properties.pending === 'true';
       const cancelable = feature.properties.cancelable === true || feature.properties.cancelable === 'true';
 
@@ -211,6 +213,14 @@ const MapCommunityReports = ({
       createdLine.style.color = '#334155';
       createdLine.textContent = `Criado em: ${formatCreatedAt(createdAt)}`;
       container.appendChild(createdLine);
+
+      if (type === 'RADAR' && Number.isFinite(radarSpeedLimit) && radarSpeedLimit > 0) {
+        const speedLine = document.createElement('div');
+        speedLine.style.fontSize = '12px';
+        speedLine.style.color = '#334155';
+        speedLine.textContent = `Velocidade: ${radarSpeedLimit} km/h`;
+        container.appendChild(speedLine);
+      }
 
       if (pending) {
         const chip = document.createElement('div');

@@ -17,6 +17,7 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  TextField,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -108,6 +109,7 @@ const MainMap = ({
   const [selectedHeadingState, setSelectedHeadingState] = useState('idle');
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState(null);
+  const [radarSpeedLimit, setRadarSpeedLimit] = useState('');
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [publicReports, setPublicReports] = useState([]);
   const [pendingReports, setPendingReports] = useState([]);
@@ -133,18 +135,21 @@ const MainMap = ({
   const mapReportErrorToMessage = useCallback((error) => {
     const text = error?.message || '';
     if (text.includes('DUPLICATE_NEARBY')) {
-      return 'Já existe um aviso desse tipo aqui.';
+      return 'Ja existe um aviso desse tipo aqui.';
     }
     if (text.includes('COOLDOWN_ACTIVE')) {
       return 'Aguarde 30s para enviar outro aviso.';
     }
     if (text.includes('RATE_LIMIT_DAILY')) {
-      return 'Você atingiu o limite de avisos de hoje.';
+      return 'Voce atingiu o limite de avisos de hoje.';
     }
     if (text.includes('CANCEL_WINDOW_EXPIRED')) {
-      return 'Janela para cancelar já expirou.';
+      return 'Janela para cancelar ja expirou.';
     }
-    return 'Não foi possível enviar. Tente novamente.';
+    if (text.includes('INVALID_RADAR_SPEED_LIMIT')) {
+      return 'Informe a velocidade do radar (20 a 220 km/h).';
+    }
+    return 'Nao foi possivel enviar. Tente novamente.';
   }, []);
 
   const computeCancelable = useCallback((report) => {
@@ -464,6 +469,9 @@ const MainMap = ({
   const handleReportTypeSelect = useCallback((type) => {
     setReportSheetOpen(false);
     setSelectedReportType(type);
+    if (type !== 'RADAR') {
+      setRadarSpeedLimit('');
+    }
   }, []);
 
   const handleReportConfirm = useCallback(async () => {
@@ -479,6 +487,15 @@ const MainMap = ({
     const center = map.getCenter();
     const latitude = Number(center.lat);
     const longitude = Number(center.lng);
+    const parsedRadarSpeedLimit = Number(radarSpeedLimit);
+
+    if (selectedReportType === 'RADAR') {
+      if (!Number.isInteger(parsedRadarSpeedLimit) || parsedRadarSpeedLimit < 20 || parsedRadarSpeedLimit > 220) {
+        showFollowMessage('Informe a velocidade do radar (20 a 220 km/h).', 'warning');
+        return;
+      }
+    }
+
     const tempId = `temp-${Date.now()}-${Math.round(Math.random() * 100000)}`;
     const tempItem = {
       id: tempId,
@@ -486,6 +503,7 @@ const MainMap = ({
       status: 'PENDING_PRIVATE',
       latitude,
       longitude,
+      radarSpeedLimit: selectedReportType === 'RADAR' ? parsedRadarSpeedLimit : null,
       createdAt: new Date().toISOString(),
       cancelable: false,
     };
@@ -501,6 +519,7 @@ const MainMap = ({
           type: selectedReportType,
           latitude,
           longitude,
+          radarSpeedLimit: selectedReportType === 'RADAR' ? parsedRadarSpeedLimit : null,
         }),
       });
       const saved = await response.json();
@@ -517,8 +536,10 @@ const MainMap = ({
     } finally {
       setReportSubmitting(false);
       setSelectedReportType(null);
+      setRadarSpeedLimit('');
     }
   }, [
+    radarSpeedLimit,
     selectedReportType,
     showFollowMessage,
     computeCancelable,
@@ -637,15 +658,39 @@ const MainMap = ({
       </Drawer>
       <Dialog
         open={Boolean(selectedReportType)}
-        onClose={() => setSelectedReportType(null)}
+        onClose={() => {
+          setSelectedReportType(null);
+          setRadarSpeedLimit('');
+        }}
         fullWidth
         maxWidth="xs"
       >
         <DialogTitle>{`Adicionar ${(COMMUNITY_TYPES.find((item) => item.key === selectedReportType)?.label || '').toLowerCase()} aqui?`}</DialogTitle>
-        <DialogContent>Usaremos o centro do mapa.</DialogContent>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Usaremos o centro do mapa.
+          </Typography>
+          {selectedReportType === 'RADAR' && (
+            <TextField
+              autoFocus
+              fullWidth
+              size="small"
+              margin="dense"
+              type="number"
+              label="Velocidade do radar (km/h)"
+              value={radarSpeedLimit}
+              onChange={(event) => setRadarSpeedLimit(event.target.value)}
+              inputProps={{ min: 20, max: 220, step: 1 }}
+              helperText="Obrigatorio para aviso de radar."
+            />
+          )}
+        </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => setSelectedReportType(null)}
+            onClick={() => {
+              setSelectedReportType(null);
+              setRadarSpeedLimit('');
+            }}
             disabled={reportSubmitting}
           >
             Cancelar
@@ -681,5 +726,7 @@ const MainMap = ({
 };
 
 export default MainMap;
+
+
 
 

@@ -48,6 +48,20 @@ const typeLabel = (type) => {
   }
 };
 
+const formatCoordinate = (value) => Number(value || 0).toFixed(6);
+const formatRadarSpeedLimit = (value) => (value == null ? '' : String(value));
+
+const isValidCoordinate = (latitude, longitude) => Number.isFinite(latitude)
+  && Number.isFinite(longitude)
+  && latitude >= -90
+  && latitude <= 90
+  && longitude >= -180
+  && longitude <= 180;
+
+const isValidRadarSpeedLimit = (value) => Number.isInteger(value)
+  && value >= 20
+  && value <= 220;
+
 const CommunityReportsPendingPage = () => {
   const { classes } = useSettingsStyles();
   const admin = useAdministrator();
@@ -56,15 +70,6 @@ const CommunityReportsPendingPage = () => {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [inlineError, setInlineError] = useState('');
-
-  const formatCoordinate = (value) => Number(value || 0).toFixed(6);
-
-  const isValidCoordinate = (latitude, longitude) => Number.isFinite(latitude)
-    && Number.isFinite(longitude)
-    && latitude >= -90
-    && latitude <= 90
-    && longitude >= -180
-    && longitude <= 180;
 
   const loadItems = useCatch(async () => {
     setLoading(true);
@@ -78,6 +83,7 @@ const CommunityReportsPendingPage = () => {
           next[item.id] = {
             latitude: previous[item.id]?.latitude ?? formatCoordinate(item.latitude),
             longitude: previous[item.id]?.longitude ?? formatCoordinate(item.longitude),
+            radarSpeedLimit: previous[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit),
           };
         });
         return next;
@@ -91,23 +97,25 @@ const CommunityReportsPendingPage = () => {
     await loadItems();
   }, []);
 
-  const handleCoordinateChange = (id, field, value) => {
+  const handleDraftChange = (id, field, value) => {
     setDraftById((previous) => ({
       ...previous,
       [id]: {
         latitude: previous[id]?.latitude ?? '',
         longitude: previous[id]?.longitude ?? '',
+        radarSpeedLimit: previous[id]?.radarSpeedLimit ?? '',
         [field]: value,
       },
     }));
   };
 
-  const resetCoordinates = (item) => {
+  const resetDraft = (item) => {
     setDraftById((previous) => ({
       ...previous,
       [item.id]: {
         latitude: formatCoordinate(item.latitude),
         longitude: formatCoordinate(item.longitude),
+        radarSpeedLimit: formatRadarSpeedLimit(item.radarSpeedLimit),
       },
     }));
   };
@@ -116,12 +124,18 @@ const CommunityReportsPendingPage = () => {
     const draft = draftById[item.id] || {
       latitude: formatCoordinate(item.latitude),
       longitude: formatCoordinate(item.longitude),
+      radarSpeedLimit: formatRadarSpeedLimit(item.radarSpeedLimit),
     };
     const latitude = Number(draft.latitude);
     const longitude = Number(draft.longitude);
+    const radarSpeedLimit = Number(draft.radarSpeedLimit);
 
     if (!isValidCoordinate(latitude, longitude)) {
       setInlineError('Latitude/longitude invalidas. Ajuste antes de aprovar.');
+      return;
+    }
+    if (item.type === 'RADAR' && !isValidRadarSpeedLimit(radarSpeedLimit)) {
+      setInlineError('Velocidade do radar invalida. Use 20 a 220 km/h.');
       return;
     }
 
@@ -131,7 +145,11 @@ const CommunityReportsPendingPage = () => {
       await fetchOrThrow(`/api/admin/community/reports/${item.id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ latitude, longitude }),
+        body: JSON.stringify({
+          latitude,
+          longitude,
+          radarSpeedLimit: item.type === 'RADAR' ? radarSpeedLimit : null,
+        }),
       });
       setItems((values) => values.filter((value) => value.id !== item.id));
       setDraftById((values) => {
@@ -176,11 +194,12 @@ const CommunityReportsPendingPage = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Tipo</TableCell>
+                  <TableCell>Vel. Radar</TableCell>
                   <TableCell>Latitude</TableCell>
                   <TableCell>Longitude</TableCell>
                   <TableCell>Criado em</TableCell>
                   <TableCell>Autor</TableCell>
-                  <TableCell align="right">Ações</TableCell>
+                  <TableCell align="right">Acoes</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -188,11 +207,22 @@ const CommunityReportsPendingPage = () => {
                   <TableRow key={item.id}>
                     <TableCell>{typeLabel(item.type)}</TableCell>
                     <TableCell>
+                      {item.type === 'RADAR' ? (
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
+                          onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
+                          inputProps={{ min: 20, max: 220, step: 1 }}
+                        />
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell>
                       <TextField
                         size="small"
                         type="number"
                         value={draftById[item.id]?.latitude ?? formatCoordinate(item.latitude)}
-                        onChange={(event) => handleCoordinateChange(item.id, 'latitude', event.target.value)}
+                        onChange={(event) => handleDraftChange(item.id, 'latitude', event.target.value)}
                         inputProps={{ step: 'any' }}
                       />
                     </TableCell>
@@ -201,7 +231,7 @@ const CommunityReportsPendingPage = () => {
                         size="small"
                         type="number"
                         value={draftById[item.id]?.longitude ?? formatCoordinate(item.longitude)}
-                        onChange={(event) => handleCoordinateChange(item.id, 'longitude', event.target.value)}
+                        onChange={(event) => handleDraftChange(item.id, 'longitude', event.target.value)}
                         inputProps={{ step: 'any' }}
                       />
                     </TableCell>
@@ -213,7 +243,7 @@ const CommunityReportsPendingPage = () => {
                           variant="text"
                           size="small"
                           disabled={savingId !== null}
-                          onClick={() => resetCoordinates(item)}
+                          onClick={() => resetDraft(item)}
                         >
                           Original
                         </Button>
@@ -240,14 +270,14 @@ const CommunityReportsPendingPage = () => {
                 ))}
                 {!loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                       Nenhum aviso pendente.
                     </TableCell>
                   </TableRow>
                 )}
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={7} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
