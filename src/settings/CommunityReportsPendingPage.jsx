@@ -18,6 +18,9 @@ import useSettingsStyles from './common/useSettingsStyles';
 import { useAdministrator } from '../common/util/permissions';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 
+const STATUS_PENDING = 'pending_private';
+const STATUS_ACTIVE = 'approved_public';
+
 const formatDate = (value) => {
   if (!value) {
     return '-';
@@ -70,11 +73,15 @@ const CommunityReportsPendingPage = () => {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
   const [inlineError, setInlineError] = useState('');
+  const [statusFilter, setStatusFilter] = useState(STATUS_PENDING);
+
+  const pendingMode = statusFilter === STATUS_PENDING;
+  const activeMode = statusFilter === STATUS_ACTIVE;
 
   const loadItems = useCatch(async () => {
     setLoading(true);
     try {
-      const response = await fetchOrThrow('/api/admin/community/reports?status=pending_private');
+      const response = await fetchOrThrow(`/api/admin/community/reports?status=${statusFilter}`);
       const loadedItems = await response.json();
       setItems(loadedItems);
       setDraftById((previous) => {
@@ -95,7 +102,7 @@ const CommunityReportsPendingPage = () => {
 
   useEffectAsync(async () => {
     await loadItems();
-  }, []);
+  }, [statusFilter]);
 
   const handleDraftChange = (id, field, value) => {
     setDraftById((previous) => ({
@@ -152,11 +159,6 @@ const CommunityReportsPendingPage = () => {
         }),
       });
       setItems((values) => values.filter((value) => value.id !== item.id));
-      setDraftById((values) => {
-        const next = { ...values };
-        delete next[item.id];
-        return next;
-      });
     } finally {
       setSavingId(null);
     }
@@ -173,6 +175,17 @@ const CommunityReportsPendingPage = () => {
     }
   });
 
+  const handleDeactivate = useCatch(async (id) => {
+    setInlineError('');
+    setSavingId(`deactivate-${id}`);
+    try {
+      await fetchOrThrow(`/api/admin/community/reports/${id}/deactivate`, { method: 'POST' });
+      setItems((values) => values.filter((item) => item.id !== id));
+    } finally {
+      setSavingId(null);
+    }
+  });
+
   return (
     <PageLayout menu={<SettingsMenu />} breadcrumbs={['settingsTitle', 'communityReportsPendingMenu']}>
       <Container maxWidth="lg" className={classes.container}>
@@ -182,8 +195,30 @@ const CommunityReportsPendingPage = () => {
           </Typography>
         ) : (
           <>
+            <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
+              <Button
+                variant={pendingMode ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setInlineError('');
+                  setStatusFilter(STATUS_PENDING);
+                }}
+                disabled={savingId !== null}
+              >
+                Pendentes
+              </Button>
+              <Button
+                variant={activeMode ? 'contained' : 'outlined'}
+                onClick={() => {
+                  setInlineError('');
+                  setStatusFilter(STATUS_ACTIVE);
+                }}
+                disabled={savingId !== null}
+              >
+                Ativos
+              </Button>
+            </Stack>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              Pendentes
+              {pendingMode ? 'Pendentes para aprovacao' : 'Marcacoes ativas no mapa'}
             </Typography>
             {inlineError && (
               <Typography variant="body2" color="error" sx={{ mb: 2 }}>
@@ -197,7 +232,7 @@ const CommunityReportsPendingPage = () => {
                   <TableCell>Vel. Radar</TableCell>
                   <TableCell>Latitude</TableCell>
                   <TableCell>Longitude</TableCell>
-                  <TableCell>Criado em</TableCell>
+                  <TableCell>{pendingMode ? 'Criado em' : 'Aprovado em'}</TableCell>
                   <TableCell>Autor</TableCell>
                   <TableCell align="right">Acoes</TableCell>
                 </TableRow>
@@ -208,62 +243,88 @@ const CommunityReportsPendingPage = () => {
                     <TableCell>{typeLabel(item.type)}</TableCell>
                     <TableCell>
                       {item.type === 'RADAR' ? (
-                        <TextField
-                          size="small"
-                          type="number"
-                          value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
-                          onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
-                          inputProps={{ min: 20, max: 120, step: 1 }}
-                        />
+                        pendingMode ? (
+                          <TextField
+                            size="small"
+                            type="number"
+                            value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
+                            onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
+                            inputProps={{ min: 20, max: 120, step: 1 }}
+                          />
+                        ) : (
+                          `${item.radarSpeedLimit ?? '-'}`
+                        )
                       ) : '-'}
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={draftById[item.id]?.latitude ?? formatCoordinate(item.latitude)}
-                        onChange={(event) => handleDraftChange(item.id, 'latitude', event.target.value)}
-                        inputProps={{ step: 'any' }}
-                      />
+                      {pendingMode ? (
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={draftById[item.id]?.latitude ?? formatCoordinate(item.latitude)}
+                          onChange={(event) => handleDraftChange(item.id, 'latitude', event.target.value)}
+                          inputProps={{ step: 'any' }}
+                        />
+                      ) : (
+                        formatCoordinate(item.latitude)
+                      )}
                     </TableCell>
                     <TableCell>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={draftById[item.id]?.longitude ?? formatCoordinate(item.longitude)}
-                        onChange={(event) => handleDraftChange(item.id, 'longitude', event.target.value)}
-                        inputProps={{ step: 'any' }}
-                      />
+                      {pendingMode ? (
+                        <TextField
+                          size="small"
+                          type="number"
+                          value={draftById[item.id]?.longitude ?? formatCoordinate(item.longitude)}
+                          onChange={(event) => handleDraftChange(item.id, 'longitude', event.target.value)}
+                          inputProps={{ step: 'any' }}
+                        />
+                      ) : (
+                        formatCoordinate(item.longitude)
+                      )}
                     </TableCell>
-                    <TableCell>{formatDate(item.createdAt)}</TableCell>
+                    <TableCell>{formatDate(pendingMode ? item.createdAt : item.approvedAt)}</TableCell>
                     <TableCell>{item.authorName || `#${item.createdByUserId}`}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          variant="text"
-                          size="small"
-                          disabled={savingId !== null}
-                          onClick={() => resetDraft(item)}
-                        >
-                          Original
-                        </Button>
-                        <Button
-                          variant="contained"
-                          size="small"
-                          disabled={savingId !== null}
-                          onClick={() => handleApprove(item)}
-                        >
-                          Aprovar c/ local
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          size="small"
-                          disabled={savingId !== null}
-                          onClick={() => handleReject(item.id)}
-                        >
-                          Rejeitar
-                        </Button>
+                        {pendingMode ? (
+                          <>
+                            <Button
+                              variant="text"
+                              size="small"
+                              disabled={savingId !== null}
+                              onClick={() => resetDraft(item)}
+                            >
+                              Original
+                            </Button>
+                            <Button
+                              variant="contained"
+                              size="small"
+                              disabled={savingId !== null}
+                              onClick={() => handleApprove(item)}
+                            >
+                              Aprovar
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              disabled={savingId !== null}
+                              onClick={() => handleReject(item.id)}
+                            >
+                              Rejeitar
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            disabled={savingId !== null}
+                            onClick={() => handleDeactivate(item.id)}
+                          >
+                            Remover do mapa
+                          </Button>
+                        )}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -271,7 +332,7 @@ const CommunityReportsPendingPage = () => {
                 {!loading && items.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
-                      Nenhum aviso pendente.
+                      {pendingMode ? 'Nenhum aviso pendente.' : 'Nenhuma marcacao ativa.'}
                     </TableCell>
                   </TableRow>
                 )}
