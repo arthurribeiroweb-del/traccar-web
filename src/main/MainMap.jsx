@@ -75,6 +75,7 @@ const MainMap = ({
   const headingBuffersRef = useRef({});
   const headingMetaRef = useRef({});
   const lastPositionSignatureRef = useRef({});
+  const lastAutoFollowSelectedRef = useRef(null);
   const selectedUpdateRef = useRef({ deviceId: null, signature: null, lastAt: 0 });
   const announcedStateRef = useRef({ stale: false, heading: null });
 
@@ -91,6 +92,7 @@ const MainMap = ({
       if (followDeviceId != null) {
         dispatch(devicesActions.setFollowDeviceId(null));
       }
+      lastAutoFollowSelectedRef.current = null;
       announcedStateRef.current = { stale: false, heading: null };
       setSelectedHeadingState('idle');
       setSelectedStale(false);
@@ -98,9 +100,16 @@ const MainMap = ({
       return;
     }
 
-    if (followDeviceId != null && String(followDeviceId) !== String(selectedId)) {
+    const selectedKey = String(selectedId);
+    const selectedChanged = lastAutoFollowSelectedRef.current !== selectedKey;
+    const followingSelected = String(followDeviceId) === selectedKey;
+    const followBoundToOtherDevice = followDeviceId != null && !followingSelected;
+
+    if (!followingSelected && (selectedChanged || followBoundToOtherDevice)) {
       dispatch(devicesActions.setFollowDeviceId(selectedId));
+      setSelectedStale(false);
     }
+    lastAutoFollowSelectedRef.current = selectedKey;
   }, [dispatch, followDeviceId, selectedId]);
 
   const onMarkerClick = useCallback((_, deviceId) => {
