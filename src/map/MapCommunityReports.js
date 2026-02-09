@@ -1,11 +1,14 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import maplibregl from 'maplibre-gl';
 import { map } from './core/MapView';
+import fetchOrThrow from '../common/util/fetchOrThrow';
 import buracoIconUrl from '../resources/images/icon/community-buraco.svg';
 import buracoApprovedIconUrl from '../resources/images/icon/community-buraco-approved.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.svg';
@@ -52,6 +55,63 @@ const MapCommunityReports = ({
   const id = useId();
   const symbolLayerId = `${id}-community-symbol`;
   const popupRef = useRef(null);
+  const [voteState, setVoteState] = useState({});
+  const [hiddenReports, setHiddenReports] = useState(new Set());
+  const [votingId, setVotingId] = useState(null);
+
+  const clearPopup = useCallback(() => {
+    if (popupRef.current) {
+      popupRef.current.remove();
+      popupRef.current = null;
+    }
+  }, []);
+
+  const loadVotes = useCallback(async (reportId) => {
+    const response = await fetchOrThrow(`/api/community/reports/${reportId}/votes`);
+    const data = await response.json();
+    setVoteState((prev) => ({ ...prev, [reportId]: data }));
+    setHiddenReports((prev) => {
+      const next = new Set(prev);
+      if (data.status === 'REMOVED') {
+        next.add(String(reportId));
+      } else {
+        next.delete(String(reportId));
+      }
+      return next;
+    });
+    if (data.status === 'REMOVED') {
+      clearPopup();
+    }
+    return data;
+  }, [clearPopup]);
+
+  const sendVote = useCallback(async (reportId, vote) => {
+    setVotingId(reportId);
+    try {
+      const response = await fetchOrThrow(`/api/community/reports/${reportId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote }),
+      });
+      const data = await response.json();
+      setVoteState((prev) => ({ ...prev, [reportId]: data }));
+      setHiddenReports((prev) => {
+        const next = new Set(prev);
+        if (data.status === 'REMOVED') {
+          next.add(String(reportId));
+        } else {
+          next.delete(String(reportId));
+        }
+        return next;
+      });
+      if (data.status === 'REMOVED') {
+        clearPopup();
+      }
+      return data;
+    } finally {
+      setVotingId(null);
+    }
+  }, [clearPopup]);
 
   const imageIds = useMemo(() => ({
     BURACO: `${id}-community-icon-buraco`,
@@ -85,17 +145,13 @@ const MapCommunityReports = ({
             radarSpeedLimit: report.radarSpeedLimit,
             cancelable: Boolean(report.cancelable),
             authorName: report.authorName,
+            existsVotes: report.existsVotes ?? 0,
+            goneVotes: report.goneVotes ?? 0,
+            lastVotedAt: report.lastVotedAt,
           },
         })),
     };
   }, [publicReports, pendingReports]);
-
-  const clearPopup = () => {
-    if (popupRef.current) {
-      popupRef.current.remove();
-      popupRef.current = null;
-    }
-  };
 
   useEffect(() => {
     const iconEntries = [
@@ -195,6 +251,13 @@ const MapCommunityReports = ({
       const pending = feature.properties.pending === true || feature.properties.pending === 'true';
       const cancelable = feature.properties.cancelable === true || feature.properties.cancelable === 'true';
       const authorName = feature.properties.authorName || 'Usuário';
+      const initialVotes = voteState[reportId] || {
+        existsVotes: feature.properties.existsVotes || 0,
+        goneVotes: feature.properties.goneVotes || 0,
+        userVote: feature.properties.userVote,
+        lastVotedAt: feature.properties.lastVotedAt,
+        status,
+      };
 
       clearPopup();
 
@@ -222,6 +285,76 @@ const MapCommunityReports = ({
       statusLine.style.color = '#334155';
       statusLine.textContent = `Status: ${statusLabelMap[status] || status || '-'}`;
       container.appendChild(statusLine);
+
+      const voteLine = document.createElement('div');
+      voteLine.style.fontSize = '12px';
+      voteLine.style.color = '#0F172A';
+      container.appendChild(voteLine);
+
+      const lastVoteLine = document.createElement('div');
+      lastVoteLine.style.fontSize = '11px';
+      lastVoteLine.style.color = '#475569';
+      container.appendChild(lastVoteLine);
+
+      const updateVoteInfo = (data) => {
+        const exists = data?.existsVotes ?? 0;
+        const gone = data?.goneVotes ?? 0;
+        voteLine.textContent = `Votos: Existe ${exists} | Sumiu ${gone}`;
+        if (data?.lastVotedAt) {
+          lastVoteLine.textContent = `Último voto: ${formatCreatedAt(data.lastVotedAt)}`;
+        } else {
+          lastVoteLine.textContent = '';
+        }
+      };
+      updateVoteInfo(initialVotes);
+
+      const buttonsRow = document.createElement('div');
+      buttonsRow.style.display = 'flex';
+      buttonsRow.style.gap = '8px';
+      buttonsRow.style.margin = '4px 0';
+      container.appendChild(buttonsRow);
+
+      const renderButton = (label, value, accent) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.style.flex = '1';
+        button.style.minHeight = '36px';
+        button.style.borderRadius = '8px';
+        button.style.border = `1px solid ${accent ? '#0EA5E9' : '#CBD5E1'}`;
+        button.style.background = '#FFFFFF';
+        button.style.color = '#0F172A';
+        button.style.fontWeight = '600';
+        button.style.cursor = 'pointer';
+        button.textContent = label;
+        button.disabled = votingId === reportId;
+        const applyActive = (active) => {
+          button.style.background = active ? '#E0F2FE' : '#FFFFFF';
+          button.style.borderColor = active ? '#0EA5E9' : '#CBD5E1';
+        };
+        applyActive(initialVotes.userVote === value);
+        button.onclick = async () => {
+          button.disabled = true;
+          try {
+            const data = await sendVote(reportId, value);
+            applyUserVote(data);
+            updateVoteInfo(data);
+          } catch (error) {
+            console.warn('vote failed', error);
+          } finally {
+            button.disabled = false;
+          }
+        };
+        buttonsRow.appendChild(button);
+        return applyActive;
+      };
+
+      const applyExistsActive = renderButton('Ainda existe', 'EXISTS', true);
+      const applyGoneActive = renderButton('Sumiu', 'GONE', false);
+      const applyUserVote = (data) => {
+        applyExistsActive(data?.userVote === 'EXISTS');
+        applyGoneActive(data?.userVote === 'GONE');
+      };
+      applyUserVote(initialVotes);
 
       const createdLine = document.createElement('div');
       createdLine.style.fontSize = '12px';
@@ -285,6 +418,13 @@ const MapCommunityReports = ({
         .setLngLat(event.lngLat)
         .setDOMContent(container)
         .addTo(map);
+
+      loadVotes(reportId)
+        .then((data) => {
+          updateVoteInfo(data);
+          applyUserVote(data);
+        })
+        .catch((error) => console.warn('loadVotes failed', error));
     };
 
     map.on('mouseenter', symbolLayerId, onMouseEnter);
@@ -311,8 +451,15 @@ const MapCommunityReports = ({
   }, [id, imageIds, onCancelPending, symbolLayerId]);
 
   useEffect(() => {
-    map.getSource(id)?.setData(features);
-  }, [features, id]);
+    const filteredFeatures = {
+      ...features,
+      features: features.features.filter((feature) => {
+        const reportId = feature?.properties?.reportId;
+        return !hiddenReports.has(String(reportId));
+      }),
+    };
+    map.getSource(id)?.setData(filteredFeatures);
+  }, [features, hiddenReports, id]);
 
   return null;
 };
