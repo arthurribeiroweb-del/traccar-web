@@ -315,6 +315,9 @@ const MapCommunityReports = ({
       buttonsRow.style.gap = '8px';
       buttonsRow.style.margin = '4px 0';
       buttonsRow.addEventListener('click', (event) => event.stopPropagation());
+      buttonsRow.addEventListener('mousedown', (event) => event.stopPropagation());
+      buttonsRow.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+      buttonsRow.addEventListener('touchend', (event) => event.stopPropagation());
       container.appendChild(buttonsRow);
       const voteButtons = [];
       const setVoteButtonsDisabled = (disabled) => {
@@ -336,6 +339,7 @@ const MapCommunityReports = ({
         button.style.color = '#0F172A';
         button.style.fontWeight = '600';
         button.style.cursor = 'pointer';
+        button.style.touchAction = 'manipulation';
         button.textContent = label;
         voteButtons.push(button);
         const applyActive = (active) => {
@@ -380,6 +384,9 @@ const MapCommunityReports = ({
             }
           }
         };
+        button.addEventListener('mousedown', (event) => event.stopPropagation());
+        button.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+        button.addEventListener('touchend', (event) => event.stopPropagation());
         buttonsRow.appendChild(button);
         return applyActive;
       };
@@ -453,7 +460,7 @@ const MapCommunityReports = ({
 
       popupRef.current = new maplibregl.Popup({
         closeButton: true,
-        closeOnClick: true,
+        closeOnClick: false,
         maxWidth: '280px',
       })
         .setLngLat(event.lngLat)
