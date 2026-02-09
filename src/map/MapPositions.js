@@ -34,9 +34,10 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
     const baseRotation = Number.isFinite(computedHeading)
       ? computedHeading
       : (Number.isFinite(fallbackCourse) ? fallbackCourse : null);
+    const iconRotationOffset = 180;
     const headingOffset = Number(device?.attributes?.headingOffset || 0);
     const rotation = Number.isFinite(baseRotation)
-      ? ((baseRotation + (Number.isFinite(headingOffset) ? headingOffset : 0)) % 360 + 360) % 360
+      ? ((baseRotation + iconRotationOffset + (Number.isFinite(headingOffset) ? headingOffset : 0)) % 360 + 360) % 360
       : null;
     const hasDirection = Number.isFinite(rotation);
 
