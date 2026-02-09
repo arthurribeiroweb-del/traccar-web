@@ -65,6 +65,7 @@ const HIDE_MAP_SHORTCUTS = {
 const BUFFER_SIZE = 5;
 const NO_UPDATE_TIMEOUT_MS = 30000;
 const REPORT_MOVE_DEBOUNCE_MS = 300;
+const COMMUNITY_REFRESH_INTERVAL_MS = 15000;
 
 const COMMUNITY_TYPES = [
   { key: 'RADAR', label: 'Radar', icon: SpeedIcon },
@@ -430,6 +431,13 @@ const MainMap = ({
 
   useEffect(() => {
     const timer = window.setInterval(() => {
+      refreshCommunityReports().catch(() => {});
+    }, COMMUNITY_REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [refreshCommunityReports]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
       setPendingReports((reports) => reports.map((item) => ({
         ...item,
         cancelable: computeCancelable(item),
@@ -550,11 +558,6 @@ const MainMap = ({
         <MapOverlay />
         <MapGeofence />
         <MapRadar enabled={showRadars} />
-        <MapCommunityReports
-          publicReports={publicReports}
-          pendingReports={combinedPendingReports}
-          onCancelPending={handleCancelPendingWrapper}
-        />
         <MapAccuracy positions={filteredPositions} />
         <MapLiveRoutes deviceIds={filteredPositions.map((p) => p.deviceId)} />
         <MapPositions
@@ -562,6 +565,11 @@ const MainMap = ({
           onMarkerClick={onMarkerClick}
           selectedPosition={selectedPosition}
           showStatus
+        />
+        <MapCommunityReports
+          publicReports={publicReports}
+          pendingReports={combinedPendingReports}
+          onCancelPending={handleCancelPendingWrapper}
         />
         <MapDefaultCamera />
         <MapSelectedDevice

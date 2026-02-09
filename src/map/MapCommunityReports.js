@@ -7,6 +7,9 @@ import {
 import maplibregl from 'maplibre-gl';
 import { map } from './core/MapView';
 import { findFonts } from './core/mapUtil';
+import buracoIconUrl from '../resources/images/icon/buraco.svg';
+import radarIconUrl from '../resources/images/icon/default.svg';
+import quebraMolasIconUrl from '../resources/images/icon/scooter.svg';
 
 const typeLabelMap = {
   RADAR: 'Radar',
@@ -43,9 +46,16 @@ const MapCommunityReports = ({
   onCancelPending,
 }) => {
   const id = useId();
+  const symbolLayerId = `${id}-community-symbol`;
   const circleLayerId = `${id}-community-circle`;
   const textLayerId = `${id}-community-text`;
   const popupRef = useRef(null);
+
+  const imageIds = useMemo(() => ({
+    BURACO: `${id}-community-icon-buraco`,
+    RADAR: `${id}-community-icon-radar`,
+    QUEBRA_MOLAS: `${id}-community-icon-quebra-molas`,
+  }), [id]);
 
   const features = useMemo(() => {
     const all = [
@@ -83,6 +93,30 @@ const MapCommunityReports = ({
   };
 
   useEffect(() => {
+    const iconEntries = [
+      { imageId: imageIds.BURACO, iconUrl: buracoIconUrl },
+      { imageId: imageIds.RADAR, iconUrl: radarIconUrl },
+      { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
+    ];
+
+    const loadSvgAsMapImage = async (imageId, iconUrl) => {
+      if (map.hasImage(imageId)) {
+        return;
+      }
+      const image = new Image();
+      image.decoding = 'async';
+      image.onload = () => {
+        if (!map.hasImage(imageId)) {
+          map.addImage(imageId, image);
+        }
+      };
+      image.src = iconUrl;
+    };
+
+    iconEntries.forEach(({ imageId, iconUrl }) => {
+      loadSvgAsMapImage(imageId, iconUrl);
+    });
+
     map.addSource(id, {
       type: 'geojson',
       data: {
@@ -96,10 +130,10 @@ const MapCommunityReports = ({
       type: 'circle',
       source: id,
       paint: {
-        'circle-radius': 11,
+        'circle-radius': 16,
         'circle-stroke-color': '#FFFFFF',
         'circle-stroke-width': 2,
-        'circle-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.55, 0.95],
+        'circle-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.2, 0.25],
         'circle-color': [
           'match',
           ['get', 'type'],
@@ -111,6 +145,37 @@ const MapCommunityReports = ({
           '#2563EB',
           '#64748B',
         ],
+      },
+    });
+
+    map.addLayer({
+      id: symbolLayerId,
+      type: 'symbol',
+      source: id,
+      layout: {
+        'icon-image': [
+          'match',
+          ['get', 'type'],
+          'RADAR',
+          imageIds.RADAR,
+          'BURACO',
+          imageIds.BURACO,
+          'QUEBRA_MOLAS',
+          imageIds.QUEBRA_MOLAS,
+          imageIds.RADAR,
+        ],
+        'icon-size': [
+          'match',
+          ['get', 'type'],
+          'BURACO',
+          0.06,
+          1.8,
+        ],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.55, 1],
       },
     });
 
@@ -136,6 +201,7 @@ const MapCommunityReports = ({
       },
       paint: {
         'text-color': '#FFFFFF',
+        'text-opacity': 0,
       },
     });
 
@@ -234,19 +300,22 @@ const MapCommunityReports = ({
         .addTo(map);
     };
 
-    [circleLayerId, textLayerId].forEach((layerId) => {
+    [circleLayerId, symbolLayerId, textLayerId].forEach((layerId) => {
       map.on('mouseenter', layerId, onMouseEnter);
       map.on('mouseleave', layerId, onMouseLeave);
       map.on('click', layerId, onClick);
     });
 
     return () => {
-      [circleLayerId, textLayerId].forEach((layerId) => {
+      [circleLayerId, symbolLayerId, textLayerId].forEach((layerId) => {
         map.off('mouseenter', layerId, onMouseEnter);
         map.off('mouseleave', layerId, onMouseLeave);
         map.off('click', layerId, onClick);
       });
       clearPopup();
+      if (map.getLayer(symbolLayerId)) {
+        map.removeLayer(symbolLayerId);
+      }
       if (map.getLayer(textLayerId)) {
         map.removeLayer(textLayerId);
       }
@@ -256,8 +325,13 @@ const MapCommunityReports = ({
       if (map.getSource(id)) {
         map.removeSource(id);
       }
+      Object.values(imageIds).forEach((imageId) => {
+        if (map.hasImage(imageId)) {
+          map.removeImage(imageId);
+        }
+      });
     };
-  }, [onCancelPending]);
+  }, [imageIds, onCancelPending, symbolLayerId]);
 
   useEffect(() => {
     map.getSource(id)?.setData(features);
