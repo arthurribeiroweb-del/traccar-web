@@ -112,7 +112,7 @@ const MapCommunityReports = ({
           const height = image.naturalHeight || image.height || COMMUNITY_ICON_BASE_SIZE;
           const pixelRatio = Math.max(width, height) / COMMUNITY_ICON_BASE_SIZE;
           map.addImage(imageId, image, {
-            pixelRatio: pixelRatio >= 1 ? pixelRatio : 1,
+            pixelRatio: Math.max(pixelRatio, 0.01),
           });
         }
       };
