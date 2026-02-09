@@ -23,6 +23,7 @@ const statusLabelMap = {
 };
 
 const MIN_VISIBLE_ZOOM = 17;
+const COMMUNITY_ICON_BASE_SIZE = 64;
 
 const formatCreatedAt = (value) => {
   if (!value) {
@@ -106,7 +107,12 @@ const MapCommunityReports = ({
       image.decoding = 'async';
       image.onload = () => {
         if (!map.hasImage(imageId)) {
-          map.addImage(imageId, image);
+          const width = image.naturalWidth || image.width || COMMUNITY_ICON_BASE_SIZE;
+          const height = image.naturalHeight || image.height || COMMUNITY_ICON_BASE_SIZE;
+          const pixelRatio = Math.max(width, height) / COMMUNITY_ICON_BASE_SIZE;
+          map.addImage(imageId, image, {
+            pixelRatio: pixelRatio >= 1 ? pixelRatio : 1,
+          });
         }
       };
       image.src = iconUrl;
@@ -146,11 +152,11 @@ const MapCommunityReports = ({
           ['linear'],
           ['zoom'],
           17,
-          0.34,
-          18.5,
           0.4,
-          20,
+          18.5,
           0.48,
+          20,
+          0.56,
         ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
