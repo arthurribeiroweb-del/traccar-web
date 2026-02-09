@@ -27,7 +27,6 @@ import tramSvg from '../../resources/images/icon/tram.svg';
 import truckSvg from '../../resources/images/icon/truck.svg';
 import vanSvg from '../../resources/images/icon/van.svg';
 import vehicleTopdownSvg from '../../resources/images/icon/vehicle-topdown.svg';
-import { DEVICE_ICON_CATEGORIES, normalizeDeviceIcon } from '../../common/util/deviceIcons';
 
 export const mapIcons = {
   arrow: directionSvg,
@@ -68,25 +67,31 @@ export const mapIconKey = (category) => {
   }
 };
 
-export const mapVehicleMarkerKey = (category) => `vehicle-${category}`;
-export const VEHICLE_MARKER_IMAGE_KEY = 'vehicle-topdown-premium';
+const deviceIconMap = {
+  pin: 'default',
+  arrow: 'arrow',
+  car: 'car',
+  moto: 'motorcycle',
+  truck: 'truck',
+  bus: 'bus',
+  van: 'van',
+  tractor: 'tractor',
+  trailer: 'trailer',
+  boat: 'boat',
+  jetski: 'boat',
+};
 
 export const mapDeviceIconKey = (device) => {
-  const explicitIcon = normalizeDeviceIcon(device?.attributes?.deviceIcon, false);
-  if (explicitIcon) {
-    return explicitIcon;
+  const icon = device?.attributes?.deviceIcon;
+  if (icon && deviceIconMap.hasOwnProperty(icon)) {
+    return deviceIconMap[icon];
   }
-
-  const category = normalizeDeviceIcon(mapIconKey(device?.category), false);
-  if (category) {
-    return category;
-  }
-
-  const legacyIcon = normalizeDeviceIcon(device?.attributes?.deviceIcon, true);
-  return legacyIcon || 'default';
+  return mapIconKey(device?.category);
 };
 
 export const mapImages = {};
+
+export const VEHICLE_MARKER_IMAGE_KEY = 'vehicle-topdown';
 
 const toImageData = (image) => {
   const canvas = document.createElement('canvas');
@@ -116,14 +121,6 @@ export default async () => {
   } catch (error) {
     mapImages[VEHICLE_MARKER_IMAGE_KEY] = toImageData(await loadImage(carSvg));
   }
-
-  await Promise.all(DEVICE_ICON_CATEGORIES.map(async (category) => {
-    try {
-      mapImages[mapVehicleMarkerKey(category)] = toImageData(await loadImage(mapIcons[category]));
-    } catch (error) {
-      mapImages[mapVehicleMarkerKey(category)] = toImageData(await loadImage(vehicleTopdownSvg));
-    }
-  }));
 
   await Promise.all(Object.keys(mapIcons).map(async (category) => {
     const results = [];

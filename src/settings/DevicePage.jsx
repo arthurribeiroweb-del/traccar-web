@@ -25,11 +25,6 @@ import { useCatch } from '../reactHelper';
 import useSettingsStyles from './common/useSettingsStyles';
 import QrCodeDialog from '../common/components/QrCodeDialog';
 import fetchOrThrow from '../common/util/fetchOrThrow';
-import {
-  DEVICE_ICON_CATEGORIES,
-  categoryTranslationKey,
-  normalizeDeviceIcon,
-} from '../common/util/deviceIcons';
 
 const DevicePage = () => {
   const { classes } = useSettingsStyles();
@@ -40,10 +35,19 @@ const DevicePage = () => {
   const commonDeviceAttributes = useCommonDeviceAttributes(t);
   const deviceAttributes = useDeviceAttributes(t);
 
-  const deviceIconOptions = DEVICE_ICON_CATEGORIES.map((category) => ({
-    id: category,
-    name: t(categoryTranslationKey(category)),
-  }));
+  const deviceIconOptions = [
+    { id: 'pin', name: t('deviceIconPin') },
+    { id: 'arrow', name: t('deviceIconArrow') },
+    { id: 'car', name: t('deviceIconCar') },
+    { id: 'moto', name: t('deviceIconMoto') },
+    { id: 'truck', name: t('deviceIconTruck') },
+    { id: 'bus', name: t('deviceIconBus') },
+    { id: 'van', name: t('deviceIconVan') },
+    { id: 'tractor', name: t('deviceIconTractor') },
+    { id: 'trailer', name: t('deviceIconTrailer') },
+    { id: 'boat', name: t('deviceIconBoat') },
+    { id: 'jetski', name: t('deviceIconJetski') },
+  ];
 
   const [searchParams] = useSearchParams();
   const uniqueId = searchParams.get('uniqueId');
@@ -139,7 +143,7 @@ const DevicePage = () => {
                 label={t('deviceCategory')}
               />
               <SelectField
-                value={normalizeDeviceIcon(item.attributes?.deviceIcon) || 'default'}
+                value={item.attributes?.deviceIcon || 'pin'}
                 onChange={(event) => setItem({
                   ...item,
                   attributes: {
