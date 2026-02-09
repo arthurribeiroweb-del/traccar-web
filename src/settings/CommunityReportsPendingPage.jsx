@@ -287,7 +287,6 @@ const CommunityReportsPendingPage = () => {
               <TableHead>
                 <TableRow>
                   <TableCell>Tipo</TableCell>
-                  <TableCell>Vel. Radar</TableCell>
                   <TableCell>Latitude</TableCell>
                   <TableCell>Longitude</TableCell>
                   <TableCell>{pendingMode ? 'Criado em' : 'Aprovado em'}</TableCell>
@@ -299,7 +298,6 @@ const CommunityReportsPendingPage = () => {
                 {!loading && displayItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{typeLabel(item.type)}</TableCell>
-                    <TableCell>-</TableCell>
                     <TableCell>
                       {pendingMode ? (
                         <TextField
@@ -375,14 +373,14 @@ const CommunityReportsPendingPage = () => {
                 ))}
                 {!loading && displayItems.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={6} align="center">
                       {pendingMode ? 'Nenhum buraco pendente.' : 'Nenhum buraco ativo.'}
                     </TableCell>
                   </TableRow>
                 )}
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
+                    <TableCell colSpan={6} align="center">
                       Carregando...
                     </TableCell>
                   </TableRow>
@@ -398,7 +396,6 @@ const CommunityReportsPendingPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell>Tipo</TableCell>
-                    <TableCell>Vel. Radar</TableCell>
                     <TableCell>Latitude</TableCell>
                     <TableCell>Longitude</TableCell>
                     <TableCell>{pendingMode ? 'Criado em' : 'Aprovado em'}</TableCell>
@@ -410,7 +407,6 @@ const CommunityReportsPendingPage = () => {
                   {!loading && displayItems.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{typeLabel(item.type)}</TableCell>
-                      <TableCell>-</TableCell>
                       <TableCell>
                         {pendingMode ? (
                           <TextField
@@ -486,14 +482,14 @@ const CommunityReportsPendingPage = () => {
                   ))}
                   {!loading && displayItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={6} align="center">
                         {pendingMode ? 'Nenhum buraco pendente.' : 'Nenhum buraco ativo.'}
                       </TableCell>
                     </TableRow>
                   )}
                   {loading && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={6} align="center">
                         Carregando...
                       </TableCell>
                     </TableRow>
