@@ -149,6 +149,15 @@ const MainMap = ({
     if (text.includes('INVALID_RADAR_SPEED_LIMIT')) {
       return 'Informe a velocidade do radar (20 a 120 km/h).';
     }
+    if (text.includes('INVALID_COORDINATES')) {
+      return 'Localizacao invalida no mapa. Tente novamente.';
+    }
+    if (text.includes('Unrecognized field') && text.includes('radarSpeedLimit')) {
+      return 'Servidor desatualizado para o novo campo de radar. Atualize a VPS.';
+    }
+    if (text.toUpperCase().includes('RADARSPEEDLIMIT')) {
+      return 'Banco de dados desatualizado. Execute a atualizacao completa na VPS.';
+    }
     return 'Nao foi possivel enviar. Tente novamente.';
   }, []);
 
@@ -512,15 +521,18 @@ const MainMap = ({
     setOptimisticReports((items) => [tempItem, ...items]);
 
     try {
+      const payload = {
+        type: selectedReportType,
+        latitude,
+        longitude,
+      };
+      if (selectedReportType === 'RADAR') {
+        payload.radarSpeedLimit = parsedRadarSpeedLimit;
+      }
       const response = await fetchOrThrow('/api/community/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: selectedReportType,
-          latitude,
-          longitude,
-          radarSpeedLimit: selectedReportType === 'RADAR' ? parsedRadarSpeedLimit : null,
-        }),
+        body: JSON.stringify(payload),
       });
       const saved = await response.json();
       setOptimisticReports((items) => items.filter((item) => item.id !== tempId));

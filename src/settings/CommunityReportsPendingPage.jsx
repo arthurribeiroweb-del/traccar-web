@@ -149,14 +149,17 @@ const CommunityReportsPendingPage = () => {
     setInlineError('');
     setSavingId(`approve-${item.id}`);
     try {
+      const payload = {
+        latitude,
+        longitude,
+      };
+      if (item.type === 'RADAR') {
+        payload.radarSpeedLimit = radarSpeedLimit;
+      }
       await fetchOrThrow(`/api/admin/community/reports/${item.id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          latitude,
-          longitude,
-          radarSpeedLimit: item.type === 'RADAR' ? radarSpeedLimit : null,
-        }),
+        body: JSON.stringify(payload),
       });
       setItems((values) => values.filter((value) => value.id !== item.id));
     } finally {
