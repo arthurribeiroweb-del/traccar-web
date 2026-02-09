@@ -1,61 +1,83 @@
-import { useId, useCallback, useEffect } from 'react';
+import {
+  useId, useCallback, useEffect, useRef,
+} from 'react';
 import { useSelector } from 'react-redux';
 import { useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { map } from './core/MapView';
 import { formatTime, getStatusColor } from '../common/util/formatter';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
-import { mapDeviceIconKey } from './core/preloadImages';
+import { VEHICLE_MARKER_IMAGE_KEY } from './core/preloadImages';
 import { useAttributePreference } from '../common/util/preferences';
 import { useCatchCallback } from '../reactHelper';
 import { findFonts } from './core/mapUtil';
 
-const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, selectedPosition, titleField }) => {
+const HEADING_DELTA_THRESHOLD = 5;
+const HEADING_UPDATE_THROTTLE_MS = 200;
+
+const normalizeAngle = (angle) => ((angle % 360) + 360) % 360;
+
+const shortestAngleDelta = (from, to) => {
+  const fromAngle = normalizeAngle(from);
+  const toAngle = normalizeAngle(to);
+  const diff = toAngle - fromAngle;
+  if (diff > 180) {
+    return diff - 360;
+  }
+  if (diff < -180) {
+    return diff + 360;
+  }
+  return diff;
+};
+
+const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus }) => {
   const id = useId();
   const clusters = `${id}-clusters`;
   const selected = `${id}-selected`;
 
   const theme = useTheme();
   const desktop = useMediaQuery(theme.breakpoints.up('md'));
-  const iconScale = useAttributePreference('iconScale', desktop ? 0.75 : 1);
+  const iconScale = useAttributePreference('iconScale', desktop ? 0.75 : 1) * 0.95;
 
   const devices = useSelector((state) => state.devices.items);
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
-  const headingByDeviceId = useSelector((state) => state.devices.headingByDeviceId || {});
 
   const mapCluster = useAttributePreference('mapCluster', true);
-  const directionType = useAttributePreference('mapDirection', 'selected');
+  const rotationCacheRef = useRef({});
 
-  const createFeature = (devices, position, selectedPositionId, headingMap) => {
-    const device = devices[position.deviceId];
-    const computedHeading = headingMap[position.deviceId];
-    const fallbackCourse = Number(position.course);
-    const rotation = Number.isFinite(computedHeading)
-      ? computedHeading
-      : (Number.isFinite(fallbackCourse) ? fallbackCourse : null);
-    const hasDirection = Number.isFinite(rotation);
+  const resolveRotation = (deviceId, position) => {
+    const now = Date.now();
+    const nextCourse = Number(position.course);
+    const cached = rotationCacheRef.current[deviceId] || { rotation: 0, updatedAt: 0 };
 
-    let showDirection;
-    switch (directionType) {
-      case 'none':
-        showDirection = false;
-        break;
-      case 'all':
-        showDirection = hasDirection;
-        break;
-      default:
-        showDirection = selectedPositionId === position.id && hasDirection;
-        break;
+    if (!Number.isFinite(nextCourse)) {
+      rotationCacheRef.current[deviceId] = { rotation: 0, updatedAt: now };
+      return 0;
     }
+
+    const nextRotation = normalizeAngle(nextCourse);
+    const delta = Math.abs(shortestAngleDelta(cached.rotation, nextRotation));
+    if (now - cached.updatedAt < HEADING_UPDATE_THROTTLE_MS || delta < HEADING_DELTA_THRESHOLD) {
+      return cached.rotation;
+    }
+
+    rotationCacheRef.current[deviceId] = {
+      rotation: nextRotation,
+      updatedAt: now,
+    };
+    return nextRotation;
+  };
+
+  const createFeature = (position) => {
+    const device = devices[position.deviceId];
     return {
       id: position.id,
       deviceId: position.deviceId,
       name: getDeviceDisplayName(device) || device.name,
       fixTime: formatTime(position.fixTime, 'seconds'),
-      category: mapDeviceIconKey(device),
+      markerIcon: VEHICLE_MARKER_IMAGE_KEY,
       color: showStatus ? position.attributes.color || getStatusColor(device.status) : 'neutral',
-      rotation: showDirection ? rotation : 0,
-      direction: showDirection,
+      rotation: resolveRotation(position.deviceId, position),
     };
   };
 
@@ -114,22 +136,14 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
         source,
         filter: ['!has', 'point_count'],
         layout: {
-          'icon-image': '{category}-{color}',
+          'icon-image': '{markerIcon}',
           'icon-size': iconScale,
           'icon-allow-overlap': true,
           'icon-rotate': ['get', 'rotation'],
           'icon-rotation-alignment': 'map',
-          'text-field': `{${titleField || 'name'}}`,
-          'text-allow-overlap': true,
-          'text-anchor': 'bottom',
-          'text-offset': [0, -2 * iconScale],
-          'text-font': findFonts(map),
-          'text-size': 12,
+          'icon-anchor': 'center',
+          'icon-offset': [0, 0.15],
           'symbol-sort-key': ['get', 'id'],
-        },
-        paint: {
-          'text-halo-color': 'white',
-          'text-halo-width': 2,
         },
       });
       map.on('mouseenter', source, onMouseEnter);
@@ -178,7 +192,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
         }
       });
     };
-  }, [mapCluster, clusters, onMarkerClickCallback, onClusterClick]);
+  }, [mapCluster, clusters, iconScale, onMarkerClickCallback, onClusterClick, onMapClickCallback]);
 
   useEffect(() => {
     [id, selected].forEach((source) => {
@@ -192,24 +206,14 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
               type: 'Point',
               coordinates: [position.longitude, position.latitude],
             },
-            properties: createFeature(
-              devices,
-              position,
-              selectedPosition && selectedPosition.id,
-              headingByDeviceId,
-            ),
+            properties: createFeature(position),
           })),
       });
     });
   }, [
-    mapCluster,
-    clusters,
-    onMarkerClick,
-    onClusterClick,
     devices,
     positions,
-    selectedPosition,
-    headingByDeviceId,
+    selectedDeviceId,
   ]);
 
   return null;

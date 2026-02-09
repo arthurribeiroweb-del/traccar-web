@@ -26,6 +26,7 @@ import trainSvg from '../../resources/images/icon/train.svg';
 import tramSvg from '../../resources/images/icon/tram.svg';
 import truckSvg from '../../resources/images/icon/truck.svg';
 import vanSvg from '../../resources/images/icon/van.svg';
+import vehicleTopdownSvg from '../../resources/images/icon/vehicle-topdown.svg';
 
 export const mapIcons = {
   arrow: directionSvg,
@@ -51,6 +52,7 @@ export const mapIcons = {
   tram: tramSvg,
   truck: truckSvg,
   van: vanSvg,
+  vehicleTopdown: vehicleTopdownSvg,
 };
 
 export const mapIconKey = (category) => {
@@ -89,6 +91,20 @@ export const mapDeviceIconKey = (device) => {
 
 export const mapImages = {};
 
+export const VEHICLE_MARKER_IMAGE_KEY = 'vehicle-topdown';
+
+const toImageData = (image) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width * devicePixelRatio;
+  canvas.height = image.height * devicePixelRatio;
+  canvas.style.width = `${image.width}px`;
+  canvas.style.height = `${image.height}px`;
+
+  const context = canvas.getContext('2d');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return context.getImageData(0, 0, canvas.width, canvas.height);
+};
+
 const theme = createTheme({
   palette: {
     neutral: { main: grey[500] },
@@ -99,6 +115,13 @@ export default async () => {
   const background = await loadImage(backgroundSvg);
   mapImages.background = await prepareIcon(background);
   mapImages.direction = await prepareIcon(await loadImage(directionSvg));
+
+  try {
+    mapImages[VEHICLE_MARKER_IMAGE_KEY] = toImageData(await loadImage(vehicleTopdownSvg));
+  } catch (error) {
+    mapImages[VEHICLE_MARKER_IMAGE_KEY] = toImageData(await loadImage(carSvg));
+  }
+
   await Promise.all(Object.keys(mapIcons).map(async (category) => {
     const results = [];
     ['info', 'success', 'error', 'neutral'].forEach((color) => {
