@@ -132,6 +132,23 @@ const MainMap = ({
 
   const mapReportErrorToMessage = useCallback((error) => {
     const text = error?.message || '';
+    const upperText = text.toUpperCase();
+    const codeMatch = text.match(/IllegalArgumentException:\s*([A-Z_]+)/i)
+      || text.match(/\b([A-Z_]{6,})\b/);
+    const backendCode = (codeMatch?.[1] || '').toUpperCase();
+
+    if (backendCode.includes('DUPLICATE') || backendCode.includes('TOO_CLOSE')) {
+      return 'Ja existe um buraco marcado aqui.';
+    }
+    if (backendCode.includes('COOLDOWN_ACTIVE')) {
+      return 'Aguarde 30s para enviar outro aviso.';
+    }
+    if (backendCode.includes('RATE_LIMIT_DAILY')) {
+      return 'Voce atingiu o limite de avisos de hoje.';
+    }
+    if (backendCode.includes('INVALID_COORDINATES')) {
+      return 'Localizacao invalida no mapa. Tente novamente.';
+    }
     if (text.includes('DUPLICATE_NEARBY')) {
       return 'Ja existe um buraco marcado aqui.';
     }
@@ -153,18 +170,24 @@ const MainMap = ({
     if (text.includes('Unrecognized field') && text.includes('radarSpeedLimit')) {
       return 'Servidor desatualizado para o novo campo de radar. Atualize a VPS.';
     }
-    // Verifica se é erro de banco de dados relacionado à coluna radarspeedlimit
-    // Só mostra mensagem específica se for realmente um erro SQL de coluna não encontrada
-    const upperText = text.toUpperCase();
-    const isSqlError = upperText.includes('SQLEXCEPTION') || upperText.includes('SQL ERROR') || 
-                       upperText.includes('DATABASE') || upperText.includes('STORAGEEXCEPTION');
-    const isColumnError = upperText.includes('COLUMN') || upperText.includes('UNKNOWN') || 
-                          upperText.includes('DOES NOT EXIST') || upperText.includes('NO SUCH COLUMN') ||
-                          upperText.includes('UNKNOWN COLUMN');
-    const mentionsRadarSpeedLimit = upperText.includes('RADARSPEEDLIMIT') || upperText.includes('RADAR_SPEED_LIMIT');
-    
-    if (isSqlError && isColumnError && mentionsRadarSpeedLimit) {
+
+    const isSqlError = upperText.includes('SQLEXCEPTION') || upperText.includes('SQL ERROR')
+      || upperText.includes('DATABASE') || upperText.includes('STORAGEEXCEPTION');
+    const isColumnError = upperText.includes('COLUMN') || upperText.includes('UNKNOWN')
+      || upperText.includes('DOES NOT EXIST') || upperText.includes('NO SUCH COLUMN')
+      || upperText.includes('UNKNOWN COLUMN');
+    const mentionsCommunityColumns = upperText.includes('RADARSPEEDLIMIT')
+      || upperText.includes('RADAR_SPEED_LIMIT')
+      || upperText.includes('EXISTSVOTES')
+      || upperText.includes('GONEVOTES')
+      || upperText.includes('LASTVOTEDAT')
+      || upperText.includes('REMOVEDAT');
+
+    if (isSqlError && isColumnError && mentionsCommunityColumns) {
       return 'Banco de dados desatualizado. Execute a atualizacao completa na VPS.';
+    }
+    if (backendCode) {
+      return `Nao foi possivel enviar (${backendCode}).`;
     }
     return 'Nao foi possivel enviar. Tente novamente.';
   }, []);
@@ -765,6 +788,7 @@ const MainMap = ({
 };
 
 export default MainMap;
+
 
 
 
