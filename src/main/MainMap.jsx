@@ -191,10 +191,27 @@ const MainMap = ({
       return;
     }
     const bounds = map.getBounds();
-    const boundsParam = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
-    const response = await fetchOrThrow(`/api/community/reports?scope=public&bounds=${encodeURIComponent(boundsParam)}`);
-    const items = await response.json();
-    setPublicReports(items);
+    const west = bounds.getWest();
+    const south = bounds.getSouth();
+    const east = bounds.getEast();
+    const north = bounds.getNorth();
+    const latSpan = Math.max(north - south, 0.002);
+    const lngSpan = Math.max(east - west, 0.002);
+    const padLat = latSpan * 0.2;
+    const padLng = lngSpan * 0.2;
+    const boundsParam = [
+      west - padLng,
+      south - padLat,
+      east + padLng,
+      north + padLat,
+    ].join(',');
+    try {
+      const response = await fetchOrThrow(`/api/community/reports?scope=public&bounds=${encodeURIComponent(boundsParam)}`);
+      const items = await response.json();
+      setPublicReports(Array.isArray(items) ? items : []);
+    } catch (err) {
+      console.warn('loadPublicReports failed', err);
+    }
   }, []);
 
   const loadAdminPendingCount = useCallback(async () => {
@@ -438,7 +455,9 @@ const MainMap = ({
     if (map.loaded()) {
       onMapLoaded();
     } else {
-      map.once('load', onMapLoaded);
+      map.once('load', () => {
+        setTimeout(onMapLoaded, 500);
+      });
     }
 
     return () => {
