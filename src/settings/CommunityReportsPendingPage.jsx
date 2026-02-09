@@ -23,7 +23,7 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import MapView from '../map/core/MapView';
 import MapPendingReports from './MapPendingReports';
 import MapCamera from '../map/MapCamera';
-import { makeStyles } from '@mui/styles';
+import { makeStyles } from 'tss-react/mui';
 
 const STATUS_PENDING = 'pending_private';
 const STATUS_ACTIVE = 'approved_public';
@@ -72,7 +72,7 @@ const isValidRadarSpeedLimit = (value) => Number.isInteger(value)
   && value >= 20
   && value <= 120;
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles()((theme) => ({
   mapContainer: {
     height: '600px',
     width: '100%',
@@ -87,7 +87,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const CommunityReportsPendingPage = () => {
-  const mapClasses = useStyles();
+  const { classes: mapClasses } = useStyles();
   const { classes } = useSettingsStyles();
   const admin = useAdministrator();
   const [items, setItems] = useState([]);
