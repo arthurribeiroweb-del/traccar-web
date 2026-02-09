@@ -11,7 +11,7 @@ import { map } from './core/MapView';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 import buracoIconUrl from '../resources/images/icon/community-buraco.svg';
 import buracoApprovedIconUrl from '../resources/images/icon/community-buraco-approved.svg';
-import radarIconUrl from '../resources/images/icon/community-radar.svg';
+import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.svg';
 
 const typeLabelMap = {

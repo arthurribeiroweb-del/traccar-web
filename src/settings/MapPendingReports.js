@@ -7,7 +7,7 @@ import {
 import maplibregl from 'maplibre-gl';
 import { map } from '../map/core/MapView';
 import buracoIconUrl from '../resources/images/icon/community-buraco.svg';
-import radarIconUrl from '../resources/images/icon/community-radar.svg';
+import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.svg';
 
 const typeLabelMap = {
