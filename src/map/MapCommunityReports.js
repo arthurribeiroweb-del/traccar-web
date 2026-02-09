@@ -23,8 +23,8 @@ const statusLabelMap = {
   REJECTED: 'Rejeitado',
 };
 
-/** Zoom mínimo: abaixo disso (escala > 100 m) os ícones de buraco somem para não poluir o mapa */
-const ZOOM_HIDE_BEYOND_100M = 11;
+/** Zoom mínimo: abaixo disso (visão acima de ~50 m) os ícones de buraco somem para não poluir o mapa */
+const ZOOM_HIDE_BEYOND_100M = 17;
 const COMMUNITY_ICON_BASE_SIZE = 64;
 
 const formatCreatedAt = (value) => {
@@ -84,6 +84,7 @@ const MapCommunityReports = ({
             createdAt: report.createdAt,
             radarSpeedLimit: report.radarSpeedLimit,
             cancelable: Boolean(report.cancelable),
+            authorName: report.authorName,
           },
         })),
     };
@@ -157,12 +158,12 @@ const MapCommunityReports = ({
           'interpolate',
           ['linear'],
           ['zoom'],
-          17,
-          ['*', 0.6, ['match', ['get', 'type'], 'BURACO', 1, 0.85]],
-          18.5,
-          ['*', 0.7, ['match', ['get', 'type'], 'BURACO', 1, 0.85]],
-          20,
-          ['*', 0.8, ['match', ['get', 'type'], 'BURACO', 1, 0.85]],
+          16,
+          ['*', 0.35, ['match', ['get', 'type'], 'BURACO', 0.8, 0.85]],
+          17.5,
+          ['*', 0.45, ['match', ['get', 'type'], 'BURACO', 0.8, 0.85]],
+          19,
+          ['*', 0.55, ['match', ['get', 'type'], 'BURACO', 0.8, 0.85]],
         ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
@@ -193,6 +194,7 @@ const MapCommunityReports = ({
       const radarSpeedLimit = Number(feature.properties.radarSpeedLimit);
       const pending = feature.properties.pending === true || feature.properties.pending === 'true';
       const cancelable = feature.properties.cancelable === true || feature.properties.cancelable === 'true';
+      const authorName = feature.properties.authorName || 'Usuário';
 
       clearPopup();
 
@@ -206,6 +208,14 @@ const MapCommunityReports = ({
       title.style.fontWeight = '700';
       title.textContent = typeLabelMap[type] || type || '-';
       container.appendChild(title);
+
+      if (type === 'BURACO') {
+        const descLine = document.createElement('div');
+        descLine.style.fontSize = '12px';
+        descLine.style.color = '#0F172A';
+        descLine.textContent = `Buraco na pista, feito por ${authorName}`;
+        container.appendChild(descLine);
+      }
 
       const statusLine = document.createElement('div');
       statusLine.style.fontSize = '12px';
