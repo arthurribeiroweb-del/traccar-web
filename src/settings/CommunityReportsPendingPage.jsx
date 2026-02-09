@@ -72,14 +72,7 @@ const isValidRadarSpeedLimit = (value) => Number.isInteger(value)
   && value >= 20
   && value <= 120;
 
-const useStyles = makeStyles()((theme) => ({
-  mapContainer: {
-    height: '600px',
-    width: '100%',
-    borderRadius: theme.shape.borderRadius,
-    overflow: 'hidden',
-    border: `1px solid ${theme.palette.divider}`,
-  },
+const useStyles = makeStyles()(() => ({
   tableContainer: {
     maxHeight: '600px',
     overflow: 'auto',
@@ -254,33 +247,35 @@ const CommunityReportsPendingPage = () => {
             {pendingMode && items.length > 0 && (
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={6}>
-                  <Paper className={mapClasses.mapContainer}>
-                    <MapView>
-                      <MapPendingReports
-                        items={items}
-                        draftById={draftById}
-                        onItemClick={(item) => setSelectedItemId(item.id)}
-                        onApprove={handleApprove}
-                        onReject={handleReject}
-                        savingId={savingId}
-                      />
-                      <MapCamera
-                        coordinates={items
-                          .filter((item) => {
-                            const draft = draftById[item.id];
-                            const lat = draft ? Number(draft.latitude) : item.latitude;
-                            const lon = draft ? Number(draft.longitude) : item.longitude;
-                            return Number.isFinite(lat) && Number.isFinite(lon);
-                          })
-                          .map((item) => {
-                            const draft = draftById[item.id];
-                            return [
-                              draft ? Number(draft.longitude) : item.longitude,
-                              draft ? Number(draft.latitude) : item.latitude,
-                            ];
-                          })}
-                      />
-                    </MapView>
+                  <Paper sx={{ height: '600px', overflow: 'hidden', border: 1, borderColor: 'divider' }}>
+                    <Box sx={{ width: '100%', height: '100%' }}>
+                      <MapView>
+                        <MapPendingReports
+                          items={items}
+                          draftById={draftById}
+                          onItemClick={(item) => setSelectedItemId(item.id)}
+                          onApprove={handleApprove}
+                          onReject={handleReject}
+                          savingId={savingId}
+                        />
+                        <MapCamera
+                          coordinates={items
+                            .filter((item) => {
+                              const draft = draftById[item.id];
+                              const lat = draft ? Number(draft.latitude) : item.latitude;
+                              const lon = draft ? Number(draft.longitude) : item.longitude;
+                              return Number.isFinite(lat) && Number.isFinite(lon);
+                            })
+                            .map((item) => {
+                              const draft = draftById[item.id];
+                              return [
+                                draft ? Number(draft.longitude) : item.longitude,
+                                draft ? Number(draft.latitude) : item.latitude,
+                              ];
+                            })}
+                        />
+                      </MapView>
+                    </Box>
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
