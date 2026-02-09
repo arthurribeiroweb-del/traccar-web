@@ -18,7 +18,7 @@ import {
   formatAlarm, formatBoolean, formatPercentage, formatStatus, getStatusColor,
 } from '../common/util/formatter';
 import { useTranslation } from '../common/components/LocalizationProvider';
-import { mapIcons } from '../map/core/preloadImages';
+import { mapDeviceIconKey, mapIcons } from '../map/core/preloadImages';
 import { useAdministrator } from '../common/util/permissions';
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import EngineIcon from '../resources/images/data/engine.svg?react';
@@ -30,11 +30,9 @@ dayjs.extend(relativeTime);
 
 const useStyles = makeStyles()((theme) => ({
   icon: {
-    width: '26px',
-    height: '26px',
-  },
-  avatar: {
-    backgroundColor: 'transparent',
+    width: '25px',
+    height: '25px',
+    filter: 'brightness(0) invert(1)',
   },
   batteryText: {
     fontSize: '0.75rem',
@@ -115,16 +113,8 @@ const DeviceRow = ({ devices, index, style }) => {
         className={selectedDeviceId === item.id ? classes.selected : null}
       >
         <ListItemAvatar>
-          <Avatar className={classes.avatar}>
-            <img
-              className={classes.icon}
-              src={mapIcons.vehicleTopdown}
-              alt=""
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = mapIcons.car;
-              }}
-            />
+          <Avatar>
+            <img className={classes.icon} src={mapIcons[mapDeviceIconKey(item)]} alt="" />
           </Avatar>
         </ListItemAvatar>
         <ListItemText
