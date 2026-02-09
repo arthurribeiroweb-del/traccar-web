@@ -22,6 +22,7 @@ import ReplayPage from './other/ReplayPage';
 import TripReportPage from './reports/TripReportPage';
 import StopReportPage from './reports/StopReportPage';
 import SummaryReportPage from './reports/SummaryReportPage';
+import DailyReportRedirectPage from './reports/DailyReportRedirectPage';
 import ChartReportPage from './reports/ChartReportPage';
 import DriversPage from './settings/DriversPage';
 import DriverPage from './settings/DriverPage';
@@ -327,6 +328,7 @@ const Navigation = () => {
             )}
           />
           <Route path="summary" element={<SummaryReportPage />} />
+          <Route path="daily" element={<DailyReportRedirectPage />} />
           <Route path="trips" element={<TripReportPage />} />
           <Route
             path="scheduled"
