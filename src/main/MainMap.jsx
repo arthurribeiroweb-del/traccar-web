@@ -22,9 +22,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
-import SpeedIcon from '@mui/icons-material/Speed';
 import DangerousIcon from '@mui/icons-material/Dangerous';
-import HorizontalRuleIcon from '@mui/icons-material/HorizontalRule';
 import MapView from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
@@ -68,10 +66,9 @@ const NO_UPDATE_TIMEOUT_MS = 30000;
 const REPORT_MOVE_DEBOUNCE_MS = 300;
 const COMMUNITY_REFRESH_INTERVAL_MS = 15000;
 
+// MVP: apenas BURACO no fluxo de reportar
 const COMMUNITY_TYPES = [
-  { key: 'RADAR', label: 'Radar', icon: SpeedIcon },
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
-  { key: 'QUEBRA_MOLAS', label: 'Quebra-molas', icon: HorizontalRuleIcon },
 ];
 
 const MainMap = ({
@@ -109,7 +106,8 @@ const MainMap = ({
   const [selectedHeadingState, setSelectedHeadingState] = useState('idle');
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState(null);
-  const [radarSpeedLimit, setRadarSpeedLimit] = useState('');
+  const [reportClickPosition, setReportClickPosition] = useState(null);
+  const [waitingForMapClick, setWaitingForMapClick] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [publicReports, setPublicReports] = useState([]);
   const [pendingReports, setPendingReports] = useState([]);
@@ -135,7 +133,7 @@ const MainMap = ({
   const mapReportErrorToMessage = useCallback((error) => {
     const text = error?.message || '';
     if (text.includes('DUPLICATE_NEARBY')) {
-      return 'Ja existe um aviso desse tipo aqui.';
+      return 'Ja existe um buraco marcado aqui.';
     }
     if (text.includes('COOLDOWN_ACTIVE')) {
       return 'Aguarde 30s para enviar outro aviso.';
@@ -487,11 +485,31 @@ const MainMap = ({
 
   const handleReportTypeSelect = useCallback((type) => {
     setReportSheetOpen(false);
-    setSelectedReportType(type);
-    if (type !== 'RADAR') {
-      setRadarSpeedLimit('');
+    if (type === 'BURACO') {
+      setReportClickPosition(null);
+      setWaitingForMapClick(true);
+      showFollowMessage('Clique no mapa onde está o buraco.', 'info');
+    } else {
+      setSelectedReportType(type);
     }
-  }, []);
+  }, [showFollowMessage]);
+
+  useEffect(() => {
+    if (!waitingForMapClick || !map) {
+      return undefined;
+    }
+    const onMapClick = (e) => {
+      setReportClickPosition({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      setWaitingForMapClick(false);
+      setSelectedReportType('BURACO');
+    };
+    map.once('click', onMapClick);
+    map.getCanvas().style.cursor = 'crosshair';
+    return () => {
+      map.off('click', onMapClick);
+      map.getCanvas().style.cursor = '';
+    };
+  }, [waitingForMapClick]);
 
   const handleReportConfirm = useCallback(async () => {
     if (!selectedReportType) {
@@ -503,26 +521,21 @@ const MainMap = ({
       return;
     }
 
-    const center = map.getCenter();
-    const latitude = Number(center.lat);
-    const longitude = Number(center.lng);
-    const parsedRadarSpeedLimit = Number(radarSpeedLimit);
-
-    if (selectedReportType === 'RADAR') {
-      if (!Number.isInteger(parsedRadarSpeedLimit) || parsedRadarSpeedLimit < 20 || parsedRadarSpeedLimit > 120) {
-        showFollowMessage('Informe a velocidade do radar (20 a 120 km/h).', 'warning');
-        return;
-      }
-    }
+    const latitude = reportClickPosition
+      ? Number(reportClickPosition.lat)
+      : Number(map.getCenter().lat);
+    const longitude = reportClickPosition
+      ? Number(reportClickPosition.lng)
+      : Number(map.getCenter().lng);
 
     const tempId = `temp-${Date.now()}-${Math.round(Math.random() * 100000)}`;
     const tempItem = {
       id: tempId,
-      type: selectedReportType,
+      type: 'BURACO',
       status: 'PENDING_PRIVATE',
       latitude,
       longitude,
-      radarSpeedLimit: selectedReportType === 'RADAR' ? parsedRadarSpeedLimit : null,
+      radarSpeedLimit: null,
       createdAt: new Date().toISOString(),
       cancelable: false,
     };
@@ -532,13 +545,10 @@ const MainMap = ({
 
     try {
       const payload = {
-        type: selectedReportType,
+        type: 'BURACO',
         latitude,
         longitude,
       };
-      if (selectedReportType === 'RADAR') {
-        payload.radarSpeedLimit = parsedRadarSpeedLimit;
-      }
       const response = await fetchOrThrow('/api/community/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -558,11 +568,11 @@ const MainMap = ({
     } finally {
       setReportSubmitting(false);
       setSelectedReportType(null);
-      setRadarSpeedLimit('');
+      setReportClickPosition(null);
     }
   }, [
-    radarSpeedLimit,
     selectedReportType,
+    reportClickPosition,
     showFollowMessage,
     computeCancelable,
     loadAdminPendingCount,
@@ -645,7 +655,10 @@ const MainMap = ({
       <Drawer
         anchor="bottom"
         open={reportSheetOpen}
-        onClose={() => setReportSheetOpen(false)}
+        onClose={() => {
+          setReportSheetOpen(false);
+          setWaitingForMapClick(false);
+        }}
         PaperProps={{
           sx: {
             borderTopLeftRadius: 16,
@@ -655,9 +668,9 @@ const MainMap = ({
         }}
       >
         <Box sx={{ px: 2, pt: 2 }}>
-          <Typography variant="h6">Reportar no mapa</Typography>
+          <Typography variant="h6">Reportar</Typography>
           <Typography variant="body2" color="text.secondary">
-            O ponto será enviado para aprovação.
+            Escolha o tipo. Depois clique no mapa no local exato e confirme.
           </Typography>
         </Box>
         <List>
@@ -682,37 +695,22 @@ const MainMap = ({
         open={Boolean(selectedReportType)}
         onClose={() => {
           setSelectedReportType(null);
-          setRadarSpeedLimit('');
+          setReportClickPosition(null);
         }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>{`Adicionar ${(COMMUNITY_TYPES.find((item) => item.key === selectedReportType)?.label || '').toLowerCase()} aqui?`}</DialogTitle>
+        <DialogTitle>Adicionar BURACO aqui?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            Usaremos o centro do mapa.
+            {reportClickPosition
+              ? 'Local = ponto que você clicou no mapa. Confirme para enviar para aprovação.'
+              : 'Local = centro do mapa. Confirme para enviar para aprovação.'}
           </Typography>
-          {selectedReportType === 'RADAR' && (
-            <TextField
-              autoFocus
-              fullWidth
-              size="small"
-              margin="dense"
-              type="number"
-              label="Velocidade do radar (km/h)"
-              value={radarSpeedLimit}
-              onChange={(event) => setRadarSpeedLimit(event.target.value)}
-              inputProps={{ min: 20, max: 120, step: 1 }}
-              helperText="Obrigatorio. Faixa permitida: 20 a 120 km/h."
-            />
-          )}
         </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => {
-              setSelectedReportType(null);
-              setRadarSpeedLimit('');
-            }}
+            onClick={() => setSelectedReportType(null)}
             disabled={reportSubmitting}
           >
             Cancelar

@@ -94,6 +94,9 @@ const CommunityReportsPendingPage = () => {
   const pendingMode = statusFilter === STATUS_PENDING;
   const activeMode = statusFilter === STATUS_ACTIVE;
 
+  // MVP: somente BURACO na tela Admin
+  const displayItems = items.filter((item) => item.type === 'BURACO');
+
   const loadItems = useCatch(async () => {
     setLoading(true);
     try {
@@ -237,21 +240,21 @@ const CommunityReportsPendingPage = () => {
               </Button>
             </Stack>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              {pendingMode ? 'Pendentes para aprovacao' : 'Marcacoes ativas no mapa'}
+              {pendingMode ? 'Buracos pendentes para aprovacao' : 'Buracos ativos no mapa'}
             </Typography>
             {inlineError && (
               <Typography variant="body2" color="error" sx={{ mb: 2 }}>
                 {inlineError}
               </Typography>
             )}
-            {pendingMode && items.length > 0 && (
+            {pendingMode && (
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={6}>
                   <Paper sx={{ height: '600px', overflow: 'hidden', border: 1, borderColor: 'divider' }}>
                     <Box sx={{ width: '100%', height: '100%' }}>
                       <MapView>
                         <MapPendingReports
-                          items={items}
+                          items={displayItems}
                           draftById={draftById}
                           onItemClick={(item) => setSelectedItemId(item.id)}
                           onApprove={handleApprove}
@@ -259,7 +262,7 @@ const CommunityReportsPendingPage = () => {
                           savingId={savingId}
                         />
                         <MapCamera
-                          coordinates={items
+                          coordinates={displayItems
                             .filter((item) => {
                               const draft = draftById[item.id];
                               const lat = draft ? Number(draft.latitude) : item.latitude;
@@ -293,24 +296,10 @@ const CommunityReportsPendingPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {!loading && items.map((item) => (
+                {!loading && displayItems.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{typeLabel(item.type)}</TableCell>
-                    <TableCell>
-                      {item.type === 'RADAR' ? (
-                        pendingMode ? (
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
-                            onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
-                            inputProps={{ min: 20, max: 120, step: 1 }}
-                          />
-                        ) : (
-                          `${item.radarSpeedLimit ?? '-'}`
-                        )
-                      ) : '-'}
-                    </TableCell>
+                    <TableCell>-</TableCell>
                     <TableCell>
                       {pendingMode ? (
                         <TextField
@@ -384,10 +373,10 @@ const CommunityReportsPendingPage = () => {
                     </TableCell>
                   </TableRow>
                 ))}
-                {!loading && items.length === 0 && (
+                {!loading && displayItems.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7} align="center">
-                      {pendingMode ? 'Nenhum aviso pendente.' : 'Nenhuma marcacao ativa.'}
+                      {pendingMode ? 'Nenhum buraco pendente.' : 'Nenhum buraco ativo.'}
                     </TableCell>
                   </TableRow>
                 )}
@@ -404,7 +393,7 @@ const CommunityReportsPendingPage = () => {
                 </Grid>
               </Grid>
             )}
-            {(!pendingMode || items.length === 0) && (
+            {!pendingMode && (
               <Table className={classes.table}>
                 <TableHead>
                   <TableRow>
@@ -418,24 +407,10 @@ const CommunityReportsPendingPage = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {!loading && items.map((item) => (
+                  {!loading && displayItems.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{typeLabel(item.type)}</TableCell>
-                      <TableCell>
-                        {item.type === 'RADAR' ? (
-                          pendingMode ? (
-                            <TextField
-                              size="small"
-                              type="number"
-                              value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
-                              onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
-                              inputProps={{ min: 20, max: 120, step: 1 }}
-                            />
-                          ) : (
-                            `${item.radarSpeedLimit ?? '-'}`
-                          )
-                        ) : '-'}
-                      </TableCell>
+                      <TableCell>-</TableCell>
                       <TableCell>
                         {pendingMode ? (
                           <TextField
@@ -509,10 +484,10 @@ const CommunityReportsPendingPage = () => {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!loading && items.length === 0 && (
+                  {!loading && displayItems.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
-                        {pendingMode ? 'Nenhum aviso pendente.' : 'Nenhuma marcacao ativa.'}
+                        {pendingMode ? 'Nenhum buraco pendente.' : 'Nenhum buraco ativo.'}
                       </TableCell>
                     </TableRow>
                   )}
