@@ -320,6 +320,14 @@ const MapCommunityReports = ({
       buttonsRow.style.margin = '4px 0';
       buttonsRow.addEventListener('click', (event) => event.stopPropagation());
       container.appendChild(buttonsRow);
+      const voteButtons = [];
+      const setVoteButtonsDisabled = (disabled) => {
+        voteButtons.forEach((button) => {
+          button.disabled = disabled;
+          button.style.opacity = disabled ? '0.7' : '1';
+          button.style.cursor = disabled ? 'not-allowed' : 'pointer';
+        });
+      };
 
       const renderButton = (label, value, accent) => {
         const button = document.createElement('button');
@@ -333,7 +341,7 @@ const MapCommunityReports = ({
         button.style.fontWeight = '600';
         button.style.cursor = 'pointer';
         button.textContent = label;
-        button.disabled = votingId === reportId;
+        voteButtons.push(button);
         const applyActive = (active) => {
           button.style.background = active ? '#E0F2FE' : '#FFFFFF';
           button.style.borderColor = active ? '#0EA5E9' : '#CBD5E1';
@@ -342,17 +350,33 @@ const MapCommunityReports = ({
         button.onclick = async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          button.disabled = true;
+          setVoteButtonsDisabled(true);
           feedbackLine.textContent = '';
+          feedbackLine.style.color = '#475569';
+          feedbackLine.textContent = 'Enviando voto...';
           try {
             const data = await sendVote(reportId, value);
             applyUserVote(data);
             updateVoteInfo(data);
+            feedbackLine.style.color = '#166534';
+            feedbackLine.textContent = 'Voto enviado com sucesso.';
+            setVoteButtonsDisabled(Boolean(data?.userVote));
           } catch (error) {
             console.warn('vote failed', error);
-            feedbackLine.textContent = 'Nao foi possivel votar.';
+            const message = String(error?.message || '').toUpperCase();
+            if (message.includes('ALREADY_VOTED')) {
+              feedbackLine.textContent = 'Voce ja votou neste buraco.';
+              feedbackLine.style.color = '#92400E';
+              setVoteButtonsDisabled(true);
+            } else {
+              feedbackLine.textContent = 'Nao foi possivel votar.';
+              feedbackLine.style.color = '#B91C1C';
+              setVoteButtonsDisabled(false);
+            }
           } finally {
-            button.disabled = false;
+            if (!feedbackLine.textContent) {
+              setVoteButtonsDisabled(false);
+            }
           }
         };
         buttonsRow.appendChild(button);
@@ -366,6 +390,7 @@ const MapCommunityReports = ({
         applyGoneActive(data?.userVote === 'GONE');
       };
       applyUserVote(initialVotes);
+      setVoteButtonsDisabled(Boolean(initialVotes.userVote));
 
       const createdLine = document.createElement('div');
       createdLine.style.fontSize = '12px';
@@ -434,6 +459,7 @@ const MapCommunityReports = ({
         .then((data) => {
           updateVoteInfo(data);
           applyUserVote(data);
+          setVoteButtonsDisabled(Boolean(data?.userVote));
         })
         .catch((error) => console.warn('loadVotes failed', error));
     };
