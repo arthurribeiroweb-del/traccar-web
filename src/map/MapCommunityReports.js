@@ -291,6 +291,12 @@ const MapCommunityReports = ({
       voteLine.style.color = '#0F172A';
       container.appendChild(voteLine);
 
+      const feedbackLine = document.createElement('div');
+      feedbackLine.style.fontSize = '11px';
+      feedbackLine.style.color = '#B91C1C';
+      feedbackLine.style.minHeight = '14px';
+      container.appendChild(feedbackLine);
+
       const lastVoteLine = document.createElement('div');
       lastVoteLine.style.fontSize = '11px';
       lastVoteLine.style.color = '#475569';
@@ -312,6 +318,7 @@ const MapCommunityReports = ({
       buttonsRow.style.display = 'flex';
       buttonsRow.style.gap = '8px';
       buttonsRow.style.margin = '4px 0';
+      buttonsRow.addEventListener('click', (event) => event.stopPropagation());
       container.appendChild(buttonsRow);
 
       const renderButton = (label, value, accent) => {
@@ -332,14 +339,18 @@ const MapCommunityReports = ({
           button.style.borderColor = active ? '#0EA5E9' : '#CBD5E1';
         };
         applyActive(initialVotes.userVote === value);
-        button.onclick = async () => {
+        button.onclick = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
           button.disabled = true;
+          feedbackLine.textContent = '';
           try {
             const data = await sendVote(reportId, value);
             applyUserVote(data);
             updateVoteInfo(data);
           } catch (error) {
             console.warn('vote failed', error);
+            feedbackLine.textContent = 'Nao foi possivel votar.';
           } finally {
             button.disabled = false;
           }
