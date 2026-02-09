@@ -155,7 +155,17 @@ const MainMap = ({
     if (text.includes('Unrecognized field') && text.includes('radarSpeedLimit')) {
       return 'Servidor desatualizado para o novo campo de radar. Atualize a VPS.';
     }
-    if (text.toUpperCase().includes('RADARSPEEDLIMIT')) {
+    // Verifica se é erro de banco de dados relacionado à coluna radarspeedlimit
+    // Só mostra mensagem específica se for realmente um erro SQL de coluna não encontrada
+    const upperText = text.toUpperCase();
+    const isSqlError = upperText.includes('SQLEXCEPTION') || upperText.includes('SQL ERROR') || 
+                       upperText.includes('DATABASE') || upperText.includes('STORAGEEXCEPTION');
+    const isColumnError = upperText.includes('COLUMN') || upperText.includes('UNKNOWN') || 
+                          upperText.includes('DOES NOT EXIST') || upperText.includes('NO SUCH COLUMN') ||
+                          upperText.includes('UNKNOWN COLUMN');
+    const mentionsRadarSpeedLimit = upperText.includes('RADARSPEEDLIMIT') || upperText.includes('RADAR_SPEED_LIMIT');
+    
+    if (isSqlError && isColumnError && mentionsRadarSpeedLimit) {
       return 'Banco de dados desatualizado. Execute a atualizacao completa na VPS.';
     }
     return 'Nao foi possivel enviar. Tente novamente.';
