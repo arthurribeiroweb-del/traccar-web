@@ -286,13 +286,17 @@ const MapCommunityReports = ({
       title.textContent = typeLabelMap[type] || type || '-';
       container.appendChild(title);
 
-      if (type === 'BURACO' || type === 'QUEBRA_MOLAS') {
+      if (type === 'BURACO' || type === 'QUEBRA_MOLAS' || type === 'RADAR') {
         const descLine = document.createElement('div');
         descLine.style.fontSize = '12px';
         descLine.style.color = '#0F172A';
-        descLine.textContent = type === 'BURACO'
-          ? `Buraco na pista, feito por ${authorName}`
-          : `Lombada na pista, feito por ${authorName}`;
+        if (type === 'BURACO') {
+          descLine.textContent = `Buraco na pista, feito por ${authorName}`;
+        } else if (type === 'QUEBRA_MOLAS') {
+          descLine.textContent = `Lombada na pista, feito por ${authorName}`;
+        } else {
+          descLine.textContent = `Radar na pista, feito por ${authorName}`;
+        }
         container.appendChild(descLine);
       }
 

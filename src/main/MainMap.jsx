@@ -17,6 +17,7 @@ import {
   DialogActions,
   Button,
   CircularProgress,
+  MenuItem,
   TextField,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -24,6 +25,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import SpeedIcon from '@mui/icons-material/Speed';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import MapView from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
@@ -70,7 +72,10 @@ const COMMUNITY_REFRESH_INTERVAL_MS = 15000;
 const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
   { key: 'QUEBRA_MOLAS', label: 'Lombada', icon: SpeedIcon },
+  { key: 'RADAR', label: 'Radar', icon: CameraAltIcon },
 ];
+
+const RADAR_SPEED_OPTIONS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 const getCommunityTypeLabel = (type) => COMMUNITY_TYPES
   .find((item) => item.key === type)?.label || type || 'Aviso';
@@ -112,6 +117,7 @@ const MainMap = ({
   const [selectedReportType, setSelectedReportType] = useState(null);
   const [reportTypeWaitingClick, setReportTypeWaitingClick] = useState(null);
   const [reportClickPosition, setReportClickPosition] = useState(null);
+  const [selectedRadarSpeedLimit, setSelectedRadarSpeedLimit] = useState(40);
   const [waitingForMapClick, setWaitingForMapClick] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [publicReports, setPublicReports] = useState([]);
@@ -573,6 +579,12 @@ const MainMap = ({
     const longitude = reportClickPosition
       ? Number(reportClickPosition.lng)
       : Number(map.getCenter().lng);
+    const radarSpeedLimit = Number(selectedRadarSpeedLimit);
+    if (selectedReportType === 'RADAR'
+      && (!Number.isInteger(radarSpeedLimit) || radarSpeedLimit < 20 || radarSpeedLimit > 120 || radarSpeedLimit % 10 !== 0)) {
+      showFollowMessage('Selecione uma velocidade valida do radar (20 a 120 km/h).', 'warning');
+      return;
+    }
 
     const tempId = `temp-${Date.now()}-${Math.round(Math.random() * 100000)}`;
     const tempItem = {
@@ -581,7 +593,7 @@ const MainMap = ({
       status: 'PENDING_PRIVATE',
       latitude,
       longitude,
-      radarSpeedLimit: null,
+      radarSpeedLimit: selectedReportType === 'RADAR' ? radarSpeedLimit : null,
       createdAt: new Date().toISOString(),
       cancelable: false,
     };
@@ -595,6 +607,9 @@ const MainMap = ({
         latitude,
         longitude,
       };
+      if (selectedReportType === 'RADAR') {
+        payload.radarSpeedLimit = radarSpeedLimit;
+      }
       const response = await fetchOrThrow('/api/community/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -616,9 +631,11 @@ const MainMap = ({
       setSelectedReportType(null);
       setReportTypeWaitingClick(null);
       setReportClickPosition(null);
+      setSelectedRadarSpeedLimit(40);
     }
   }, [
     selectedReportType,
+    selectedRadarSpeedLimit,
     reportClickPosition,
     showFollowMessage,
     computeCancelable,
@@ -706,6 +723,7 @@ const MainMap = ({
           setReportSheetOpen(false);
           setWaitingForMapClick(false);
           setReportTypeWaitingClick(null);
+          setSelectedRadarSpeedLimit(40);
         }}
         PaperProps={{
           sx: {
@@ -745,6 +763,7 @@ const MainMap = ({
           setSelectedReportType(null);
           setReportTypeWaitingClick(null);
           setReportClickPosition(null);
+          setSelectedRadarSpeedLimit(40);
         }}
         fullWidth
         maxWidth="xs"
@@ -756,12 +775,30 @@ const MainMap = ({
               ? 'Local = ponto que você clicou no mapa. Confirme para enviar para aprovação.'
               : 'Local = centro do mapa. Confirme para enviar para aprovação.'}
           </Typography>
+          {selectedReportType === 'RADAR' && (
+            <TextField
+              select
+              fullWidth
+              margin="normal"
+              label="Velocidade do radar"
+              value={selectedRadarSpeedLimit}
+              onChange={(event) => setSelectedRadarSpeedLimit(Number(event.target.value))}
+              helperText="Selecione de 10 em 10 (20 a 120 km/h)."
+            >
+              {RADAR_SPEED_OPTIONS.map((speed) => (
+                <MenuItem key={speed} value={speed}>
+                  {`${speed} km/h`}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </DialogContent>
         <DialogActions>
           <Button
             onClick={() => {
               setSelectedReportType(null);
               setReportTypeWaitingClick(null);
+              setSelectedRadarSpeedLimit(40);
             }}
             disabled={reportSubmitting}
           >

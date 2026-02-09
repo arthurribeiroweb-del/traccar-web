@@ -87,7 +87,9 @@ const CommunityReportsPendingPage = () => {
   const pendingMode = statusFilter === STATUS_PENDING;
   const activeMode = statusFilter === STATUS_ACTIVE;
 
-  const displayItems = items.filter((item) => item.type === 'BURACO' || item.type === 'QUEBRA_MOLAS');
+  const displayItems = items.filter((item) => item.type === 'BURACO'
+    || item.type === 'QUEBRA_MOLAS'
+    || item.type === 'RADAR');
 
   const loadItems = useCatch(async () => {
     setLoading(true);
