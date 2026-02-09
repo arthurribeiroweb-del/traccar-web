@@ -311,6 +311,13 @@ const StatusCard = ({
   const navigationAppTitle = useAttributePreference('navigationAppTitle');
 
   const [actionsEl, setActionsEl] = useState(null);
+  const openActionsMenu = useCallback((event) => {
+    event.stopPropagation();
+    if (event.type === 'touchstart') {
+      event.preventDefault();
+    }
+    setActionsEl(event.currentTarget);
+  }, []);
 
   const [removing, setRemoving] = useState(false);
   const [commandController, setCommandController] = useState(null);
@@ -782,6 +789,7 @@ const StatusCard = ({
             default={{ x: 0, y: 0, width: 'auto', height: 'auto' }}
             enableResizing={false}
             dragHandleClassName="draggable-header"
+            cancel=".status-card-header-actions, .status-card-header-actions *"
             style={{ position: 'relative' }}
           >
             <Card elevation={3} className={classes.card}>
@@ -816,13 +824,14 @@ const StatusCard = ({
                     <RealtimeStatusChip position={position} />
                   </div>
                 </div>
-                <div className={classes.headerActions}>
+                <div className={`${classes.headerActions} status-card-header-actions`}>
                   {showMenuButton && (
                     <Tooltip title={t('sharedExtra')}>
                       <span>
                         <IconButton
                           size="small"
-                          onClick={(e) => setActionsEl(e.currentTarget)}
+                          onClick={openActionsMenu}
+                          onTouchStart={openActionsMenu}
                         >
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
