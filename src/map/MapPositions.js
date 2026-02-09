@@ -28,11 +28,16 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
 
   const createFeature = (devices, position, selectedPositionId, headingMap) => {
     const device = devices[position.deviceId];
+    const category = mapDeviceIconKey(device);
     const computedHeading = headingMap[position.deviceId];
     const fallbackCourse = Number(position.course);
-    const rotation = Number.isFinite(computedHeading)
+    const baseRotation = Number.isFinite(computedHeading)
       ? computedHeading
       : (Number.isFinite(fallbackCourse) ? fallbackCourse : null);
+    const headingOffset = Number(device?.attributes?.headingOffset || 0);
+    const rotation = Number.isFinite(baseRotation)
+      ? ((baseRotation + (Number.isFinite(headingOffset) ? headingOffset : 0)) % 360 + 360) % 360
+      : null;
     const hasDirection = Number.isFinite(rotation);
 
     let showDirection;
@@ -52,7 +57,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
       deviceId: position.deviceId,
       name: getDeviceDisplayName(device) || device.name,
       fixTime: formatTime(position.fixTime, 'seconds'),
-      category: mapDeviceIconKey(device),
+      category,
       color: showStatus ? position.attributes.color || getStatusColor(device.status) : 'neutral',
       rotation: showDirection ? rotation : 0,
       direction: showDirection,
