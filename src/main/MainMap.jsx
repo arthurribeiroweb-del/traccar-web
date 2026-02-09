@@ -261,9 +261,13 @@ const MainMap = ({
     }
 
     if (selectedHeadingState === 'loading' && announcedStateRef.current.heading !== 'loading') {
-      showFollowMessage('Calculando direção...', 'info');
+      if (import.meta.env.DEV) {
+        console.debug('[FollowHeading] calculating direction');
+      }
     } else if (selectedHeadingState === 'unavailable' && announcedStateRef.current.heading !== 'unavailable') {
-      showFollowMessage('Direção indisponível', 'warning');
+      if (import.meta.env.DEV) {
+        console.debug('[FollowHeading] direction unavailable');
+      }
     }
     announcedStateRef.current.heading = selectedHeadingState;
   }, [followEnabled, selectedHeadingState, selectedStale, showFollowMessage]);
@@ -335,3 +339,5 @@ const MainMap = ({
 };
 
 export default MainMap;
+
+
