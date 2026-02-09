@@ -14,9 +14,14 @@ import {
   zoomForScale,
 } from './mapZoomDefaults';
 
-const DEAD_ZONE_RATIO = 0.3;
-
-const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
+const MapSelectedDevice = ({
+  mapReady,
+  followEnabled,
+  onDisableFollow,
+  selectedHeading,
+  rotateMapWithHeading,
+  suspendFollow,
+}) => {
   const currentTime = useSelector((state) => state.devices.selectTime);
   const currentId = useSelector((state) => state.devices.selectedId);
   const previousTime = usePrevious(currentTime);
@@ -29,6 +34,7 @@ const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
 
   const previousPosition = usePrevious(position);
   const previousFollow = usePrevious(followEnabled);
+  const previousHeading = usePrevious(selectedHeading);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -36,6 +42,9 @@ const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
     const handleZoomStart = (event) => {
       if (event.originalEvent) {
         userZoomingRef.current = true;
+        if (followEnabled) {
+          onDisableFollow();
+        }
       }
     };
     const handleZoomEnd = () => {
@@ -51,49 +60,58 @@ const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
       map.off('zoomstart', handleZoomStart);
       map.off('zoomend', handleZoomEnd);
     };
-  }, [mapReady]);
+  }, [followEnabled, mapReady, onDisableFollow]);
 
   useEffect(() => {
     if (!mapReady) return;
 
-    const handleDragStart = (event) => {
+    const disableOnUserInteraction = (event) => {
       if (event.originalEvent && followEnabled) {
-        setFollowEnabled(false);
+        onDisableFollow();
       }
     };
 
-    map.on('dragstart', handleDragStart);
+    map.on('dragstart', disableOnUserInteraction);
+    map.on('rotatestart', disableOnUserInteraction);
+    map.on('pitchstart', disableOnUserInteraction);
+
     return () => {
-      map.off('dragstart', handleDragStart);
+      map.off('dragstart', disableOnUserInteraction);
+      map.off('rotatestart', disableOnUserInteraction);
+      map.off('pitchstart', disableOnUserInteraction);
     };
-  }, [mapReady, followEnabled, setFollowEnabled]);
+  }, [mapReady, followEnabled, onDisableFollow]);
 
   useEffect(() => {
     if (!mapReady) return;
 
     const positionChanged = position && (!previousPosition
       || position.latitude !== previousPosition.latitude || position.longitude !== previousPosition.longitude);
+    const headingChanged = Number.isFinite(selectedHeading) && selectedHeading !== previousHeading;
 
     const selectionChanged = currentId !== previousId || currentTime !== previousTime;
     const followActivated = followEnabled && !previousFollow;
 
-    const shouldRecenterForFollow = () => {
-      if (!followEnabled || !positionChanged) {
-        return false;
-      }
-      const canvas = map.getCanvas();
-      if (!canvas) {
-        return true;
-      }
-      const point = map.project([position.longitude, position.latitude]);
-      const centerX = canvas.clientWidth / 2;
-      const centerY = canvas.clientHeight / 2;
-      const limitX = canvas.clientWidth * DEAD_ZONE_RATIO;
-      const limitY = canvas.clientHeight * DEAD_ZONE_RATIO;
-      return Math.abs(point.x - centerX) > limitX || Math.abs(point.y - centerY) > limitY;
-    };
+    const shouldFollowMove = followEnabled
+      && !suspendFollow
+      && position
+      && (positionChanged || followActivated || headingChanged);
 
-    if ((selectionChanged || followActivated || shouldRecenterForFollow()) && position) {
+    if (shouldFollowMove) {
+      map.easeTo({
+        center: [position.longitude, position.latitude],
+        zoom: map.getZoom(),
+        offset: [0, 0],
+        duration: 280,
+        easing: (value) => 1 - ((1 - value) ** 2),
+        bearing: rotateMapWithHeading && Number.isFinite(selectedHeading)
+          ? selectedHeading
+          : map.getBearing(),
+      });
+      return;
+    }
+
+    if (!followEnabled && selectionChanged && position) {
       const storedZoom = getStoredZoom();
       const userHasZoomed = hasUserZoomed();
       const applyDefault = selectionChanged && shouldApplyDefaultZoom();
@@ -114,6 +132,13 @@ const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
         markDefaultZoomApplied();
       }
     }
+
+    if (!followEnabled && previousFollow && rotateMapWithHeading && Math.abs(map.getBearing()) > 0.5) {
+      map.easeTo({
+        bearing: 0,
+        duration: 220,
+      });
+    }
   }, [
     currentId,
     previousId,
@@ -123,6 +148,11 @@ const MapSelectedDevice = ({ mapReady, followEnabled, setFollowEnabled }) => {
     previousFollow,
     position,
     previousPosition,
+    previousHeading,
+    selectedHeading,
+    rotateMapWithHeading,
+    suspendFollow,
+    onDisableFollow,
     selectZoom,
     mapReady,
   ]);

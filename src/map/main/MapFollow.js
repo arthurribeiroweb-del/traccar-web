@@ -16,7 +16,10 @@ class FollowControl {
     this.button.className = statusClass('off');
     this.button.type = 'button';
     this.button.onclick = () => this.onClick(this);
-    this.button.title = this.getTitle(false);
+    const title = this.getTitle(false);
+    this.button.title = title;
+    this.button.setAttribute('aria-label', title);
+    this.button.setAttribute('aria-pressed', 'false');
 
     this.container = document.createElement('div');
     this.container.className = 'maplibregl-ctrl-group maplibregl-ctrl';
@@ -31,7 +34,10 @@ class FollowControl {
 
   setEnabled(enabled) {
     this.button.className = statusClass(enabled ? 'on' : 'off');
-    this.button.title = this.getTitle(enabled);
+    const title = this.getTitle(enabled);
+    this.button.title = title;
+    this.button.setAttribute('aria-label', title);
+    this.button.setAttribute('aria-pressed', String(Boolean(enabled)));
   }
 
   setVisible(visible) {
