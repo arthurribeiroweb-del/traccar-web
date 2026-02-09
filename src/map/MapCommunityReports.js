@@ -57,7 +57,6 @@ const MapCommunityReports = ({
   const popupRef = useRef(null);
   const [voteState, setVoteState] = useState({});
   const [hiddenReports, setHiddenReports] = useState(new Set());
-  const [votingId, setVotingId] = useState(null);
 
   const clearPopup = useCallback(() => {
     if (popupRef.current) {
@@ -86,31 +85,26 @@ const MapCommunityReports = ({
   }, [clearPopup]);
 
   const sendVote = useCallback(async (reportId, vote) => {
-    setVotingId(reportId);
-    try {
-      const response = await fetchOrThrow(`/api/community/reports/${reportId}/vote`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vote }),
-      });
-      const data = await response.json();
-      setVoteState((prev) => ({ ...prev, [reportId]: data }));
-      setHiddenReports((prev) => {
-        const next = new Set(prev);
-        if (data.status === 'REMOVED') {
-          next.add(String(reportId));
-        } else {
-          next.delete(String(reportId));
-        }
-        return next;
-      });
+    const response = await fetchOrThrow(`/api/community/reports/${reportId}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vote }),
+    });
+    const data = await response.json();
+    setVoteState((prev) => ({ ...prev, [reportId]: data }));
+    setHiddenReports((prev) => {
+      const next = new Set(prev);
       if (data.status === 'REMOVED') {
-        clearPopup();
+        next.add(String(reportId));
+      } else {
+        next.delete(String(reportId));
       }
-      return data;
-    } finally {
-      setVotingId(null);
+      return next;
+    });
+    if (data.status === 'REMOVED') {
+      clearPopup();
     }
+    return data;
   }, [clearPopup]);
 
   const imageIds = useMemo(() => ({
@@ -257,6 +251,8 @@ const MapCommunityReports = ({
         userVote: feature.properties.userVote,
         lastVotedAt: feature.properties.lastVotedAt,
         status,
+        canVote: feature.properties.userVote ? false : true,
+        nextVoteAt: null,
       };
 
       clearPopup();
@@ -360,12 +356,17 @@ const MapCommunityReports = ({
             updateVoteInfo(data);
             feedbackLine.style.color = '#166534';
             feedbackLine.textContent = 'Voto enviado com sucesso.';
-            setVoteButtonsDisabled(Boolean(data?.userVote));
+            setVoteButtonsDisabled(!(data?.canVote ?? true));
           } catch (error) {
             console.warn('vote failed', error);
             const message = String(error?.message || '').toUpperCase();
-            if (message.includes('ALREADY_VOTED')) {
-              feedbackLine.textContent = 'Voce ja votou neste buraco.';
+            if (message.includes('VOTE_COOLDOWN_ACTIVE')) {
+              const currentData = await loadVotes(reportId).catch(() => null);
+              if (currentData?.nextVoteAt) {
+                feedbackLine.textContent = `Voce podera votar novamente em ${formatCreatedAt(currentData.nextVoteAt)}.`;
+              } else {
+                feedbackLine.textContent = 'Voce ja votou neste buraco recentemente.';
+              }
               feedbackLine.style.color = '#92400E';
               setVoteButtonsDisabled(true);
             } else {
@@ -390,7 +391,11 @@ const MapCommunityReports = ({
         applyGoneActive(data?.userVote === 'GONE');
       };
       applyUserVote(initialVotes);
-      setVoteButtonsDisabled(Boolean(initialVotes.userVote));
+      setVoteButtonsDisabled(!(initialVotes?.canVote ?? true));
+      if (!(initialVotes?.canVote ?? true) && initialVotes?.nextVoteAt) {
+        feedbackLine.style.color = '#92400E';
+        feedbackLine.textContent = `Voce podera votar novamente em ${formatCreatedAt(initialVotes.nextVoteAt)}.`;
+      }
 
       const createdLine = document.createElement('div');
       createdLine.style.fontSize = '12px';
@@ -459,7 +464,11 @@ const MapCommunityReports = ({
         .then((data) => {
           updateVoteInfo(data);
           applyUserVote(data);
-          setVoteButtonsDisabled(Boolean(data?.userVote));
+          setVoteButtonsDisabled(!(data?.canVote ?? true));
+          if (!(data?.canVote ?? true) && data?.nextVoteAt) {
+            feedbackLine.style.color = '#92400E';
+            feedbackLine.textContent = `Voce podera votar novamente em ${formatCreatedAt(data.nextVoteAt)}.`;
+          }
         })
         .catch((error) => console.warn('loadVotes failed', error));
     };
