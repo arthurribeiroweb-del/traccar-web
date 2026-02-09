@@ -70,9 +70,11 @@ echo "=== 4. PARAR TRACCAR ==="
 sudo systemctl stop traccar
 
 echo ""
-echo "=== 5. COPIAR JAR E TEMPLATES ==="
+echo "=== 5. COPIAR JAR, TEMPLATES E SCHEMA ==="
 sudo cp "$SERVER_SRC/target/tracker-server.jar" "$TRACCAR/tracker-server.jar"
 sudo cp -r "$SERVER_SRC/templates/"* "$TRACCAR/templates/"
+sudo mkdir -p "$TRACCAR/schema"
+sudo rsync -a --delete "$SERVER_SRC/schema/" "$TRACCAR/schema/"
 
 echo ""
 echo "=== 6. INICIAR TRACCAR ==="
