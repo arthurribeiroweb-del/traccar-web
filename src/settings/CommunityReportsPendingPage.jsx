@@ -60,7 +60,7 @@ const isValidCoordinate = (latitude, longitude) => Number.isFinite(latitude)
 
 const isValidRadarSpeedLimit = (value) => Number.isInteger(value)
   && value >= 20
-  && value <= 220;
+  && value <= 120;
 
 const CommunityReportsPendingPage = () => {
   const { classes } = useSettingsStyles();
@@ -135,7 +135,7 @@ const CommunityReportsPendingPage = () => {
       return;
     }
     if (item.type === 'RADAR' && !isValidRadarSpeedLimit(radarSpeedLimit)) {
-      setInlineError('Velocidade do radar invalida. Use 20 a 220 km/h.');
+      setInlineError('Velocidade do radar invalida. Use 20 a 120 km/h.');
       return;
     }
 
@@ -213,7 +213,7 @@ const CommunityReportsPendingPage = () => {
                           type="number"
                           value={draftById[item.id]?.radarSpeedLimit ?? formatRadarSpeedLimit(item.radarSpeedLimit)}
                           onChange={(event) => handleDraftChange(item.id, 'radarSpeedLimit', event.target.value)}
-                          inputProps={{ min: 20, max: 220, step: 1 }}
+                          inputProps={{ min: 20, max: 120, step: 1 }}
                         />
                       ) : '-'}
                     </TableCell>

@@ -147,7 +147,7 @@ const MainMap = ({
       return 'Janela para cancelar ja expirou.';
     }
     if (text.includes('INVALID_RADAR_SPEED_LIMIT')) {
-      return 'Informe a velocidade do radar (20 a 220 km/h).';
+      return 'Informe a velocidade do radar (20 a 120 km/h).';
     }
     return 'Nao foi possivel enviar. Tente novamente.';
   }, []);
@@ -490,8 +490,8 @@ const MainMap = ({
     const parsedRadarSpeedLimit = Number(radarSpeedLimit);
 
     if (selectedReportType === 'RADAR') {
-      if (!Number.isInteger(parsedRadarSpeedLimit) || parsedRadarSpeedLimit < 20 || parsedRadarSpeedLimit > 220) {
-        showFollowMessage('Informe a velocidade do radar (20 a 220 km/h).', 'warning');
+      if (!Number.isInteger(parsedRadarSpeedLimit) || parsedRadarSpeedLimit < 20 || parsedRadarSpeedLimit > 120) {
+        showFollowMessage('Informe a velocidade do radar (20 a 120 km/h).', 'warning');
         return;
       }
     }
@@ -680,8 +680,8 @@ const MainMap = ({
               label="Velocidade do radar (km/h)"
               value={radarSpeedLimit}
               onChange={(event) => setRadarSpeedLimit(event.target.value)}
-              inputProps={{ min: 20, max: 220, step: 1 }}
-              helperText="Obrigatorio para aviso de radar."
+              inputProps={{ min: 20, max: 120, step: 1 }}
+              helperText="Obrigatorio. Faixa permitida: 20 a 120 km/h."
             />
           )}
         </DialogContent>
