@@ -87,7 +87,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const CommunityReportsPendingPage = () => {
-  const classes = useStyles();
+  const mapClasses = useStyles();
   const { classes } = useSettingsStyles();
   const admin = useAdministrator();
   const [items, setItems] = useState([]);
@@ -254,7 +254,7 @@ const CommunityReportsPendingPage = () => {
             {pendingMode && items.length > 0 && (
               <Grid container spacing={2} sx={{ mb: 2 }}>
                 <Grid item xs={12} md={6}>
-                  <Paper className={classes.mapContainer}>
+                  <Paper className={mapClasses.mapContainer}>
                     <MapView>
                       <MapPendingReports
                         items={items}
@@ -284,7 +284,7 @@ const CommunityReportsPendingPage = () => {
                   </Paper>
                 </Grid>
                 <Grid item xs={12} md={6}>
-                  <Box className={classes.tableContainer}>
+                  <Box className={mapClasses.tableContainer}>
                     <Table className={classes.table} size="small">
               <TableHead>
                 <TableRow>
