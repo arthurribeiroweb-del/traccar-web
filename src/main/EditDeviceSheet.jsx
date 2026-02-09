@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback, useEffect, useMemo, useRef, useState,
+} from 'react';
 import {
   SwipeableDrawer,
   Box,
@@ -10,11 +12,12 @@ import {
   Snackbar,
   Alert,
 } from '@mui/material';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import { alpha } from '@mui/material/styles';
 import { makeStyles } from 'tss-react/mui';
 import { useDispatch } from 'react-redux';
 import { useTranslation } from '../common/components/LocalizationProvider';
-import deviceCategories from '../common/util/deviceCategories';
+import { DEVICE_ICON_CATEGORIES, categoryTranslationKey } from '../common/util/deviceIcons';
 import { mapIcons } from '../map/core/preloadImages';
 import { devicesActions, errorsActions } from '../store';
 import { useDeviceReadonly, useRestriction } from '../common/util/permissions';
@@ -44,6 +47,9 @@ const useStyles = makeStyles()((theme) => ({
   helper: {
     marginBottom: theme.spacing(1.5),
   },
+  iconSubtitle: {
+    marginBottom: theme.spacing(1),
+  },
   grid: {
     marginTop: theme.spacing(1),
     display: 'grid',
@@ -54,6 +60,7 @@ const useStyles = makeStyles()((theme) => ({
     },
   },
   option: {
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing(0.5),
@@ -69,9 +76,16 @@ const useStyles = makeStyles()((theme) => ({
     borderColor: theme.palette.primary.main,
     background: alpha(theme.palette.primary.main, 0.08),
   },
+  optionCheck: {
+    color: theme.palette.primary.main,
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    fontSize: 18,
+  },
   optionIcon: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
   },
   actions: {
     display: 'flex',
@@ -95,6 +109,8 @@ const EditDeviceSheet = ({
   const [name, setName] = useState('');
   const [category, setCategory] = useState('default');
   const [saving, setSaving] = useState(false);
+  const initialNameRef = useRef('');
+  const initialCategoryRef = useRef('default');
   const [toast, setToast] = useState({
     open: false,
     message: '',
@@ -104,14 +120,19 @@ const EditDeviceSheet = ({
 
   useEffect(() => {
     if (device && open) {
-      setName(getDeviceDisplayName(device) || device.name || '');
-      setCategory(device.category || 'default');
+      const initialName = getDeviceDisplayName(device) || device.name || '';
+      const initialCategory = device.category || 'default';
+      initialNameRef.current = initialName;
+      initialCategoryRef.current = initialCategory;
+      setName(initialName);
+      setCategory(initialCategory);
     }
-  }, [device, open]);
+  }, [device?.id, open]);
 
   const trimmedName = name.trim();
   const namePlaceholder = t('deviceNamePlaceholder') || 'Ex.: AMAROK 2';
   const iconLabel = t('deviceMapIcon') || t('deviceCategory');
+  const iconSubtitle = t('deviceMapIconSubtitle') || 'Escolha como seu veiculo aparece no mapa.';
   const titleLabel = t('deviceEditTitle') || t('sharedEdit');
   const helperLabel = t('deviceEditHelper') || 'Voce pode personalizar o nome e o icone do seu veiculo.';
 
@@ -120,9 +141,8 @@ const EditDeviceSheet = ({
 
   const { hasChanges, nameChanged, categoryChanged } = useMemo(() => {
     if (!device) return { hasChanges: false, nameChanged: false, categoryChanged: false };
-    const currentDisplay = getDeviceDisplayName(device) || device.name || '';
-    const nameChanged = trimmedName !== currentDisplay;
-    const categoryChanged = category !== (device.category || 'default');
+    const nameChanged = trimmedName !== initialNameRef.current;
+    const categoryChanged = category !== initialCategoryRef.current;
     return { hasChanges: nameChanged || categoryChanged, nameChanged, categoryChanged };
   }, [device, trimmedName, category]);
 
@@ -135,6 +155,28 @@ const EditDeviceSheet = ({
   const closeToast = useCallback(() => {
     setToast((current) => ({ ...current, open: false, retry: false }));
   }, []);
+
+  const applyCategoryPreview = useCallback((nextCategory) => {
+    if (!device) {
+      return;
+    }
+    dispatch(devicesActions.update([{ ...device, category: nextCategory }]));
+  }, [device, dispatch]);
+
+  const revertCategoryPreview = useCallback(() => {
+    if (!device || category === initialCategoryRef.current) {
+      return;
+    }
+    dispatch(devicesActions.update([{ ...device, category: initialCategoryRef.current }]));
+  }, [category, device, dispatch]);
+
+  const handleDismiss = useCallback(() => {
+    if (saving) {
+      return;
+    }
+    revertCategoryPreview();
+    onClose?.();
+  }, [saving, revertCategoryPreview, onClose]);
 
   const handleSave = useCallback(async () => {
     if (!device || !canSave) return;
@@ -159,9 +201,12 @@ const EditDeviceSheet = ({
 
       const saved = await response.json();
       dispatch(devicesActions.update([saved]));
+      const successMessage = categoryChanged && !nameChanged
+        ? (t('deviceIconUpdated') || 'Icone atualizado.')
+        : (t('deviceEditSaveSuccess') || 'Alteracoes salvas.');
       setToast({
         open: true,
-        message: t('deviceEditSaveSuccess') || 'Alteracoes salvas.',
+        message: successMessage,
         severity: 'success',
         retry: false,
       });
@@ -192,7 +237,7 @@ const EditDeviceSheet = ({
       clearTimeout(timeoutId);
       setSaving(false);
     }
-  }, [canSave, category, device, dispatch, onClose, t, trimmedName]);
+  }, [canSave, category, device, dispatch, onClose, t, trimmedName, categoryChanged, nameChanged]);
 
   const handleRetry = useCallback(() => {
     closeToast();
@@ -204,7 +249,7 @@ const EditDeviceSheet = ({
       <SwipeableDrawer
         anchor="bottom"
         open={open}
-        onClose={onClose}
+        onClose={handleDismiss}
         onOpen={() => {}}
         disableBackdropTransition={!iOS}
         disableDiscovery={iOS}
@@ -228,17 +273,32 @@ const EditDeviceSheet = ({
           <Typography variant="body2" color="textSecondary" className={classes.helper}>
             {iconLabel}
           </Typography>
+          <Typography variant="caption" color="textSecondary" className={classes.iconSubtitle}>
+            {iconSubtitle}
+          </Typography>
           <div className={classes.grid}>
-            {deviceCategories.map((item) => {
-              const label = t(`category${item.replace(/^\w/, (c) => c.toUpperCase())}`) || item;
+            {DEVICE_ICON_CATEGORIES.map((item) => {
+              const label = t(categoryTranslationKey(item)) || item;
               return (
                 <ButtonBase
                   key={item}
-                  onClick={() => setCategory(item)}
+                  onClick={() => {
+                    setCategory(item);
+                    applyCategoryPreview(item);
+                  }}
                   disabled={!canEditCategory || saving}
                   className={cx(classes.option, category === item && classes.optionSelected)}
                 >
-                  <img src={mapIcons[item] || mapIcons.default} alt="" className={classes.optionIcon} />
+                  {category === item && <CheckCircleRoundedIcon className={classes.optionCheck} />}
+                  <img
+                    src={mapIcons[item] || mapIcons.default}
+                    alt=""
+                    className={classes.optionIcon}
+                    onError={(event) => {
+                      event.currentTarget.onerror = null;
+                      event.currentTarget.src = mapIcons.default;
+                    }}
+                  />
                   <Typography variant="caption" color="textSecondary">
                     {label}
                   </Typography>
@@ -247,7 +307,7 @@ const EditDeviceSheet = ({
             })}
           </div>
           <div className={classes.actions}>
-            <Button variant="outlined" fullWidth onClick={onClose} disabled={saving}>
+            <Button variant="outlined" fullWidth onClick={handleDismiss} disabled={saving}>
               {t('sharedCancel')}
             </Button>
             <Button

@@ -118,11 +118,11 @@ const DeviceRow = ({ devices, index, style }) => {
           <Avatar className={classes.avatar}>
             <img
               className={classes.icon}
-              src={mapIcons.vehicleTopdown}
+              src={mapIcons.vehicleTopdown || mapIcons.default}
               alt=""
               onError={(event) => {
                 event.currentTarget.onerror = null;
-                event.currentTarget.src = mapIcons.car;
+                event.currentTarget.src = mapIcons.default;
               }}
             />
           </Avatar>

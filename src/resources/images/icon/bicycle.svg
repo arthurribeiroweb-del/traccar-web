@@ -1,1 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="M200-160q-85 0-142.5-57.5T0-360q0-85 58.5-142.5T200-560q77 0 129.5 46T396-400h26l-72-200h-70v-80h200v80h-44l14 40h192l-58-160H480v-80h104q26 0 46.5 14t29.5 38l68 186h32q83 0 141.5 58.5T960-362q0 84-58 143t-142 59q-72 0-126.5-45T564-320H396q-14 69-68 114.5T200-160Zm0-80q41 0 70.5-22.5T312-320H200v-80h112q-12-36-41.5-58T200-480q-51 0-85.5 34.5T80-360q0 50 34.5 85t85.5 35Zm308-160h56q5-23 13.5-43t22.5-37H478l30 80Zm252 160q51 0 85.5-35t34.5-85q0-51-34.5-85.5T760-480h-4l40 106-76 28-38-106q-20 17-31 40t-11 52q0 50 34.5 85t85.5 35ZM196-360Zm564 0Z"/></svg>
+<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="22" y1="6" x2="22" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#dbe2ea" />
+    </linearGradient>
+    <linearGradient id="glass" x1="22" y1="11" x2="22" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#93c5fd" />
+      <stop offset="1" stop-color="#e0f2fe" />
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="22" cy="35.8" rx="11" ry="3" fill="#0f172a" fill-opacity="0.22" />
+
+  <path d="M22 5.5C16.8 5.5 12.9 9.6 12.9 14.7V29.3C12.9 34.4 16.8 38.5 22 38.5C27.2 38.5 31.1 34.4 31.1 29.3V14.7C31.1 9.6 27.2 5.5 22 5.5Z" fill="url(#body)" stroke="#111827" stroke-width="1.3" />
+  <path d="M22 8.9C18.9 8.9 16.5 11.4 16.5 14.5V29.5C16.5 32.6 18.9 35.1 22 35.1C25.1 35.1 27.5 32.6 27.5 29.5V14.5C27.5 11.4 25.1 8.9 22 8.9Z" fill="#f8fafc" stroke="#334155" stroke-width="1" />
+  <path d="M18.1 10.7H25.9C27.1 10.7 28 11.6 28 12.8V18.6C28 20 26.9 21.1 25.5 21.1H18.5C17.1 21.1 16 20 16 18.6V12.8C16 11.6 16.9 10.7 18.1 10.7Z" fill="url(#glass)" stroke="#1e293b" stroke-width="1" />
+  <rect x="16.9" y="22.1" width="10.2" height="7.1" rx="2.3" fill="#edf2f7" stroke="#1f2937" stroke-width="1.1" />
+  <rect x="19.4" y="6.2" width="5.2" height="2.8" rx="1" fill="#fef08a" stroke="#8a6c11" stroke-width="0.8" />
+
+  <rect x="12.1" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="12.1" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+
+  <circle cx="18.2" cy="25.8" r="2.3" fill="none" stroke="#0f172a" stroke-width="1.4" />
+  <circle cx="25.8" cy="25.8" r="2.3" fill="none" stroke="#0f172a" stroke-width="1.4" />
+  <path d="M18.2 25.8L21.4 22.1L23.1 25.8H25.8L22.4 20.8H20.1" fill="none" stroke="#0f172a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

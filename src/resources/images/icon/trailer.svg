@@ -1,1 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="m240-160c-33.333 0-61.667-11.667-85-35s-35-51.667-35-85h-80v-440c0-22 7.8333-40.833 23.5-56.5s34.5-23.5 56.5-23.5h560v440h240v80h-560c0 33.333-11.667 61.667-35 85s-51.667 35-85 35zm0-80c11.333 0 20.833-3.8333 28.5-11.5s11.5-17.167 11.5-28.5-3.8333-20.833-11.5-28.5-17.167-11.5-28.5-11.5-20.833 3.8333-28.5 11.5-11.5 17.167-11.5 28.5 3.8333 20.833 11.5 28.5 17.167 11.5 28.5 11.5zm-120-120h32c11.333-12 24.333-21.667 39-29s31-11 49-11 34.333 3.6667 49 11 27.667 17 39 29h272v-360h-480z"/></svg>
+<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="22" y1="6" x2="22" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#dbe2ea" />
+    </linearGradient>
+    <linearGradient id="glass" x1="22" y1="11" x2="22" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#93c5fd" />
+      <stop offset="1" stop-color="#e0f2fe" />
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="22" cy="35.8" rx="11" ry="3" fill="#0f172a" fill-opacity="0.22" />
+
+  <path d="M22 5.5C16.8 5.5 12.9 9.6 12.9 14.7V29.3C12.9 34.4 16.8 38.5 22 38.5C27.2 38.5 31.1 34.4 31.1 29.3V14.7C31.1 9.6 27.2 5.5 22 5.5Z" fill="url(#body)" stroke="#111827" stroke-width="1.3" />
+  <path d="M22 8.9C18.9 8.9 16.5 11.4 16.5 14.5V29.5C16.5 32.6 18.9 35.1 22 35.1C25.1 35.1 27.5 32.6 27.5 29.5V14.5C27.5 11.4 25.1 8.9 22 8.9Z" fill="#f8fafc" stroke="#334155" stroke-width="1" />
+  <path d="M18.1 10.7H25.9C27.1 10.7 28 11.6 28 12.8V18.6C28 20 26.9 21.1 25.5 21.1H18.5C17.1 21.1 16 20 16 18.6V12.8C16 11.6 16.9 10.7 18.1 10.7Z" fill="url(#glass)" stroke="#1e293b" stroke-width="1" />
+  <rect x="16.9" y="22.1" width="10.2" height="7.1" rx="2.3" fill="#edf2f7" stroke="#1f2937" stroke-width="1.1" />
+  <rect x="19.4" y="6.2" width="5.2" height="2.8" rx="1" fill="#fef08a" stroke="#8a6c11" stroke-width="0.8" />
+
+  <rect x="12.1" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="12.1" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+
+  <rect x="16.6" y="22.1" width="4.5" height="3.6" rx="0.7" fill="none" stroke="#0f172a" stroke-width="1.2" />
+  <rect x="21.7" y="21.4" width="6.9" height="4.3" rx="0.8" fill="none" stroke="#0f172a" stroke-width="1.2" />
+  <circle cx="18.1" cy="26.9" r="1.1" fill="#0f172a" />
+  <circle cx="24.1" cy="26.9" r="1.1" fill="#0f172a" />
+  <circle cx="27" cy="26.9" r="1.1" fill="#0f172a" />
+</svg>

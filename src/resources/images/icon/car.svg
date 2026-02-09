@@ -1,1 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#5f6368"><path d="M240-200v40q0 17-11.5 28.5T200-120h-40q-17 0-28.5-11.5T120-160v-320l84-240q6-18 21.5-29t34.5-11h440q19 0 34.5 11t21.5 29l84 240v320q0 17-11.5 28.5T800-120h-40q-17 0-28.5-11.5T720-160v-40H240Zm-8-360h496l-42-120H274l-42 120Zm-32 80v200-200Zm100 160q25 0 42.5-17.5T360-380q0-25-17.5-42.5T300-440q-25 0-42.5 17.5T240-380q0 25 17.5 42.5T300-320Zm360 0q25 0 42.5-17.5T720-380q0-25-17.5-42.5T660-440q-25 0-42.5 17.5T600-380q0 25 17.5 42.5T660-320Zm-460 40h560v-200H200v200Z"/></svg>
+<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="22" y1="6" x2="22" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#dbe2ea" />
+    </linearGradient>
+    <linearGradient id="glass" x1="22" y1="11" x2="22" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#93c5fd" />
+      <stop offset="1" stop-color="#e0f2fe" />
+    </linearGradient>
+  </defs>
+
+  <ellipse cx="22" cy="35.8" rx="11" ry="3" fill="#0f172a" fill-opacity="0.22" />
+
+  <path d="M22 5.5C16.8 5.5 12.9 9.6 12.9 14.7V29.3C12.9 34.4 16.8 38.5 22 38.5C27.2 38.5 31.1 34.4 31.1 29.3V14.7C31.1 9.6 27.2 5.5 22 5.5Z" fill="url(#body)" stroke="#111827" stroke-width="1.3" />
+  <path d="M22 8.9C18.9 8.9 16.5 11.4 16.5 14.5V29.5C16.5 32.6 18.9 35.1 22 35.1C25.1 35.1 27.5 32.6 27.5 29.5V14.5C27.5 11.4 25.1 8.9 22 8.9Z" fill="#f8fafc" stroke="#334155" stroke-width="1" />
+  <path d="M18.1 10.7H25.9C27.1 10.7 28 11.6 28 12.8V18.6C28 20 26.9 21.1 25.5 21.1H18.5C17.1 21.1 16 20 16 18.6V12.8C16 11.6 16.9 10.7 18.1 10.7Z" fill="url(#glass)" stroke="#1e293b" stroke-width="1" />
+  <rect x="16.9" y="22.1" width="10.2" height="7.1" rx="2.3" fill="#edf2f7" stroke="#1f2937" stroke-width="1.1" />
+  <rect x="19.4" y="6.2" width="5.2" height="2.8" rx="1" fill="#fef08a" stroke="#8a6c11" stroke-width="0.8" />
+
+  <rect x="12.1" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="13.1" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="12.1" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+  <rect x="28.9" y="22.2" width="3" height="5.8" rx="1.4" fill="#111827" />
+
+  <path d="M18.6 26.9H25.4" stroke="#0f172a" stroke-width="1.6" stroke-linecap="round" />
+  <path d="M20.1 24.4H23.9" stroke="#0f172a" stroke-width="1.6" stroke-linecap="round" />
+  <circle cx="22" cy="22" r="1.2" fill="#0f172a" />
+</svg>
