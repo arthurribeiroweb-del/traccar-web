@@ -7,6 +7,7 @@ import {
 import maplibregl from 'maplibre-gl';
 import { map } from './core/MapView';
 import buracoIconUrl from '../resources/images/icon/community-buraco.svg';
+import buracoApprovedIconUrl from '../resources/images/icon/community-buraco-approved.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.svg';
 import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.svg';
 
@@ -22,7 +23,8 @@ const statusLabelMap = {
   REJECTED: 'Rejeitado',
 };
 
-const MIN_VISIBLE_ZOOM = 17;
+/** Zoom mínimo: abaixo disso (escala > 100 m) os ícones de buraco somem para não poluir o mapa */
+const ZOOM_HIDE_BEYOND_100M = 11;
 const COMMUNITY_ICON_BASE_SIZE = 64;
 
 const formatCreatedAt = (value) => {
@@ -53,6 +55,7 @@ const MapCommunityReports = ({
 
   const imageIds = useMemo(() => ({
     BURACO: `${id}-community-icon-buraco`,
+    BURACO_APPROVED: `${id}-community-icon-buraco-approved`,
     RADAR: `${id}-community-icon-radar`,
     QUEBRA_MOLAS: `${id}-community-icon-quebra-molas`,
   }), [id]);
@@ -96,6 +99,7 @@ const MapCommunityReports = ({
   useEffect(() => {
     const iconEntries = [
       { imageId: imageIds.BURACO, iconUrl: buracoIconUrl },
+      { imageId: imageIds.BURACO_APPROVED, iconUrl: buracoApprovedIconUrl },
       { imageId: imageIds.RADAR, iconUrl: radarIconUrl },
       { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
     ];
@@ -135,15 +139,15 @@ const MapCommunityReports = ({
       id: symbolLayerId,
       type: 'symbol',
       source: id,
-      minzoom: MIN_VISIBLE_ZOOM,
+      minzoom: ZOOM_HIDE_BEYOND_100M,
       layout: {
         'icon-image': [
           'match',
           ['get', 'type'],
+          'BURACO',
+          ['case', ['to-boolean', ['get', 'pending']], imageIds.BURACO, imageIds.BURACO_APPROVED],
           'RADAR',
           imageIds.RADAR,
-          'BURACO',
-          imageIds.BURACO,
           'QUEBRA_MOLAS',
           imageIds.QUEBRA_MOLAS,
           imageIds.RADAR,
@@ -157,11 +161,11 @@ const MapCommunityReports = ({
             ['linear'],
             ['zoom'],
             17,
-            0.5,
+            0.48,
             18.5,
-            0.58,
+            0.56,
             20,
-            0.66,
+            0.64,
           ],
           [
             'interpolate',
