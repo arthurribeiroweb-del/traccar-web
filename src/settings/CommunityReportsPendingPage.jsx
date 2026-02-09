@@ -3,6 +3,7 @@ import {
   Button,
   Container,
   Stack,
+  TextField,
   Table,
   TableBody,
   TableCell,
@@ -51,14 +52,36 @@ const CommunityReportsPendingPage = () => {
   const { classes } = useSettingsStyles();
   const admin = useAdministrator();
   const [items, setItems] = useState([]);
+  const [draftById, setDraftById] = useState({});
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [inlineError, setInlineError] = useState('');
+
+  const formatCoordinate = (value) => Number(value || 0).toFixed(6);
+
+  const isValidCoordinate = (latitude, longitude) => Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180;
 
   const loadItems = useCatch(async () => {
     setLoading(true);
     try {
       const response = await fetchOrThrow('/api/admin/community/reports?status=pending_private');
-      setItems(await response.json());
+      const loadedItems = await response.json();
+      setItems(loadedItems);
+      setDraftById((previous) => {
+        const next = {};
+        loadedItems.forEach((item) => {
+          next[item.id] = {
+            latitude: previous[item.id]?.latitude ?? formatCoordinate(item.latitude),
+            longitude: previous[item.id]?.longitude ?? formatCoordinate(item.longitude),
+          };
+        });
+        return next;
+      });
     } finally {
       setLoading(false);
     }
@@ -68,17 +91,61 @@ const CommunityReportsPendingPage = () => {
     await loadItems();
   }, []);
 
-  const handleApprove = useCatch(async (id) => {
-    setSavingId(`approve-${id}`);
+  const handleCoordinateChange = (id, field, value) => {
+    setDraftById((previous) => ({
+      ...previous,
+      [id]: {
+        latitude: previous[id]?.latitude ?? '',
+        longitude: previous[id]?.longitude ?? '',
+        [field]: value,
+      },
+    }));
+  };
+
+  const resetCoordinates = (item) => {
+    setDraftById((previous) => ({
+      ...previous,
+      [item.id]: {
+        latitude: formatCoordinate(item.latitude),
+        longitude: formatCoordinate(item.longitude),
+      },
+    }));
+  };
+
+  const handleApprove = useCatch(async (item) => {
+    const draft = draftById[item.id] || {
+      latitude: formatCoordinate(item.latitude),
+      longitude: formatCoordinate(item.longitude),
+    };
+    const latitude = Number(draft.latitude);
+    const longitude = Number(draft.longitude);
+
+    if (!isValidCoordinate(latitude, longitude)) {
+      setInlineError('Latitude/longitude invalidas. Ajuste antes de aprovar.');
+      return;
+    }
+
+    setInlineError('');
+    setSavingId(`approve-${item.id}`);
     try {
-      await fetchOrThrow(`/api/admin/community/reports/${id}/approve`, { method: 'POST' });
-      setItems((values) => values.filter((item) => item.id !== id));
+      await fetchOrThrow(`/api/admin/community/reports/${item.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ latitude, longitude }),
+      });
+      setItems((values) => values.filter((value) => value.id !== item.id));
+      setDraftById((values) => {
+        const next = { ...values };
+        delete next[item.id];
+        return next;
+      });
     } finally {
       setSavingId(null);
     }
   });
 
   const handleReject = useCatch(async (id) => {
+    setInlineError('');
     setSavingId(`reject-${id}`);
     try {
       await fetchOrThrow(`/api/admin/community/reports/${id}/reject`, { method: 'POST' });
@@ -100,6 +167,11 @@ const CommunityReportsPendingPage = () => {
             <Typography variant="h6" sx={{ mb: 2 }}>
               Pendentes
             </Typography>
+            {inlineError && (
+              <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+                {inlineError}
+              </Typography>
+            )}
             <Table className={classes.table}>
               <TableHead>
                 <TableRow>
@@ -115,19 +187,43 @@ const CommunityReportsPendingPage = () => {
                 {!loading && items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{typeLabel(item.type)}</TableCell>
-                    <TableCell>{Number(item.latitude).toFixed(6)}</TableCell>
-                    <TableCell>{Number(item.longitude).toFixed(6)}</TableCell>
+                    <TableCell>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={draftById[item.id]?.latitude ?? formatCoordinate(item.latitude)}
+                        onChange={(event) => handleCoordinateChange(item.id, 'latitude', event.target.value)}
+                        inputProps={{ step: 'any' }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={draftById[item.id]?.longitude ?? formatCoordinate(item.longitude)}
+                        onChange={(event) => handleCoordinateChange(item.id, 'longitude', event.target.value)}
+                        inputProps={{ step: 'any' }}
+                      />
+                    </TableCell>
                     <TableCell>{formatDate(item.createdAt)}</TableCell>
                     <TableCell>{item.authorName || `#${item.createdByUserId}`}</TableCell>
                     <TableCell align="right">
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         <Button
+                          variant="text"
+                          size="small"
+                          disabled={savingId !== null}
+                          onClick={() => resetCoordinates(item)}
+                        >
+                          Original
+                        </Button>
+                        <Button
                           variant="contained"
                           size="small"
                           disabled={savingId !== null}
-                          onClick={() => handleApprove(item.id)}
+                          onClick={() => handleApprove(item)}
                         >
-                          Aprovar
+                          Aprovar c/ local
                         </Button>
                         <Button
                           variant="outlined"
