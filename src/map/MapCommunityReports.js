@@ -6,10 +6,9 @@ import {
 } from 'react';
 import maplibregl from 'maplibre-gl';
 import { map } from './core/MapView';
-import { findFonts } from './core/mapUtil';
-import buracoIconUrl from '../resources/images/icon/buraco.svg';
-import radarIconUrl from '../resources/images/icon/default.svg';
-import quebraMolasIconUrl from '../resources/images/icon/scooter.svg';
+import buracoIconUrl from '../resources/images/icon/community-buraco.svg';
+import radarIconUrl from '../resources/images/icon/community-radar.svg';
+import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.svg';
 
 const typeLabelMap = {
   RADAR: 'Radar',
@@ -22,6 +21,8 @@ const statusLabelMap = {
   APPROVED_PUBLIC: 'Público',
   REJECTED: 'Rejeitado',
 };
+
+const MIN_VISIBLE_ZOOM = 17;
 
 const formatCreatedAt = (value) => {
   if (!value) {
@@ -47,8 +48,6 @@ const MapCommunityReports = ({
 }) => {
   const id = useId();
   const symbolLayerId = `${id}-community-symbol`;
-  const circleLayerId = `${id}-community-circle`;
-  const textLayerId = `${id}-community-text`;
   const popupRef = useRef(null);
 
   const imageIds = useMemo(() => ({
@@ -99,7 +98,7 @@ const MapCommunityReports = ({
       { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
     ];
 
-    const loadSvgAsMapImage = async (imageId, iconUrl) => {
+    const loadSvgAsMapImage = (imageId, iconUrl) => {
       if (map.hasImage(imageId)) {
         return;
       }
@@ -126,32 +125,10 @@ const MapCommunityReports = ({
     });
 
     map.addLayer({
-      id: circleLayerId,
-      type: 'circle',
-      source: id,
-      paint: {
-        'circle-radius': 16,
-        'circle-stroke-color': '#FFFFFF',
-        'circle-stroke-width': 2,
-        'circle-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.2, 0.25],
-        'circle-color': [
-          'match',
-          ['get', 'type'],
-          'RADAR',
-          '#F59E0B',
-          'BURACO',
-          '#EF4444',
-          'QUEBRA_MOLAS',
-          '#2563EB',
-          '#64748B',
-        ],
-      },
-    });
-
-    map.addLayer({
       id: symbolLayerId,
       type: 'symbol',
       source: id,
+      minzoom: MIN_VISIBLE_ZOOM,
       layout: {
         'icon-image': [
           'match',
@@ -164,44 +141,13 @@ const MapCommunityReports = ({
           imageIds.QUEBRA_MOLAS,
           imageIds.RADAR,
         ],
-        'icon-size': [
-          'match',
-          ['get', 'type'],
-          'BURACO',
-          0.06,
-          1.8,
-        ],
+        'icon-size': 0.62,
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
+        'icon-padding': 8,
       },
       paint: {
-        'icon-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.55, 1],
-      },
-    });
-
-    map.addLayer({
-      id: textLayerId,
-      type: 'symbol',
-      source: id,
-      layout: {
-        'text-field': [
-          'match',
-          ['get', 'type'],
-          'RADAR',
-          'R',
-          'BURACO',
-          'B',
-          'QUEBRA_MOLAS',
-          'Q',
-          '?',
-        ],
-        'text-size': 11,
-        'text-font': findFonts(map),
-        'text-allow-overlap': true,
-      },
-      paint: {
-        'text-color': '#FFFFFF',
-        'text-opacity': 0,
+        'icon-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.58, 1],
       },
     });
 
@@ -300,27 +246,17 @@ const MapCommunityReports = ({
         .addTo(map);
     };
 
-    [circleLayerId, symbolLayerId, textLayerId].forEach((layerId) => {
-      map.on('mouseenter', layerId, onMouseEnter);
-      map.on('mouseleave', layerId, onMouseLeave);
-      map.on('click', layerId, onClick);
-    });
+    map.on('mouseenter', symbolLayerId, onMouseEnter);
+    map.on('mouseleave', symbolLayerId, onMouseLeave);
+    map.on('click', symbolLayerId, onClick);
 
     return () => {
-      [circleLayerId, symbolLayerId, textLayerId].forEach((layerId) => {
-        map.off('mouseenter', layerId, onMouseEnter);
-        map.off('mouseleave', layerId, onMouseLeave);
-        map.off('click', layerId, onClick);
-      });
+      map.off('mouseenter', symbolLayerId, onMouseEnter);
+      map.off('mouseleave', symbolLayerId, onMouseLeave);
+      map.off('click', symbolLayerId, onClick);
       clearPopup();
       if (map.getLayer(symbolLayerId)) {
         map.removeLayer(symbolLayerId);
-      }
-      if (map.getLayer(textLayerId)) {
-        map.removeLayer(textLayerId);
-      }
-      if (map.getLayer(circleLayerId)) {
-        map.removeLayer(circleLayerId);
       }
       if (map.getSource(id)) {
         map.removeSource(id);
@@ -331,11 +267,11 @@ const MapCommunityReports = ({
         }
       });
     };
-  }, [imageIds, onCancelPending, symbolLayerId]);
+  }, [id, imageIds, onCancelPending, symbolLayerId]);
 
   useEffect(() => {
     map.getSource(id)?.setData(features);
-  }, [features]);
+  }, [features, id]);
 
   return null;
 };
