@@ -46,7 +46,7 @@ const typeLabel = (type) => {
     case 'BURACO':
       return 'Buraco';
     case 'QUEBRA_MOLAS':
-      return 'Quebra-molas';
+      return 'Lombada';
     default:
       return type || '-';
   }
@@ -87,8 +87,7 @@ const CommunityReportsPendingPage = () => {
   const pendingMode = statusFilter === STATUS_PENDING;
   const activeMode = statusFilter === STATUS_ACTIVE;
 
-  // MVP: somente BURACO na tela Admin
-  const displayItems = items.filter((item) => item.type === 'BURACO');
+  const displayItems = items.filter((item) => item.type === 'BURACO' || item.type === 'QUEBRA_MOLAS');
 
   const loadItems = useCatch(async () => {
     setLoading(true);

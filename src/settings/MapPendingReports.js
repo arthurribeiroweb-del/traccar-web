@@ -13,7 +13,7 @@ import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.
 const typeLabelMap = {
   RADAR: 'Radar',
   BURACO: 'Buraco',
-  QUEBRA_MOLAS: 'Quebra-molas',
+  QUEBRA_MOLAS: 'Lombada',
 };
 
 const MapPendingReports = ({

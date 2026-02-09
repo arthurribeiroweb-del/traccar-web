@@ -23,6 +23,7 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
 import DangerousIcon from '@mui/icons-material/Dangerous';
+import SpeedIcon from '@mui/icons-material/Speed';
 import MapView from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
@@ -66,10 +67,13 @@ const NO_UPDATE_TIMEOUT_MS = 30000;
 const REPORT_MOVE_DEBOUNCE_MS = 300;
 const COMMUNITY_REFRESH_INTERVAL_MS = 15000;
 
-// MVP: apenas BURACO no fluxo de reportar
 const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
+  { key: 'QUEBRA_MOLAS', label: 'Lombada', icon: SpeedIcon },
 ];
+
+const getCommunityTypeLabel = (type) => COMMUNITY_TYPES
+  .find((item) => item.key === type)?.label || type || 'Aviso';
 
 const MainMap = ({
   filteredPositions,
@@ -106,6 +110,7 @@ const MainMap = ({
   const [selectedHeadingState, setSelectedHeadingState] = useState('idle');
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState(null);
+  const [reportTypeWaitingClick, setReportTypeWaitingClick] = useState(null);
   const [reportClickPosition, setReportClickPosition] = useState(null);
   const [waitingForMapClick, setWaitingForMapClick] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -527,13 +532,10 @@ const MainMap = ({
 
   const handleReportTypeSelect = useCallback((type) => {
     setReportSheetOpen(false);
-    if (type === 'BURACO') {
-      setReportClickPosition(null);
-      setWaitingForMapClick(true);
-      showFollowMessage('Clique no mapa onde está o buraco.', 'info');
-    } else {
-      setSelectedReportType(type);
-    }
+    setReportClickPosition(null);
+    setReportTypeWaitingClick(type);
+    setWaitingForMapClick(true);
+    showFollowMessage(`Clique no mapa onde esta a ${getCommunityTypeLabel(type).toLowerCase()}.`, 'info');
   }, [showFollowMessage]);
 
   useEffect(() => {
@@ -543,7 +545,8 @@ const MainMap = ({
     const onMapClick = (e) => {
       setReportClickPosition({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       setWaitingForMapClick(false);
-      setSelectedReportType('BURACO');
+      setSelectedReportType(reportTypeWaitingClick);
+      setReportTypeWaitingClick(null);
     };
     map.once('click', onMapClick);
     map.getCanvas().style.cursor = 'crosshair';
@@ -551,7 +554,7 @@ const MainMap = ({
       map.off('click', onMapClick);
       map.getCanvas().style.cursor = '';
     };
-  }, [waitingForMapClick]);
+  }, [reportTypeWaitingClick, waitingForMapClick]);
 
   const handleReportConfirm = useCallback(async () => {
     if (!selectedReportType) {
@@ -560,6 +563,7 @@ const MainMap = ({
     if (!map || !map.loaded()) {
       showFollowMessage('Não foi possível enviar. Tente novamente.', 'error');
       setSelectedReportType(null);
+      setReportTypeWaitingClick(null);
       return;
     }
 
@@ -573,7 +577,7 @@ const MainMap = ({
     const tempId = `temp-${Date.now()}-${Math.round(Math.random() * 100000)}`;
     const tempItem = {
       id: tempId,
-      type: 'BURACO',
+      type: selectedReportType,
       status: 'PENDING_PRIVATE',
       latitude,
       longitude,
@@ -587,7 +591,7 @@ const MainMap = ({
 
     try {
       const payload = {
-        type: 'BURACO',
+        type: selectedReportType,
         latitude,
         longitude,
       };
@@ -610,6 +614,7 @@ const MainMap = ({
     } finally {
       setReportSubmitting(false);
       setSelectedReportType(null);
+      setReportTypeWaitingClick(null);
       setReportClickPosition(null);
     }
   }, [
@@ -700,6 +705,7 @@ const MainMap = ({
         onClose={() => {
           setReportSheetOpen(false);
           setWaitingForMapClick(false);
+          setReportTypeWaitingClick(null);
         }}
         PaperProps={{
           sx: {
@@ -737,12 +743,13 @@ const MainMap = ({
         open={Boolean(selectedReportType)}
         onClose={() => {
           setSelectedReportType(null);
+          setReportTypeWaitingClick(null);
           setReportClickPosition(null);
         }}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Adicionar BURACO aqui?</DialogTitle>
+        <DialogTitle>{`Adicionar ${getCommunityTypeLabel(selectedReportType).toUpperCase()} aqui?`}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
             {reportClickPosition
@@ -752,7 +759,10 @@ const MainMap = ({
         </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => setSelectedReportType(null)}
+            onClick={() => {
+              setSelectedReportType(null);
+              setReportTypeWaitingClick(null);
+            }}
             disabled={reportSubmitting}
           >
             Cancelar

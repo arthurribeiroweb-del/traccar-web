@@ -17,7 +17,7 @@ import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.
 const typeLabelMap = {
   RADAR: 'Radar',
   BURACO: 'Buraco',
-  QUEBRA_MOLAS: 'Quebra-molas',
+  QUEBRA_MOLAS: 'Lombada',
 };
 
 const statusLabelMap = {
@@ -286,11 +286,13 @@ const MapCommunityReports = ({
       title.textContent = typeLabelMap[type] || type || '-';
       container.appendChild(title);
 
-      if (type === 'BURACO') {
+      if (type === 'BURACO' || type === 'QUEBRA_MOLAS') {
         const descLine = document.createElement('div');
         descLine.style.fontSize = '12px';
         descLine.style.color = '#0F172A';
-        descLine.textContent = `Buraco na pista, feito por ${authorName}`;
+        descLine.textContent = type === 'BURACO'
+          ? `Buraco na pista, feito por ${authorName}`
+          : `Lombada na pista, feito por ${authorName}`;
         container.appendChild(descLine);
       }
 
