@@ -47,6 +47,24 @@ const formatCreatedAt = (value) => {
   });
 };
 
+const formatAuthorForDisplay = (value) => {
+  if (!value) {
+    return 'Usuario';
+  }
+  const raw = String(value).trim();
+  if (!raw) {
+    return 'Usuario';
+  }
+  const normalized = raw.includes('@') ? raw.split('@')[0] : raw;
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  if (!parts.length) {
+    return 'Usuario';
+  }
+  if (parts.length === 1) {
+    return parts[0];
+  }
+  return parts[parts.length - 1];
+};
 const MapCommunityReports = ({
   publicReports,
   pendingReports,
@@ -244,7 +262,7 @@ const MapCommunityReports = ({
       const radarSpeedLimit = Number(feature.properties.radarSpeedLimit);
       const pending = feature.properties.pending === true || feature.properties.pending === 'true';
       const cancelable = feature.properties.cancelable === true || feature.properties.cancelable === 'true';
-      const authorName = feature.properties.authorName || 'Usuário';
+      const authorName = formatAuthorForDisplay(feature.properties.authorName);
       const initialVotes = voteState[reportId] || {
         existsVotes: feature.properties.existsVotes || 0,
         goneVotes: feature.properties.goneVotes || 0,
@@ -518,3 +536,4 @@ const MapCommunityReports = ({
 };
 
 export default MapCommunityReports;
+
