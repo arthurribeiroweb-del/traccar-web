@@ -26,8 +26,9 @@ const statusLabelMap = {
   REJECTED: 'Rejeitado',
 };
 
-/** Zoom mínimo: abaixo disso (visão acima de ~50 m) os ícones de buraco somem para não poluir o mapa */
-const ZOOM_HIDE_BEYOND_100M = 17;
+/** Zoom mínimo para começar a desenhar avisos comunitários */
+const COMMUNITY_MIN_ZOOM = 17;
+const LOMBADA_MAX_VIEW_RADIUS_METERS = 500;
 const COMMUNITY_ICON_BASE_SIZE = 64;
 
 const formatCreatedAt = (value) => {
@@ -72,6 +73,7 @@ const MapCommunityReports = ({
 }) => {
   const id = useId();
   const symbolLayerId = `${id}-community-symbol`;
+  const speedBumpLayerId = `${id}-community-symbol-quebra-molas`;
   const popupRef = useRef(null);
   const [voteState, setVoteState] = useState({});
   const [hiddenReports, setHiddenReports] = useState(new Set());
@@ -208,7 +210,8 @@ const MapCommunityReports = ({
       id: symbolLayerId,
       type: 'symbol',
       source: id,
-      minzoom: ZOOM_HIDE_BEYOND_100M,
+      minzoom: COMMUNITY_MIN_ZOOM,
+      filter: ['!=', ['get', 'type'], 'QUEBRA_MOLAS'],
       layout: {
         'icon-image': [
           'match',
@@ -217,8 +220,6 @@ const MapCommunityReports = ({
           ['case', ['to-boolean', ['get', 'pending']], imageIds.BURACO, imageIds.BURACO_APPROVED],
           'RADAR',
           imageIds.RADAR,
-          'QUEBRA_MOLAS',
-          imageIds.QUEBRA_MOLAS,
           imageIds.RADAR,
         ],
         // icon-size must have zoom at the top level; apply type scaling per stop
@@ -227,11 +228,39 @@ const MapCommunityReports = ({
           ['linear'],
           ['zoom'],
           16,
-          ['*', 0.35, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 0.85]],
+          ['*', 0.35, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
           17.5,
-          ['*', 0.45, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 0.85]],
+          ['*', 0.45, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
           19,
-          ['*', 0.55, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 0.85]],
+          ['*', 0.55, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
+        ],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-padding': 8,
+      },
+      paint: {
+        'icon-opacity': ['case', ['to-boolean', ['get', 'pending']], 0.58, 1],
+      },
+    });
+
+    map.addLayer({
+      id: speedBumpLayerId,
+      type: 'symbol',
+      source: id,
+      minzoom: COMMUNITY_MIN_ZOOM,
+      filter: ['==', ['get', 'type'], 'QUEBRA_MOLAS'],
+      layout: {
+        'icon-image': imageIds.QUEBRA_MOLAS,
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          16,
+          ['*', 0.35, 1.1],
+          17.5,
+          ['*', 0.45, 1.1],
+          19,
+          ['*', 0.55, 1.1],
         ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
@@ -504,15 +533,47 @@ const MapCommunityReports = ({
         .catch((error) => console.warn('loadVotes failed', error));
     };
 
-    map.on('mouseenter', symbolLayerId, onMouseEnter);
-    map.on('mouseleave', symbolLayerId, onMouseLeave);
-    map.on('click', symbolLayerId, onClick);
+    const updateSpeedBumpVisibility = () => {
+      if (!map.getLayer(speedBumpLayerId)) {
+        return;
+      }
+
+      const center = map.getCenter();
+      const bounds = map.getBounds();
+      const northPoint = new maplibregl.LngLat(center.lng, bounds.getNorth());
+      const southPoint = new maplibregl.LngLat(center.lng, bounds.getSouth());
+      const viewRadiusMeters = Math.max(
+        center.distanceTo(northPoint),
+        center.distanceTo(southPoint),
+      );
+      const visibility = viewRadiusMeters <= LOMBADA_MAX_VIEW_RADIUS_METERS ? 'visible' : 'none';
+      if (map.getLayoutProperty(speedBumpLayerId, 'visibility') !== visibility) {
+        map.setLayoutProperty(speedBumpLayerId, 'visibility', visibility);
+      }
+    };
+
+    const interactiveLayerIds = [symbolLayerId, speedBumpLayerId];
+    interactiveLayerIds.forEach((layerId) => {
+      map.on('mouseenter', layerId, onMouseEnter);
+      map.on('mouseleave', layerId, onMouseLeave);
+      map.on('click', layerId, onClick);
+    });
+    map.on('moveend', updateSpeedBumpVisibility);
+    map.on('zoomend', updateSpeedBumpVisibility);
+    updateSpeedBumpVisibility();
 
     return () => {
-      map.off('mouseenter', symbolLayerId, onMouseEnter);
-      map.off('mouseleave', symbolLayerId, onMouseLeave);
-      map.off('click', symbolLayerId, onClick);
+      interactiveLayerIds.forEach((layerId) => {
+        map.off('mouseenter', layerId, onMouseEnter);
+        map.off('mouseleave', layerId, onMouseLeave);
+        map.off('click', layerId, onClick);
+      });
+      map.off('moveend', updateSpeedBumpVisibility);
+      map.off('zoomend', updateSpeedBumpVisibility);
       clearPopup();
+      if (map.getLayer(speedBumpLayerId)) {
+        map.removeLayer(speedBumpLayerId);
+      }
       if (map.getLayer(symbolLayerId)) {
         map.removeLayer(symbolLayerId);
       }
@@ -525,7 +586,7 @@ const MapCommunityReports = ({
         }
       });
     };
-  }, [id, imageIds, onCancelPending, symbolLayerId]);
+  }, [id, imageIds, onCancelPending, speedBumpLayerId, symbolLayerId]);
 
   useEffect(() => {
     const filteredFeatures = {
@@ -542,4 +603,3 @@ const MapCommunityReports = ({
 };
 
 export default MapCommunityReports;
-
