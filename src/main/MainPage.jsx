@@ -100,9 +100,8 @@ const MainPage = () => {
   });
   const [filterSort, setFilterSort] = usePersistedState('filterSort', '');
   const [filterMap, setFilterMap] = usePersistedState('filterMap', false);
-  // Radares devem ficar sempre ativos no mapa; mantemos o estado apenas para
-  // compatibilidade com preferências antigas, mas não exibimos mais toggle.
-  const [showRadars] = usePersistedState('mapRadars', true);
+  // Radares devem ficar sempre ativos no mapa, independente de preferência salva.
+  const showRadars = true;
 
   const [devicesOpen, setDevicesOpen] = useState(desktop);
   const [eventsOpen, setEventsOpen] = useState(false);
