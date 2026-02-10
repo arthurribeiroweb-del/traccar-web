@@ -133,14 +133,14 @@ const DeviceRow = ({ devices, index, style }) => {
         {position && (
           <>
             {position.attributes.hasOwnProperty('alarm') && (
-              <Tooltip disableTouchListener title={`${t('eventAlarm')}: ${formatAlarm(position.attributes.alarm, t)}`}>
+              <Tooltip title={`${t('eventAlarm')}: ${formatAlarm(position.attributes.alarm, t)}`}>
                 <IconButton size="small" disableRipple disableTouchRipple>
                   <ErrorIcon fontSize="small" className={classes.error} />
                 </IconButton>
               </Tooltip>
             )}
             {position.attributes.hasOwnProperty('ignition') && (
-              <Tooltip disableTouchListener title={`${t('positionIgnition')}: ${formatBoolean(position.attributes.ignition, t)}`}>
+              <Tooltip title={`${t('positionIgnition')}: ${formatBoolean(position.attributes.ignition, t)}`}>
                 <IconButton size="small" disableRipple disableTouchRipple>
                   {position.attributes.ignition ? (
                     <EngineIcon width={20} height={20} className={classes.success} />
@@ -151,7 +151,7 @@ const DeviceRow = ({ devices, index, style }) => {
               </Tooltip>
             )}
             {position.attributes.hasOwnProperty('batteryLevel') && (
-              <Tooltip disableTouchListener title={`${t('positionBatteryLevel')}: ${formatPercentage(position.attributes.batteryLevel)}`}>
+              <Tooltip title={`${t('positionBatteryLevel')}: ${formatPercentage(position.attributes.batteryLevel)}`}>
                 <IconButton size="small" disableRipple disableTouchRipple>
                   {(position.attributes.batteryLevel > 70 && (
                     position.attributes.charge
