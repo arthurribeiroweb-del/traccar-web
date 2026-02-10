@@ -64,8 +64,12 @@ cd "$WEB_SRC"
 git pull
 npm install
 npm run build
-sudo rm -rf "$TRACCAR/web/"*
-sudo cp -r "$WEB_SRC/build/"* "$TRACCAR/web/"
+# Evita quebrar clientes com index.html antigo em cache:
+# mantemos assets hash antigos e publicamos os novos por cima.
+sudo mkdir -p "$TRACCAR/web"
+sudo rsync -a "$WEB_SRC/build/" "$TRACCAR/web/" --exclude 'assets/'
+sudo mkdir -p "$TRACCAR/web/assets"
+sudo rsync -a "$WEB_SRC/build/assets/" "$TRACCAR/web/assets/"
 echo "Frontend deployado. version: $(cat $TRACCAR/web/version.json 2>/dev/null || echo '?')"
 
 echo ""
