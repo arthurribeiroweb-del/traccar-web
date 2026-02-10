@@ -283,6 +283,7 @@
     "backupReplaceAll": "Replace all data",
     "backupStatus": "Status",
     "reportTitle": "Relatórios",
+    "reportDashboard": "Dashboard",
     "reportScheduled": "Relatórios Agendados",
     "reportDevice": "Dispositivo",
     "reportGroup": "Grupo",
