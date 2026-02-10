@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   FormControl,
   InputLabel,
@@ -26,25 +26,35 @@ const SelectField = ({
   helperText,
   disabled,
 }) => {
-  const [items, setItems] = useState();
+  const [endpointItems, setEndpointItems] = useState();
 
-  const getOptionLabel = (option) => {
-    if (typeof option !== 'object') {
-      option = items.find((obj) => keyGetter(obj) === option);
+  const items = data || endpointItems;
+
+  const resolveOption = (option) => {
+    if (!option) {
+      return null;
     }
-    return option ? titleGetter(option) : emptyTitle;
+    if (typeof option === 'object') {
+      return option;
+    }
+    return items.find((item) => keyGetter(item) === option) || null;
   };
 
-  useEffect(() => setItems(data), [data]);
+  const getOptionLabel = (option) => {
+    const resolved = resolveOption(option);
+    return resolved ? titleGetter(resolved) : emptyTitle;
+  };
 
   useEffectAsync(async () => {
     if (endpoint) {
       const response = await fetchOrThrow(endpoint);
-      setItems(await response.json());
+      setEndpointItems(await response.json());
     }
   }, []);
 
   if (items) {
+    const selectedValue = multiple ? value : resolveOption(value);
+
     return (
       <FormControl fullWidth={fullWidth} disabled={disabled}>
         {multiple ? (
@@ -71,9 +81,9 @@ const SelectField = ({
             renderOption={(props, option) => (
               <MenuItem {...props} key={keyGetter(option)} value={keyGetter(option)}>{titleGetter(option)}</MenuItem>
             )}
-            isOptionEqualToValue={(option, value) => keyGetter(option) === value}
-            value={value}
-            onChange={(_, value) => onChange({ target: { value: value ? keyGetter(value) : emptyValue } })}
+            isOptionEqualToValue={(option, selected) => keyGetter(option) === keyGetter(selected)}
+            value={selectedValue}
+            onChange={(_, selected) => onChange({ target: { value: selected ? keyGetter(selected) : emptyValue } })}
             disabled={disabled}
             renderInput={(params) => (
               <TextField {...params} label={label} helperText={helperText} disabled={disabled} />

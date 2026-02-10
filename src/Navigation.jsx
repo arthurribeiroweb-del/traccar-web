@@ -32,7 +32,6 @@ const ReplayPage = lazy(() => import('./other/ReplayPage'));
 const TripReportPage = lazy(() => import('./reports/TripReportPage'));
 const StopReportPage = lazy(() => import('./reports/StopReportPage'));
 const SummaryReportPage = lazy(() => import('./reports/SummaryReportPage'));
-const ReportsDashboardPage = lazy(() => import('./reports/ReportsDashboardPage'));
 const DailyReportRedirectPage = lazy(() => import('./reports/DailyReportRedirectPage'));
 const ChartReportPage = lazy(() => import('./reports/ChartReportPage'));
 const DriversPage = lazy(() => import('./settings/DriversPage'));
@@ -307,7 +306,6 @@ const Navigation = () => {
         </Route>
 
         <Route path="reports">
-          <Route path="dashboard" element={<ReportsDashboardPage />} />
           <Route path="combined" element={<CombinedReportPage />} />
           <Route
             path="chart"
