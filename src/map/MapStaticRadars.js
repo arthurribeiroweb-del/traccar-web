@@ -327,7 +327,7 @@ const MapStaticRadars = ({ enabled }) => {
     }
 
     const onMouseEnter = () => {
-      map.getCanvas().style.cursor = 'pointer';
+      map.getCanvas().style.cursor = isAdmin ? 'pointer' : '';
     };
 
     const onMouseLeave = () => {
@@ -370,6 +370,10 @@ const MapStaticRadars = ({ enabled }) => {
     };
 
     const onRadarClick = (event) => {
+      if (!isAdmin) {
+        return;
+      }
+
       const feature = event.features?.[0];
       const coordinates = feature?.geometry?.coordinates;
       if (!feature?.properties || !Array.isArray(coordinates) || coordinates.length < 2) {
@@ -519,9 +523,11 @@ const MapStaticRadars = ({ enabled }) => {
       });
     };
 
-    map.on('mouseenter', layerId, onMouseEnter);
-    map.on('mouseleave', layerId, onMouseLeave);
-    map.on('click', layerId, onRadarClick);
+    if (isAdmin) {
+      map.on('mouseenter', layerId, onMouseEnter);
+      map.on('mouseleave', layerId, onMouseLeave);
+      map.on('click', layerId, onRadarClick);
+    }
 
     const loadData = async () => {
       try {
@@ -558,9 +564,11 @@ const MapStaticRadars = ({ enabled }) => {
     loadData();
 
     return () => {
-      map.off('mouseenter', layerId, onMouseEnter);
-      map.off('mouseleave', layerId, onMouseLeave);
-      map.off('click', layerId, onRadarClick);
+      if (isAdmin) {
+        map.off('mouseenter', layerId, onMouseEnter);
+        map.off('mouseleave', layerId, onMouseLeave);
+        map.off('click', layerId, onRadarClick);
+      }
       clearPopup();
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
