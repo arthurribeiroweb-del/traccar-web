@@ -46,8 +46,17 @@ fi
 
 echo "=== 1. BACKUP ==="
 BACKUP_FILE="$BACKUP_DIR/backup-traccar-$(date +%F_%H%M).tgz"
+# O tar pode retornar código 1 se algum arquivo mudar enquanto está sendo lido.
+# Isso é esperado em database.mv.db; não devemos abortar o deploy por causa disso.
+set +e
 sudo tar -czf "$BACKUP_FILE" "$TRACCAR/data" "$TRACCAR/conf/traccar.xml" "$TRACCAR/web"
-echo "Backup salvo em $BACKUP_FILE"
+TAR_EXIT_CODE=$?
+set -e
+if [ "$TAR_EXIT_CODE" -ne 0 ] && [ "$TAR_EXIT_CODE" -ne 1 ]; then
+  echo "ERRO: tar falhou com codigo $TAR_EXIT_CODE"
+  exit "$TAR_EXIT_CODE"
+fi
+echo "Backup salvo em $BACKUP_FILE (tar exit=$TAR_EXIT_CODE)"
 
 echo ""
 echo "=== 2. FRONTEND (traccar-web) ==="
