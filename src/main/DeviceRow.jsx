@@ -106,12 +106,11 @@ const DeviceRow = ({ devices, index, style }) => {
   return (
     <div style={style}>
       <ListItemButton
+        key={item.id}
         onClick={() => dispatch(devicesActions.selectId(item.id))}
         disabled={!admin && item.disabled}
         selected={selectedDeviceId === item.id}
         className={selectedDeviceId === item.id ? classes.selected : null}
-        disableRipple
-        disableTouchRipple
       >
         <ListItemAvatar>
           <Avatar>
