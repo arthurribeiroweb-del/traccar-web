@@ -79,9 +79,11 @@ const SelectField = ({
             options={items}
             getOptionLabel={getOptionLabel}
             renderOption={(props, option) => (
-              <MenuItem {...props} key={keyGetter(option)} value={keyGetter(option)}>{titleGetter(option)}</MenuItem>
+              <li {...props} key={keyGetter(option)}>{titleGetter(option)}</li>
             )}
-            isOptionEqualToValue={(option, selected) => keyGetter(option) === keyGetter(selected)}
+            isOptionEqualToValue={(option, selected) => (
+              selected != null && keyGetter(option) === keyGetter(selected)
+            )}
             value={selectedValue}
             onChange={(_, selected) => onChange({ target: { value: selected ? keyGetter(selected) : emptyValue } })}
             disabled={disabled}
