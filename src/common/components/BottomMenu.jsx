@@ -13,7 +13,7 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 
 import { sessionActions } from '../../store';
 import { useTranslation } from './LocalizationProvider';
-import { useReportsAccess, useRestriction } from '../util/permissions';
+import { useRestriction } from '../util/permissions';
 import { nativePostMessage } from './NativeInterface';
 
 const BottomMenu = () => {
@@ -24,7 +24,6 @@ const BottomMenu = () => {
 
   const readonly = useRestriction('readonly');
   const disableReports = useRestriction('disableReports');
-  const reportsAccess = useReportsAccess();
   const devices = useSelector((state) => state.devices.items);
   const user = useSelector((state) => state.session.user);
   const socket = useSelector((state) => state.session.socket);
@@ -92,12 +91,11 @@ const BottomMenu = () => {
             id = deviceIds[0];
           }
         }
-
-        const target = reportsAccess ? '/reports/combined' : '/reports/dashboard';
+        
         if (id != null) {
-          navigate(`${target}?deviceId=${id}`);
+          navigate(`/reports/combined?deviceId=${id}`);
         } else {
-          navigate(target);
+          navigate('/reports/combined');
         }
         break;
       }

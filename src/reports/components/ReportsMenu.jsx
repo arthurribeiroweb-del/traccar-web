@@ -1,5 +1,4 @@
-import { Divider, List, ListSubheader } from '@mui/material';
-import SpaceDashboardIcon from '@mui/icons-material/SpaceDashboard';
+import { Divider, List } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import PauseCircleFilledIcon from '@mui/icons-material/PauseCircleFilled';
@@ -24,7 +23,6 @@ const ReportsMenu = () => {
   const admin = useAdministrator();
   const reportsAccess = useReportsAccess();
   const readonly = useRestriction('readonly');
-  const showAdvancedSection = reportsAccess || admin;
   const showSecondarySection = reportsAccess || admin;
 
   const buildLink = (path) => {
@@ -35,12 +33,7 @@ const ReportsMenu = () => {
       return path;
     }
     const params = new URLSearchParams();
-    if (path === '/reports/dashboard') {
-      const [firstDeviceId] = deviceIds;
-      if (firstDeviceId != null) {
-        params.append('deviceId', firstDeviceId);
-      }
-    } else if (path === '/reports/chart' || path === '/reports/route' || path === '/replay') {
+    if (path === '/reports/chart' || path === '/reports/route' || path === '/replay') {
       const [firstDeviceId] = deviceIds;
       if (firstDeviceId != null) {
         params.append('deviceId', firstDeviceId);
@@ -56,23 +49,6 @@ const ReportsMenu = () => {
   return (
     <>
       <List>
-        <MenuItem
-          title={t('reportDashboard') || 'Dashboard'}
-          link={buildLink('/reports/dashboard')}
-          icon={<SpaceDashboardIcon />}
-          selected={location.pathname === '/reports/dashboard'}
-        />
-      </List>
-      {showAdvancedSection && (
-        <>
-          <Divider />
-          <List
-            subheader={(
-              <ListSubheader disableSticky>
-                {t('reportAdvanced') || 'Relatórios (Avançado)'}
-              </ListSubheader>
-            )}
-          >
         <MenuItem
           title={t('reportCombined')}
           link={buildLink('/reports/combined')}
@@ -121,14 +97,12 @@ const ReportsMenu = () => {
         {reportsAccess && (
           <MenuItem
             title={t('reportPositions')}
-          link={buildLink('/reports/route')}
-          icon={<TimelineIcon />}
-          selected={location.pathname === '/reports/route'}
-        />
+            link={buildLink('/reports/route')}
+            icon={<TimelineIcon />}
+            selected={location.pathname === '/reports/route'}
+          />
         )}
-          </List>
-        </>
-      )}
+      </List>
       {showSecondarySection && (
         <>
           <Divider />

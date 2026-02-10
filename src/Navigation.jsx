@@ -24,8 +24,6 @@ import StopReportPage from './reports/StopReportPage';
 import SummaryReportPage from './reports/SummaryReportPage';
 import DailyReportRedirectPage from './reports/DailyReportRedirectPage';
 import ChartReportPage from './reports/ChartReportPage';
-import ReportsDashboardPage from './reports/ReportsDashboardPage';
-import ReportsIndexRedirect from './reports/ReportsIndexRedirect';
 import DriversPage from './settings/DriversPage';
 import DriverPage from './settings/DriverPage';
 import CalendarsPage from './settings/CalendarsPage';
@@ -305,8 +303,6 @@ const Navigation = () => {
         </Route>
 
         <Route path="reports">
-          <Route index element={<ReportsIndexRedirect />} />
-          <Route path="dashboard" element={<ReportsDashboardPage />} />
           <Route path="combined" element={<CombinedReportPage />} />
           <Route
             path="chart"
