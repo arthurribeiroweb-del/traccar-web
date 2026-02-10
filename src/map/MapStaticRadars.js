@@ -1,11 +1,14 @@
 import {
+  useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 import circle from '@turf/circle';
 import maplibregl from 'maplibre-gl';
+import { useSelector } from 'react-redux';
 import { map } from './core/MapView';
 import radarIconUrl from '../resources/images/icon/community-radar.svg';
 import speed20IconUrl from '../resources/images/icon/speed-limit-20-sign-icon.svg';
@@ -18,6 +21,7 @@ import speed80IconUrl from '../resources/images/icon/speed-limit-80-sign-icon.sv
 import speed90IconUrl from '../resources/images/icon/speed-limit-90-sign-icon.svg';
 import speed100IconUrl from '../resources/images/icon/speed-limit-100-sign-icon.svg';
 import speed120IconUrl from '../resources/images/icon/speed-limit-120-sign-icon.svg';
+import beepSoundUrl from '../resources/bipe.mp3';
 import { useAdministrator } from '../common/util/permissions';
 import fetchOrThrow from '../common/util/fetchOrThrow';
 
@@ -32,9 +36,26 @@ const STATIC_RADARS_FILE = 'scdb-radars-br.geojson';
 const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
 const STATIC_RADARS_COMMON_PREFIXES = ['/login', '/rastreador'];
 const STATIC_RADARS_AUDIT_COLOR = '#E11D48';
+const RADAR_PROXIMITY_COOLDOWN_MS = 30000;
+const RADAR_ALERT_REPEAT_COUNT = 3;
+const RADAR_ALERT_REPEAT_GAP_MS = 450;
+const EARTH_RADIUS_METERS = 6371000;
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
   features: [],
+};
+
+const toRadians = (value) => (value * Math.PI) / 180;
+
+const distanceMeters = (latitudeA, longitudeA, latitudeB, longitudeB) => {
+  const lat1 = toRadians(latitudeA);
+  const lat2 = toRadians(latitudeB);
+  const deltaLat = toRadians(latitudeB - latitudeA);
+  const deltaLng = toRadians(longitudeB - longitudeA);
+  const a = (Math.sin(deltaLat / 2) ** 2)
+    + Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_METERS * c;
 };
 
 const normalizeRadiusOverrides = (overrides) => {
@@ -94,7 +115,7 @@ const loadStaticRadarsGeoJson = async () => {
       if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
         return { data, url };
       }
-    } catch (error) {
+    } catch {
       // Ignore and try the next candidate URL.
     }
   }
@@ -155,6 +176,9 @@ const normalizeStaticRadarsData = (data, radiusOverrides = {}) => {
 const MapStaticRadars = ({ enabled }) => {
   const id = useId();
   const isAdmin = useAdministrator();
+  const selectedId = useSelector((state) => state.devices.selectedId);
+  const positionsByDeviceId = useSelector((state) => state.session.positions || {});
+  const selectedPosition = selectedId != null ? positionsByDeviceId[selectedId] : null;
   const sourceId = `${id}-static-radars-source`;
   const layerId = `${id}-static-radars-layer`;
   const selectedRadiusSourceId = `${id}-static-radars-selected-radius-source`;
@@ -162,6 +186,12 @@ const MapStaticRadars = ({ enabled }) => {
   const selectedRadiusBorderLayerId = `${id}-static-radars-selected-radius-border`;
   const popupRef = useRef(null);
   const sourceDataRef = useRef(EMPTY_FEATURE_COLLECTION);
+  const alertAudioRef = useRef(null);
+  const alertSequenceTimersRef = useRef([]);
+  const insideRadarKeysRef = useRef(new Set());
+  const radarCooldownRef = useRef({});
+  const [dataVersion, setDataVersion] = useState(0);
+  const [visibilityVersion, setVisibilityVersion] = useState(0);
 
   const imageIds = useMemo(() => ({
     DEFAULT: `${id}-static-radars-generic`,
@@ -176,6 +206,146 @@ const MapStaticRadars = ({ enabled }) => {
     SPEED_100: `${id}-static-radars-100`,
     SPEED_120: `${id}-static-radars-120`,
   }), [id]);
+
+  const clearAlertSequence = useCallback(() => {
+    alertSequenceTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    alertSequenceTimersRef.current = [];
+  }, []);
+
+  const playRadarAlertSequence = useCallback(() => {
+    if (!alertAudioRef.current) {
+      return;
+    }
+
+    clearAlertSequence();
+    const playOnce = () => {
+      if (!alertAudioRef.current) {
+        return;
+      }
+      alertAudioRef.current.pause();
+      alertAudioRef.current.currentTime = 0;
+      alertAudioRef.current.play().catch(() => {});
+    };
+
+    playOnce();
+    for (let index = 1; index < RADAR_ALERT_REPEAT_COUNT; index += 1) {
+      const timerId = window.setTimeout(playOnce, index * RADAR_ALERT_REPEAT_GAP_MS);
+      alertSequenceTimersRef.current.push(timerId);
+    }
+  }, [clearAlertSequence]);
+
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      setVisibilityVersion((current) => current + 1);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof Audio === 'undefined') {
+      alertAudioRef.current = null;
+      return;
+    }
+    const audio = new Audio(beepSoundUrl);
+    audio.preload = 'auto';
+    alertAudioRef.current = audio;
+    return () => {
+      clearAlertSequence();
+      if (alertAudioRef.current) {
+        alertAudioRef.current.pause();
+        alertAudioRef.current.currentTime = 0;
+      }
+      alertAudioRef.current = null;
+    };
+  }, [clearAlertSequence]);
+
+  useEffect(() => {
+    if (!enabled) {
+      insideRadarKeysRef.current = new Set();
+      clearAlertSequence();
+      return;
+    }
+
+    if (!selectedPosition || !Number.isFinite(Number(selectedPosition.latitude))
+      || !Number.isFinite(Number(selectedPosition.longitude))) {
+      insideRadarKeysRef.current = new Set();
+      return;
+    }
+
+    if (document.visibilityState !== 'visible') {
+      insideRadarKeysRef.current = new Set();
+      clearAlertSequence();
+      return;
+    }
+
+    const latitude = Number(selectedPosition.latitude);
+    const longitude = Number(selectedPosition.longitude);
+    const features = sourceDataRef.current?.features || [];
+    if (!features.length) {
+      insideRadarKeysRef.current = new Set();
+      return;
+    }
+
+    const now = Date.now();
+    const nextInsideKeys = new Set();
+    let shouldPlayAlert = false;
+
+    features.forEach((feature) => {
+      const coordinates = feature?.geometry?.coordinates;
+      if (!Array.isArray(coordinates) || coordinates.length < 2) {
+        return;
+      }
+
+      const radarLng = Number(coordinates[0]);
+      const radarLat = Number(coordinates[1]);
+      if (!Number.isFinite(radarLng) || !Number.isFinite(radarLat)) {
+        return;
+      }
+
+      const radiusMeters = Number(feature?.properties?.radiusMeters);
+      if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
+        return;
+      }
+
+      const distanceToRadar = distanceMeters(latitude, longitude, radarLat, radarLng);
+      if (distanceToRadar > radiusMeters) {
+        return;
+      }
+
+      const externalId = typeof feature?.properties?.externalId === 'string'
+        ? feature.properties.externalId.trim()
+        : '';
+      const fallbackKey = `${radarLat.toFixed(6)}:${radarLng.toFixed(6)}:${Math.round(radiusMeters)}`;
+      const radarKey = externalId || fallbackKey;
+      nextInsideKeys.add(radarKey);
+
+      if (!insideRadarKeysRef.current.has(radarKey)) {
+        const previousAlertAt = radarCooldownRef.current[radarKey] || 0;
+        if (now - previousAlertAt >= RADAR_PROXIMITY_COOLDOWN_MS) {
+          radarCooldownRef.current[radarKey] = now;
+          shouldPlayAlert = true;
+        }
+      }
+    });
+
+    insideRadarKeysRef.current = nextInsideKeys;
+
+    if (shouldPlayAlert) {
+      playRadarAlertSequence();
+    }
+  }, [
+    clearAlertSequence,
+    dataVersion,
+    enabled,
+    playRadarAlertSequence,
+    selectedPosition,
+    visibilityVersion,
+  ]);
 
   useEffect(() => {
     const clearPopup = () => {
@@ -202,6 +372,7 @@ const MapStaticRadars = ({ enabled }) => {
 
     if (!enabled) {
       sourceDataRef.current = EMPTY_FEATURE_COLLECTION;
+      setDataVersion((current) => current + 1);
       clearPopup();
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
@@ -367,6 +538,7 @@ const MapStaticRadars = ({ enabled }) => {
         features: nextFeatures,
       };
       map.getSource(sourceId)?.setData(sourceDataRef.current);
+      setDataVersion((current) => current + 1);
     };
 
     const onRadarClick = (event) => {
@@ -499,7 +671,7 @@ const MapStaticRadars = ({ enabled }) => {
 
             statusLine.style.color = '#166534';
             statusLine.textContent = 'Raio salvo com sucesso.';
-          } catch (error) {
+          } catch {
             statusLine.style.color = '#B91C1C';
             statusLine.textContent = 'Falha ao salvar raio.';
           } finally {
@@ -533,7 +705,6 @@ const MapStaticRadars = ({ enabled }) => {
       try {
         const result = await loadStaticRadarsGeoJson();
         if (!result?.data) {
-          // eslint-disable-next-line no-console
           console.warn(
             `Falha ao carregar ${STATIC_RADARS_FILE}. URLs testadas:`,
             result?.attemptedUrls || resolveStaticRadarsUrls(),
@@ -547,7 +718,7 @@ const MapStaticRadars = ({ enabled }) => {
             const response = await fetchOrThrow('/api/admin/static-radars/radius');
             const payload = await response.json();
             radiusOverrides = normalizeRadiusOverrides(payload?.overrides);
-          } catch (error) {
+          } catch {
             radiusOverrides = {};
           }
         }
@@ -555,8 +726,8 @@ const MapStaticRadars = ({ enabled }) => {
         const normalizedData = normalizeStaticRadarsData(result.data, radiusOverrides);
         sourceDataRef.current = normalizedData;
         map.getSource(sourceId)?.setData(normalizedData);
+        setDataVersion((current) => current + 1);
       } catch (error) {
-        // eslint-disable-next-line no-console
         console.warn(`Erro ao carregar ${STATIC_RADARS_FILE}`, error);
       }
     };
