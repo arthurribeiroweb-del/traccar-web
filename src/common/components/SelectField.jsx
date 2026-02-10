@@ -30,6 +30,10 @@ const SelectField = ({
 
   const items = data || endpointItems;
 
+  const resolveOptionKey = (option) => (
+    typeof option === 'object' && option !== null ? keyGetter(option) : option
+  );
+
   const resolveOption = (option) => {
     if (!option) {
       return null;
@@ -53,8 +57,6 @@ const SelectField = ({
   }, []);
 
   if (items) {
-    const selectedValue = multiple ? value : resolveOption(value);
-
     return (
       <FormControl fullWidth={fullWidth} disabled={disabled}>
         {multiple ? (
@@ -82,9 +84,9 @@ const SelectField = ({
               <li {...props} key={keyGetter(option)}>{titleGetter(option)}</li>
             )}
             isOptionEqualToValue={(option, selected) => (
-              selected != null && keyGetter(option) === keyGetter(selected)
+              selected != null && keyGetter(option) === resolveOptionKey(selected)
             )}
-            value={selectedValue}
+            value={value}
             onChange={(_, selected) => onChange({ target: { value: selected ? keyGetter(selected) : emptyValue } })}
             disabled={disabled}
             renderInput={(params) => (
