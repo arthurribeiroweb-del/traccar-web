@@ -19,13 +19,15 @@ import speed90IconUrl from '../resources/images/icon/speed-limit-90-sign-icon.sv
 import speed100IconUrl from '../resources/images/icon/speed-limit-100-sign-icon.svg';
 import speed120IconUrl from '../resources/images/icon/speed-limit-120-sign-icon.svg';
 import { useAdministrator } from '../common/util/permissions';
-import { useTranslation } from '../common/components/LocalizationProvider';
+import fetchOrThrow from '../common/util/fetchOrThrow';
 
 const STATIC_RADARS_MIN_ZOOM = 10;
 const RADAR_ICON_BASE_SIZE = 64;
 const STATIC_RADARS_MIN_SPEED_KPH = 20;
 const STATIC_RADARS_MAX_SPEED_KPH = 120;
 const STATIC_RADARS_DEFAULT_RADIUS_METERS = 30;
+const STATIC_RADARS_EDIT_MIN_RADIUS_METERS = 5;
+const STATIC_RADARS_EDIT_MAX_RADIUS_METERS = 200;
 const STATIC_RADARS_FILE = 'scdb-radars-br.geojson';
 const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
 const STATIC_RADARS_COMMON_PREFIXES = ['/login', '/rastreador'];
@@ -33,6 +35,20 @@ const STATIC_RADARS_AUDIT_COLOR = '#E11D48';
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
   features: [],
+};
+
+const normalizeRadiusOverrides = (overrides) => {
+  if (!overrides || typeof overrides !== 'object') {
+    return {};
+  }
+  return Object.entries(overrides).reduce((result, [externalId, radius]) => {
+    const normalizedId = typeof externalId === 'string' ? externalId.trim() : '';
+    const parsedRadius = Number(radius);
+    if (normalizedId && Number.isFinite(parsedRadius) && parsedRadius > 0) {
+      result[normalizedId] = parsedRadius;
+    }
+    return result;
+  }, {});
 };
 
 const resolveStaticRadarsUrls = () => {
@@ -86,7 +102,7 @@ const loadStaticRadarsGeoJson = async () => {
   return { data: null, url: null, attemptedUrls: urls };
 };
 
-const normalizeStaticRadarsData = (data) => {
+const normalizeStaticRadarsData = (data, radiusOverrides = {}) => {
   if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
     return EMPTY_FEATURE_COLLECTION;
   }
@@ -106,6 +122,7 @@ const normalizeStaticRadarsData = (data) => {
         }
 
         const properties = feature?.properties || {};
+        const externalId = typeof properties.externalId === 'string' ? properties.externalId.trim() : '';
         const speedKph = Number(properties.speedKph);
         if (!Number.isFinite(speedKph)
           || speedKph < STATIC_RADARS_MIN_SPEED_KPH
@@ -114,7 +131,10 @@ const normalizeStaticRadarsData = (data) => {
         }
 
         const rawRadius = Number(properties.radiusMeters);
-        const radiusMeters = Number.isFinite(rawRadius) && rawRadius > 0
+        const overrideRadius = externalId ? Number(radiusOverrides[externalId]) : NaN;
+        const radiusMeters = Number.isFinite(overrideRadius) && overrideRadius > 0
+          ? overrideRadius
+          : Number.isFinite(rawRadius) && rawRadius > 0
           ? rawRadius
           : STATIC_RADARS_DEFAULT_RADIUS_METERS;
 
@@ -122,6 +142,7 @@ const normalizeStaticRadarsData = (data) => {
           ...feature,
           properties: {
             ...properties,
+            externalId,
             speedKph: Math.round(speedKph),
             radiusMeters,
           },
@@ -134,13 +155,13 @@ const normalizeStaticRadarsData = (data) => {
 const MapStaticRadars = ({ enabled }) => {
   const id = useId();
   const isAdmin = useAdministrator();
-  const t = useTranslation();
   const sourceId = `${id}-static-radars-source`;
   const layerId = `${id}-static-radars-layer`;
   const selectedRadiusSourceId = `${id}-static-radars-selected-radius-source`;
   const selectedRadiusAreaLayerId = `${id}-static-radars-selected-radius-area`;
   const selectedRadiusBorderLayerId = `${id}-static-radars-selected-radius-border`;
   const popupRef = useRef(null);
+  const sourceDataRef = useRef(EMPTY_FEATURE_COLLECTION);
 
   const imageIds = useMemo(() => ({
     DEFAULT: `${id}-static-radars-generic`,
@@ -180,6 +201,7 @@ const MapStaticRadars = ({ enabled }) => {
     };
 
     if (!enabled) {
+      sourceDataRef.current = EMPTY_FEATURE_COLLECTION;
       clearPopup();
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
@@ -312,6 +334,41 @@ const MapStaticRadars = ({ enabled }) => {
       map.getCanvas().style.cursor = '';
     };
 
+    const renderSelectedRadius = (coordinates, radiusMeters) => {
+      const radiusFeature = circle([Number(coordinates[0]), Number(coordinates[1])], radiusMeters, {
+        steps: 40,
+        units: 'meters',
+      });
+      map.getSource(selectedRadiusSourceId)?.setData({
+        type: 'FeatureCollection',
+        features: [radiusFeature],
+      });
+    };
+
+    const updateRadiusInSourceData = (externalId, nextRadiusMeters) => {
+      if (!externalId || !sourceDataRef.current?.features) {
+        return;
+      }
+      const nextFeatures = sourceDataRef.current.features.map((feature) => {
+        const featureExternalId = feature?.properties?.externalId || '';
+        if (featureExternalId !== externalId) {
+          return feature;
+        }
+        return {
+          ...feature,
+          properties: {
+            ...feature.properties,
+            radiusMeters: nextRadiusMeters,
+          },
+        };
+      });
+      sourceDataRef.current = {
+        ...sourceDataRef.current,
+        features: nextFeatures,
+      };
+      map.getSource(sourceId)?.setData(sourceDataRef.current);
+    };
+
     const onRadarClick = (event) => {
       const feature = event.features?.[0];
       const coordinates = feature?.geometry?.coordinates;
@@ -321,23 +378,19 @@ const MapStaticRadars = ({ enabled }) => {
 
       const speedKph = Number(feature.properties.speedKph);
       const rawRadiusMeters = Number(feature.properties.radiusMeters);
-      const radiusMeters = Number.isFinite(rawRadiusMeters) && rawRadiusMeters > 0
+      let currentRadiusMeters = Number.isFinite(rawRadiusMeters) && rawRadiusMeters > 0
         ? rawRadiusMeters
         : STATIC_RADARS_DEFAULT_RADIUS_METERS;
-      const externalId = feature.properties.externalId || '-';
+      const externalId = typeof feature.properties.externalId === 'string'
+        ? feature.properties.externalId.trim()
+        : '';
+      const externalIdLabel = externalId || '-';
       const radarTitle = Number.isFinite(speedKph)
         ? `Radar ${Math.round(speedKph)} km/h`
         : 'Radar';
 
       if (isAdmin) {
-        const radiusFeature = circle([Number(coordinates[0]), Number(coordinates[1])], radiusMeters, {
-          steps: 40,
-          units: 'meters',
-        });
-        map.getSource(selectedRadiusSourceId)?.setData({
-          type: 'FeatureCollection',
-          features: [radiusFeature],
-        });
+        renderSelectedRadius(coordinates, currentRadiusMeters);
       }
 
       clearPopup();
@@ -354,20 +407,102 @@ const MapStaticRadars = ({ enabled }) => {
 
       const idLine = document.createElement('div');
       idLine.style.fontSize = '12px';
-      idLine.textContent = `ID catalogo: ${externalId}`;
+      idLine.textContent = `ID catalogo: ${externalIdLabel}`;
       container.appendChild(idLine);
 
       const radiusLine = document.createElement('div');
       radiusLine.style.fontSize = '12px';
-      radiusLine.textContent = `Raio de alerta: ${Math.round(radiusMeters)} m`;
+      radiusLine.textContent = `Raio de alerta: ${Math.round(currentRadiusMeters)} m`;
       container.appendChild(radiusLine);
 
       if (isAdmin) {
-        const adminLine = document.createElement('div');
-        adminLine.style.fontSize = '12px';
-        adminLine.style.color = '#475569';
-        adminLine.textContent = t('radarPopupRadius');
-        container.appendChild(adminLine);
+        const controls = document.createElement('div');
+        controls.style.display = 'flex';
+        controls.style.gap = '8px';
+        controls.style.alignItems = 'center';
+
+        const radiusInput = document.createElement('input');
+        radiusInput.type = 'number';
+        radiusInput.min = String(STATIC_RADARS_EDIT_MIN_RADIUS_METERS);
+        radiusInput.max = String(STATIC_RADARS_EDIT_MAX_RADIUS_METERS);
+        radiusInput.step = '1';
+        radiusInput.value = String(Math.round(currentRadiusMeters));
+        radiusInput.style.width = '84px';
+        radiusInput.style.height = '30px';
+        radiusInput.style.border = '1px solid #CBD5E1';
+        radiusInput.style.borderRadius = '6px';
+        radiusInput.style.padding = '0 8px';
+
+        const saveButton = document.createElement('button');
+        saveButton.type = 'button';
+        saveButton.textContent = 'Salvar raio';
+        saveButton.style.height = '30px';
+        saveButton.style.border = '1px solid #CBD5E1';
+        saveButton.style.borderRadius = '6px';
+        saveButton.style.padding = '0 10px';
+        saveButton.style.background = '#FFFFFF';
+        saveButton.style.cursor = externalId ? 'pointer' : 'not-allowed';
+        saveButton.disabled = !externalId;
+
+        controls.appendChild(radiusInput);
+        controls.appendChild(saveButton);
+        container.appendChild(controls);
+
+        const statusLine = document.createElement('div');
+        statusLine.style.fontSize = '12px';
+        statusLine.style.color = '#475569';
+        statusLine.textContent = externalId
+          ? `Ajuste admin (${STATIC_RADARS_EDIT_MIN_RADIUS_METERS}-${STATIC_RADARS_EDIT_MAX_RADIUS_METERS}m)`
+          : 'Sem externalId: nao e possivel salvar override.';
+        container.appendChild(statusLine);
+
+        saveButton.onclick = async () => {
+          if (!externalId) {
+            return;
+          }
+          const nextRadiusMeters = Number(radiusInput.value);
+          if (!Number.isFinite(nextRadiusMeters)
+              || nextRadiusMeters < STATIC_RADARS_EDIT_MIN_RADIUS_METERS
+              || nextRadiusMeters > STATIC_RADARS_EDIT_MAX_RADIUS_METERS) {
+            statusLine.style.color = '#B91C1C';
+            statusLine.textContent = `Informe entre ${STATIC_RADARS_EDIT_MIN_RADIUS_METERS} e ${STATIC_RADARS_EDIT_MAX_RADIUS_METERS} metros.`;
+            return;
+          }
+
+          saveButton.disabled = true;
+          radiusInput.disabled = true;
+          statusLine.style.color = '#475569';
+          statusLine.textContent = 'Salvando...';
+          try {
+            const response = await fetchOrThrow('/api/admin/static-radars/radius', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                externalId,
+                radiusMeters: nextRadiusMeters,
+              }),
+            });
+            const saved = await response.json();
+            const savedRadius = Number(saved?.radiusMeters);
+            currentRadiusMeters = Number.isFinite(savedRadius) && savedRadius > 0
+              ? savedRadius
+              : nextRadiusMeters;
+
+            radiusInput.value = String(Math.round(currentRadiusMeters));
+            radiusLine.textContent = `Raio de alerta: ${Math.round(currentRadiusMeters)} m`;
+            renderSelectedRadius(coordinates, currentRadiusMeters);
+            updateRadiusInSourceData(externalId, currentRadiusMeters);
+
+            statusLine.style.color = '#166534';
+            statusLine.textContent = 'Raio salvo com sucesso.';
+          } catch (error) {
+            statusLine.style.color = '#B91C1C';
+            statusLine.textContent = 'Falha ao salvar raio.';
+          } finally {
+            saveButton.disabled = false;
+            radiusInput.disabled = false;
+          }
+        };
       }
 
       popupRef.current = new maplibregl.Popup({
@@ -400,7 +535,20 @@ const MapStaticRadars = ({ enabled }) => {
           return;
         }
 
-        map.getSource(sourceId)?.setData(normalizeStaticRadarsData(result.data));
+        let radiusOverrides = {};
+        if (isAdmin) {
+          try {
+            const response = await fetchOrThrow('/api/admin/static-radars/radius');
+            const payload = await response.json();
+            radiusOverrides = normalizeRadiusOverrides(payload?.overrides);
+          } catch (error) {
+            radiusOverrides = {};
+          }
+        }
+
+        const normalizedData = normalizeStaticRadarsData(result.data, radiusOverrides);
+        sourceDataRef.current = normalizedData;
+        map.getSource(sourceId)?.setData(normalizedData);
       } catch (error) {
         // eslint-disable-next-line no-console
         console.warn(`Erro ao carregar ${STATIC_RADARS_FILE}`, error);
@@ -436,7 +584,6 @@ const MapStaticRadars = ({ enabled }) => {
     selectedRadiusBorderLayerId,
     selectedRadiusSourceId,
     sourceId,
-    t,
   ]);
 
   return null;
