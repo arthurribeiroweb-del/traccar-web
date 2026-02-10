@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -41,7 +40,6 @@ import LocalGasStationIcon from '@mui/icons-material/LocalGasStation';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import CloseIcon from '@mui/icons-material/Close';
 import ReportFilter from './components/ReportFilter';
 import { useAttributePreference } from '../common/util/preferences';
 import {
@@ -57,65 +55,6 @@ import ReportsMenu from './components/ReportsMenu';
 import useReportStyles from './common/useReportStyles';
 import { useCatch } from '../reactHelper';
 import fetchOrThrow from '../common/util/fetchOrThrow';
-
-/** Dados de demonstração no mesmo formato da API /api/reports/summary */
-const getDemoSummaryItems = () => {
-  try {
-    const now = dayjs();
-    const devices = [
-      { id: 1, name: 'Caminhão 01' },
-      { id: 2, name: 'Van Logística' },
-      { id: 3, name: 'Carro Executivo' },
-    ];
-    const items = [];
-    devices.forEach((dev, di) => {
-      for (let d = 6; d >= 0; d -= 1) {
-        const day = now.subtract(d, 'day');
-        const tripsPerDay = 1 + (di + d) % 3;
-        for (let t = 0; t < tripsPerDay; t += 1) {
-          const distM = 15000 + Math.round(Math.random() * 45000);
-          const avgKnots = 12 + Math.round(Math.random() * 14);
-          const maxKnots = avgKnots + 5 + Math.round(Math.random() * 8);
-          const hoursMs = (1 + Math.random() * 3) * 3600000;
-          const startOdo = 100000 + (d * 7 + t) * 5000 + di * 20000;
-          const startTime = day.add(t * 4, 'hour').toISOString();
-          const endTime = day.add(t * 4 + 2, 'hour').toISOString();
-          items.push({
-            deviceId: dev.id,
-            startTime,
-            endTime,
-            distance: distM,
-            averageSpeed: avgKnots,
-            maxSpeed: maxKnots,
-            engineHours: hoursMs,
-            startHours: (d * 24 + t * 4) * 3600000,
-            endHours: (d * 24 + t * 4 + 2) * 3600000,
-            startOdometer: startOdo,
-            endOdometer: startOdo + distM,
-            spentFuel: Math.round((distM / 1000) * (5 + Math.random() * 3) * 10) / 10,
-          });
-        }
-      }
-    });
-    return items.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
-  } catch (e) {
-    const n = dayjs();
-    return [{
-      deviceId: 1,
-      startTime: n.toISOString(),
-      endTime: n.add(2, 'hour').toISOString(),
-      distance: 25000,
-      averageSpeed: 18,
-      maxSpeed: 25,
-      engineHours: 7200000,
-      startHours: 0,
-      endHours: 7200000,
-      startOdometer: 100000,
-      endOdometer: 125000,
-      spentFuel: 45,
-    }];
-  }
-};
 
 const useDashboardStyles = makeStyles()((theme) => ({
   root: {
@@ -286,7 +225,6 @@ const ReportsDashboardPage = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [lastReportParams, setLastReportParams] = useState(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
 
   const loadReport = useCallback(async ({ deviceIds, groupIds, from, to }) => {
     const query = new URLSearchParams({ from, to, daily: 'false' });
@@ -294,7 +232,6 @@ const ReportsDashboardPage = () => {
     groupIds.forEach((id) => query.append('groupId', id));
     setLastReportParams({ deviceIds, groupIds, from, to });
     setLoadingError(false);
-    setIsDemoMode(false);
     setLoading(true);
     try {
       const response = await fetchOrThrow(`/api/reports/summary?${query.toString()}`, {
@@ -309,51 +246,12 @@ const ReportsDashboardPage = () => {
     }
   }, []);
 
-  // Só chama a API quando há from/to (evita loading cinza ao abrir o dashboard)
-  const onShow = useCatch((params) => {
-    if (params.from && params.to) {
-      return loadReport(params);
-    }
-  });
+  // O ReportFilter dispara onShow quando from/to estao presentes na URL
+  const onShow = useCatch(loadReport);
 
   const onRetry = useCatch(async () => {
     if (lastReportParams) await loadReport(lastReportParams);
   });
-
-  const onLoadDemo = useCallback(() => {
-    setLoadingError(false);
-    setIsDemoMode(true);
-    setItems(getDemoSummaryItems());
-  }, []);
-
-  const onClearDemo = useCallback(() => {
-    setIsDemoMode(false);
-    setItems([]);
-  }, []);
-
-  // Ao abrir o dashboard, carrega dados de demonstração para não ficar zerado
-  useEffect(() => {
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    if (!from || !to) {
-      setLoading(false);
-      setLoadingError(false);
-      setIsDemoMode(true);
-      setItems(getDemoSummaryItems());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- só na montagem
-  }, []);
-
-  // Se ficou em loading sem ter pedido relatório (ex.: race), mostra demo em vez de cinza
-  useEffect(() => {
-    if (loading && !lastReportParams && items.length === 0) {
-      setLoading(false);
-      setLoadingError(false);
-      setIsDemoMode(true);
-      setItems(getDemoSummaryItems());
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- correção de estado
-  }, [loading, lastReportParams, items.length]);
 
   const kpis = useMemo(() => {
     if (!items.length) return null;
@@ -364,8 +262,16 @@ const ReportsDashboardPage = () => {
     const maxSpeed = Math.max(0, ...items.map((i) => i.maxSpeed || 0));
     const totalEngineHours = items.reduce((sum, i) => sum + (i.engineHours || 0), 0);
     const totalFuel = items.reduce((sum, i) => sum + (i.spentFuel || 0), 0);
-    const firstDate = dayjs(items[0].startTime);
-    const lastDate = dayjs(items[items.length - 1].startTime);
+    const timestamps = items
+      .map((item) => item.startTime)
+      .filter(Boolean)
+      .map((time) => dayjs(time));
+    const firstDate = timestamps.length
+      ? timestamps.reduce((min, current) => (current.isBefore(min) ? current : min), timestamps[0])
+      : dayjs();
+    const lastDate = timestamps.length
+      ? timestamps.reduce((max, current) => (current.isAfter(max) ? current : max), timestamps[0])
+      : dayjs();
     const dayCount = Math.max(1, lastDate.diff(firstDate, 'day') + 1);
     const tripsPerDay = (tripCount / dayCount).toFixed(1);
     const avgDistancePerTrip = tripCount > 0 ? totalDistance / tripCount : 0;
@@ -404,41 +310,44 @@ const ReportsDashboardPage = () => {
   }, [chartDataByDay]);
 
   const periodLabel = useMemo(() => {
-    if (lastReportParams?.from && lastReportParams?.to && !isDemoMode) {
-      return `${dayjs(lastReportParams.from).format('DD/MM/YYYY')} – ${dayjs(lastReportParams.to).format('DD/MM/YYYY')}`;
+    if (lastReportParams?.from && lastReportParams?.to) {
+      return `${dayjs(lastReportParams.from).format('DD/MM/YYYY')} - ${dayjs(lastReportParams.to).format('DD/MM/YYYY')}`;
     }
     if (kpis?.periodFrom && kpis?.periodTo) {
-      return `${kpis.periodFrom.format('DD/MM/YYYY')} – ${kpis.periodTo.format('DD/MM/YYYY')}`;
+      return `${kpis.periodFrom.format('DD/MM/YYYY')} - ${kpis.periodTo.format('DD/MM/YYYY')}`;
     }
     return null;
-  }, [lastReportParams, isDemoMode, kpis]);
-
-  const demoDeviceNames = useMemo(() => ({
-    1: 'Caminhão 01',
-    2: 'Van Logística',
-    3: 'Carro Executivo',
-  }), []);
+  }, [lastReportParams, kpis]);
 
   const chartDataByDevice = useMemo(() => {
     if (!items.length) return [];
     const byDevice = {};
     items.forEach((item) => {
-      const name = devices[item.deviceId]?.name ?? demoDeviceNames[item.deviceId] ?? `#${item.deviceId}`;
+      const name = devices[item.deviceId]?.name ?? `#${item.deviceId}`;
       if (!byDevice[name]) byDevice[name] = { name, distance: 0, trips: 0 };
       byDevice[name].distance += item.distance || 0;
       byDevice[name].trips += 1;
     });
     return Object.values(byDevice).sort((a, b) => b.distance - a.distance).slice(0, 8);
-  }, [items, devices, demoDeviceNames]);
+  }, [items, devices]);
 
   const goToSummary = useCallback(() => {
-    const params = new URLSearchParams(searchParams);
-    if (lastReportParams) {
-      params.set('from', lastReportParams.from);
-      params.set('to', lastReportParams.to);
-      lastReportParams.deviceIds.forEach((id) => params.append('deviceId', id));
-      lastReportParams.groupIds.forEach((id) => params.append('groupId', id));
-    }
+    const params = new URLSearchParams();
+    const deviceIds = lastReportParams?.deviceIds?.length
+      ? lastReportParams.deviceIds
+      : searchParams.getAll('deviceId');
+    const groupIds = lastReportParams?.groupIds?.length
+      ? lastReportParams.groupIds
+      : searchParams.getAll('groupId');
+    const from = lastReportParams?.from || searchParams.get('from');
+    const to = lastReportParams?.to || searchParams.get('to');
+
+    deviceIds.forEach((id) => params.append('deviceId', id));
+    groupIds.forEach((id) => params.append('groupId', id));
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    params.set('daily', 'false');
+
     navigate(`/reports/summary?${params.toString()}`);
   }, [navigate, searchParams, lastReportParams]);
 
@@ -450,32 +359,9 @@ const ReportsDashboardPage = () => {
           deviceType="multiple"
           loading={loading}
         />
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', px: 2, pb: 1 }}>
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={onLoadDemo}
-            disabled={loading}
-          >
-            {t('reportDashboardViewDemo')}
-          </Button>
-        </Box>
       </div>
 
       <div className={classes.root}>
-        {isDemoMode && items.length > 0 && (
-          <Alert
-            severity="info"
-            sx={{ mb: 2 }}
-            action={
-              <Button color="inherit" size="small" startIcon={<CloseIcon />} onClick={onClearDemo}>
-                {t('reportDashboardClearDemo')}
-              </Button>
-            }
-          >
-            {t('reportDashboardDemoBanner')}
-          </Alert>
-        )}
 
         {loadingError && (
           <Alert
@@ -706,9 +592,6 @@ const ReportsDashboardPage = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {t('reportNoEventsHint')}
             </Typography>
-            <Button variant="contained" sx={{ mt: 2 }} onClick={onLoadDemo} startIcon={<TrendingUpIcon />}>
-              {t('reportDashboardViewDemo')}
-            </Button>
           </Box>
         )}
 
@@ -717,9 +600,6 @@ const ReportsDashboardPage = () => {
             <Box className={classes.emptyState}>
               <DashboardIcon sx={{ fontSize: 56, color: 'action.disabled', mb: 1 }} />
               <Typography variant="body1">{t('reportDashboardSelectPeriod')}</Typography>
-              <Button variant="contained" sx={{ mt: 2 }} onClick={onLoadDemo} startIcon={<TrendingUpIcon />}>
-                {t('reportDashboardViewDemo')}
-              </Button>
             </Box>
           </Fade>
         )}
