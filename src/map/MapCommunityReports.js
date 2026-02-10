@@ -12,7 +12,7 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import buracoIconUrl from '../resources/images/icon/community-buraco.png';
 import buracoApprovedIconUrl from '../resources/images/icon/community-buraco-approved.png';
 import radarIconUrl from '../resources/images/icon/community-radar.png';
-import quebraMolasIconUrl from '../resources/images/icon/community-quebra-molas.svg';
+import quebraMolasIconUrl from '../resources/images/icon/bump-ahead-sign-icon.svg';
 
 const typeLabelMap = {
   RADAR: 'Radar',
