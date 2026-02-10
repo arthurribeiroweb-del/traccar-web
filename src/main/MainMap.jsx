@@ -31,6 +31,7 @@ import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
 import MapGeofence from '../map/MapGeofence';
 import MapRadar from '../map/MapRadar';
+import MapStaticRadars from '../map/MapStaticRadars';
 import MapCurrentLocation from '../map/MapCurrentLocation';
 import PoiMap from '../map/main/PoiMap';
 import MapPadding from '../map/MapPadding';
@@ -675,6 +676,7 @@ const MainMap = ({
         <MapOverlay />
         <MapGeofence />
         <MapRadar enabled={showRadars} />
+        <MapStaticRadars enabled={showRadars} />
         <MapAccuracy positions={filteredPositions} />
         <MapLiveRoutes deviceIds={filteredPositions.map((p) => p.deviceId)} />
         <MapPositions
