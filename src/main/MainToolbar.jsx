@@ -141,7 +141,10 @@ const MainToolbar = ({
       <Popover
         open={!!devicesAnchorEl && !devicesOpen}
         anchorEl={devicesAnchorEl}
-        onClose={() => setDevicesAnchorEl(null)}
+        onClose={() => {
+          setSearchFocused(false);
+          setDevicesAnchorEl(null);
+        }}
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: Number(theme.spacing(2).slice(0, -2)),
@@ -153,6 +156,9 @@ const MainToolbar = ({
           },
         }}
         elevation={1}
+        disableAutoFocus
+        disableEnforceFocus
+        disableRestoreFocus
       >
         {filteredDevices.slice(0, 3).map((_, index) => (
           <DeviceRow key={filteredDevices[index].id} devices={filteredDevices} index={index} />
