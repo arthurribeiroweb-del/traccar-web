@@ -1,6 +1,8 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useSelector } from 'react-redux';
@@ -55,6 +57,9 @@ import ReportsMenu from './components/ReportsMenu';
 import useReportStyles from './common/useReportStyles';
 import { useCatch } from '../reactHelper';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+
+const REPORT_CACHE_TTL_MS = 60 * 1000;
+const REPORT_CACHE_MAX_ENTRIES = 12;
 
 const useDashboardStyles = makeStyles()((theme) => ({
   root: {
@@ -225,32 +230,94 @@ const ReportsDashboardPage = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [lastReportParams, setLastReportParams] = useState(null);
+  const cacheRef = useRef(new Map());
+  const abortControllerRef = useRef(null);
+  const requestIdRef = useRef(0);
 
-  const loadReport = useCallback(async ({ deviceIds, groupIds, from, to }) => {
+  const buildCacheKey = useCallback(({ deviceIds, groupIds, from, to }) => {
+    const sortedDeviceIds = [...deviceIds].map(Number).sort((a, b) => a - b);
+    const sortedGroupIds = [...groupIds].map(Number).sort((a, b) => a - b);
+    return JSON.stringify({
+      from,
+      to,
+      deviceIds: sortedDeviceIds,
+      groupIds: sortedGroupIds,
+    });
+  }, []);
+
+  const getCachedItems = useCallback((cacheKey) => {
+    const cached = cacheRef.current.get(cacheKey);
+    if (!cached) return null;
+    if (Date.now() - cached.createdAt > REPORT_CACHE_TTL_MS) {
+      cacheRef.current.delete(cacheKey);
+      return null;
+    }
+    return cached.items;
+  }, []);
+
+  const setCachedItems = useCallback((cacheKey, summaryItems) => {
+    cacheRef.current.set(cacheKey, {
+      createdAt: Date.now(),
+      items: summaryItems,
+    });
+    if (cacheRef.current.size > REPORT_CACHE_MAX_ENTRIES) {
+      const [oldestKey] = cacheRef.current.keys();
+      cacheRef.current.delete(oldestKey);
+    }
+  }, []);
+
+  const loadReport = useCallback(async ({ deviceIds, groupIds, from, to }, { forceRefresh = false } = {}) => {
+    const cacheKey = buildCacheKey({ deviceIds, groupIds, from, to });
     const query = new URLSearchParams({ from, to, daily: 'false' });
     deviceIds.forEach((id) => query.append('deviceId', id));
     groupIds.forEach((id) => query.append('groupId', id));
     setLastReportParams({ deviceIds, groupIds, from, to });
     setLoadingError(false);
+
+    if (!forceRefresh) {
+      const cachedItems = getCachedItems(cacheKey);
+      if (cachedItems) {
+        setItems(cachedItems);
+        return;
+      }
+    }
+
+    abortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    requestIdRef.current += 1;
+    const requestId = requestIdRef.current;
     setLoading(true);
     try {
       const response = await fetchOrThrow(`/api/reports/summary?${query.toString()}`, {
         headers: { Accept: 'application/json' },
+        signal: abortController.signal,
       });
-      setItems(await response.json());
-    } catch {
+      const responseItems = await response.json();
+      if (requestId !== requestIdRef.current) return;
+      setCachedItems(cacheKey, responseItems);
+      setItems(responseItems);
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      if (requestId !== requestIdRef.current) return;
       setItems([]);
       setLoadingError(true);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
+  }, [buildCacheKey, getCachedItems, setCachedItems]);
+
+  useEffect(() => () => {
+    abortControllerRef.current?.abort();
   }, []);
 
   // O ReportFilter dispara onShow quando from/to estao presentes na URL
   const onShow = useCatch(loadReport);
 
   const onRetry = useCatch(async () => {
-    if (lastReportParams) await loadReport(lastReportParams);
+    if (lastReportParams) await loadReport(lastReportParams, { forceRefresh: true });
   });
 
   const kpis = useMemo(() => {
