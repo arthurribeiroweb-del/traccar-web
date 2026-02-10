@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -59,43 +60,61 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 
 /** Dados de demonstração no mesmo formato da API /api/reports/summary */
 const getDemoSummaryItems = () => {
-  const now = dayjs();
-  const devices = [
-    { id: 1, name: 'Caminhão 01' },
-    { id: 2, name: 'Van Logística' },
-    { id: 3, name: 'Carro Executivo' },
-  ];
-  const items = [];
-  devices.forEach((dev, di) => {
-    for (let d = 6; d >= 0; d -= 1) {
-      const day = now.subtract(d, 'day');
-      const tripsPerDay = 1 + (di + d) % 3;
-      for (let t = 0; t < tripsPerDay; t += 1) {
-        const distM = 15000 + Math.round(Math.random() * 45000);
-        const avgKnots = 12 + Math.round(Math.random() * 14);
-        const maxKnots = avgKnots + 5 + Math.round(Math.random() * 8);
-        const hoursMs = (1 + Math.random() * 3) * 3600000;
-        const startOdo = 100000 + (d * 7 + t) * 5000 + di * 20000;
-        const startTime = day.add(t * 4, 'hour').toISOString();
-        const endTime = day.add(t * 4 + 2, 'hour').toISOString();
-        items.push({
-          deviceId: dev.id,
-          startTime,
-          endTime,
-          distance: distM,
-          averageSpeed: avgKnots,
-          maxSpeed: maxKnots,
-          engineHours: hoursMs,
-          startHours: (d * 24 + t * 4) * 3600000,
-          endHours: (d * 24 + t * 4 + 2) * 3600000,
-          startOdometer: startOdo,
-          endOdometer: startOdo + distM,
-          spentFuel: Math.round((distM / 1000) * (5 + Math.random() * 3) * 10) / 10,
-        });
+  try {
+    const now = dayjs();
+    const devices = [
+      { id: 1, name: 'Caminhão 01' },
+      { id: 2, name: 'Van Logística' },
+      { id: 3, name: 'Carro Executivo' },
+    ];
+    const items = [];
+    devices.forEach((dev, di) => {
+      for (let d = 6; d >= 0; d -= 1) {
+        const day = now.subtract(d, 'day');
+        const tripsPerDay = 1 + (di + d) % 3;
+        for (let t = 0; t < tripsPerDay; t += 1) {
+          const distM = 15000 + Math.round(Math.random() * 45000);
+          const avgKnots = 12 + Math.round(Math.random() * 14);
+          const maxKnots = avgKnots + 5 + Math.round(Math.random() * 8);
+          const hoursMs = (1 + Math.random() * 3) * 3600000;
+          const startOdo = 100000 + (d * 7 + t) * 5000 + di * 20000;
+          const startTime = day.add(t * 4, 'hour').toISOString();
+          const endTime = day.add(t * 4 + 2, 'hour').toISOString();
+          items.push({
+            deviceId: dev.id,
+            startTime,
+            endTime,
+            distance: distM,
+            averageSpeed: avgKnots,
+            maxSpeed: maxKnots,
+            engineHours: hoursMs,
+            startHours: (d * 24 + t * 4) * 3600000,
+            endHours: (d * 24 + t * 4 + 2) * 3600000,
+            startOdometer: startOdo,
+            endOdometer: startOdo + distM,
+            spentFuel: Math.round((distM / 1000) * (5 + Math.random() * 3) * 10) / 10,
+          });
+        }
       }
-    }
-  });
-  return items.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+    });
+    return items.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+  } catch (e) {
+    const n = dayjs();
+    return [{
+      deviceId: 1,
+      startTime: n.toISOString(),
+      endTime: n.add(2, 'hour').toISOString(),
+      distance: 25000,
+      averageSpeed: 18,
+      maxSpeed: 25,
+      engineHours: 7200000,
+      startHours: 0,
+      endHours: 7200000,
+      startOdometer: 100000,
+      endOdometer: 125000,
+      spentFuel: 45,
+    }];
+  }
 };
 
 const useDashboardStyles = makeStyles()((theme) => ({
@@ -290,7 +309,12 @@ const ReportsDashboardPage = () => {
     }
   }, []);
 
-  const onShow = useCatch(loadReport);
+  // Só chama a API quando há from/to (evita loading cinza ao abrir o dashboard)
+  const onShow = useCatch((params) => {
+    if (params.from && params.to) {
+      return loadReport(params);
+    }
+  });
 
   const onRetry = useCatch(async () => {
     if (lastReportParams) await loadReport(lastReportParams);
@@ -306,6 +330,30 @@ const ReportsDashboardPage = () => {
     setIsDemoMode(false);
     setItems([]);
   }, []);
+
+  // Ao abrir o dashboard, carrega dados de demonstração para não ficar zerado
+  useEffect(() => {
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    if (!from || !to) {
+      setLoading(false);
+      setLoadingError(false);
+      setIsDemoMode(true);
+      setItems(getDemoSummaryItems());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- só na montagem
+  }, []);
+
+  // Se ficou em loading sem ter pedido relatório (ex.: race), mostra demo em vez de cinza
+  useEffect(() => {
+    if (loading && !lastReportParams && items.length === 0) {
+      setLoading(false);
+      setLoadingError(false);
+      setIsDemoMode(true);
+      setItems(getDemoSummaryItems());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- correção de estado
+  }, [loading, lastReportParams, items.length]);
 
   const kpis = useMemo(() => {
     if (!items.length) return null;
@@ -658,6 +706,9 @@ const ReportsDashboardPage = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {t('reportNoEventsHint')}
             </Typography>
+            <Button variant="contained" sx={{ mt: 2 }} onClick={onLoadDemo} startIcon={<TrendingUpIcon />}>
+              {t('reportDashboardViewDemo')}
+            </Button>
           </Box>
         )}
 
