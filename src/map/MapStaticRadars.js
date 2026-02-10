@@ -20,6 +20,7 @@ const STATIC_RADARS_MIN_ZOOM = 10;
 const RADAR_ICON_BASE_SIZE = 64;
 const STATIC_RADARS_FILE = 'scdb-radars-br.geojson';
 const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
+const STATIC_RADARS_COMMON_PREFIXES = ['/login', '/rastreador'];
 
 const resolveStaticRadarsUrls = () => {
   const candidates = [
@@ -42,6 +43,10 @@ const resolveStaticRadarsUrls = () => {
       candidates.push(`/${firstSegment}/${STATIC_RADARS_PATH}`);
     }
   }
+
+  STATIC_RADARS_COMMON_PREFIXES.forEach((prefix) => {
+    candidates.push(`${prefix}/${STATIC_RADARS_PATH}`);
+  });
 
   return [...new Set(candidates)];
 };
