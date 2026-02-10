@@ -6,7 +6,7 @@ import {
 } from 'react';
 import maplibregl from 'maplibre-gl';
 import { map } from '../map/core/MapView';
-import buracoIconUrl from '../resources/images/icon/community-buraco.png';
+import buracoIconUrl from '../resources/images/icon/035_pothole.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/bump-ahead-sign-icon.svg';
 

@@ -9,8 +9,7 @@ import {
 import maplibregl from 'maplibre-gl';
 import { map } from './core/MapView';
 import fetchOrThrow from '../common/util/fetchOrThrow';
-import buracoIconUrl from '../resources/images/icon/community-buraco.png';
-import buracoApprovedIconUrl from '../resources/images/icon/community-buraco-approved.png';
+import buracoIconUrl from '../resources/images/icon/035_pothole.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/bump-ahead-sign-icon.svg';
 
@@ -170,7 +169,7 @@ const MapCommunityReports = ({
   useEffect(() => {
     const iconEntries = [
       { imageId: imageIds.BURACO, iconUrl: buracoIconUrl },
-      { imageId: imageIds.BURACO_APPROVED, iconUrl: buracoApprovedIconUrl },
+      { imageId: imageIds.BURACO_APPROVED, iconUrl: buracoIconUrl },
       { imageId: imageIds.RADAR, iconUrl: radarIconUrl },
       { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
     ];
