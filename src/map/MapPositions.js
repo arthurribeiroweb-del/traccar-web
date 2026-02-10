@@ -10,7 +10,15 @@ import { useAttributePreference } from '../common/util/preferences';
 import { useCatchCallback } from '../reactHelper';
 import { findFonts } from './core/mapUtil';
 
-const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, selectedPosition, titleField }) => {
+const MapPositions = ({
+  positions,
+  onMapClick,
+  onMarkerClick,
+  showStatus,
+  selectedPosition,
+  titleField,
+  stabilizeSelectedInFollow = false,
+}) => {
   const id = useId();
   const clusters = `${id}-clusters`;
   const selected = `${id}-selected`;
@@ -53,6 +61,8 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
         showDirection = selectedPositionId === position.id && hasDirection;
         break;
     }
+    const lockSelectedOrientation = stabilizeSelectedInFollow && selectedPositionId === position.id;
+
     return {
       id: position.id,
       deviceId: position.deviceId,
@@ -60,8 +70,8 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
       fixTime: formatTime(position.fixTime, 'seconds'),
       category,
       color: showStatus ? position.attributes.color || getStatusColor(device.status) : 'neutral',
-      rotation: showDirection ? rotation : 0,
-      direction: showDirection,
+      rotation: lockSelectedOrientation ? 0 : (showDirection ? rotation : 0),
+      direction: lockSelectedOrientation ? false : showDirection,
     };
   };
 
@@ -114,6 +124,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
       },
     });
     [id, selected].forEach((source) => {
+      const isSelectedSource = source === selected;
       map.addLayer({
         id: source,
         type: 'symbol',
@@ -124,7 +135,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
           'icon-size': iconScale,
           'icon-allow-overlap': true,
           'icon-rotate': ['get', 'rotation'],
-          'icon-rotation-alignment': 'map',
+          'icon-rotation-alignment': isSelectedSource && stabilizeSelectedInFollow ? 'viewport' : 'map',
           'text-field': `{${titleField || 'name'}}`,
           'text-allow-overlap': true,
           'text-anchor': 'bottom',
@@ -184,7 +195,18 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
         }
       });
     };
-  }, [mapCluster, clusters, onMarkerClickCallback, onClusterClick]);
+  }, [mapCluster, clusters, onMarkerClickCallback, onClusterClick, stabilizeSelectedInFollow]);
+
+  useEffect(() => {
+    if (!map.getLayer(selected)) {
+      return;
+    }
+    map.setLayoutProperty(
+      selected,
+      'icon-rotation-alignment',
+      stabilizeSelectedInFollow ? 'viewport' : 'map',
+    );
+  }, [selected, stabilizeSelectedInFollow]);
 
   useEffect(() => {
     [id, selected].forEach((source) => {
@@ -216,6 +238,7 @@ const MapPositions = ({ positions, onMapClick, onMarkerClick, showStatus, select
     positions,
     selectedPosition,
     headingByDeviceId,
+    stabilizeSelectedInFollow,
   ]);
 
   return null;

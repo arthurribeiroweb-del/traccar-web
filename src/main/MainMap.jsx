@@ -99,7 +99,7 @@ const MainMap = ({
   const followDeviceId = useSelector((state) => state.devices.followDeviceId);
   const headingByDeviceId = useSelector((state) => state.devices.headingByDeviceId || {});
   const positionsByDeviceId = useSelector((state) => state.session.positions);
-  const followRotateMapPreference = useAttributePreference('web.followRotateMap', false);
+  const followRotateMapPreference = useAttributePreference('web.followRotateMap', true);
   const administrator = useAdministrator();
 
   const features = useFeatures();
@@ -684,6 +684,7 @@ const MainMap = ({
           onMarkerClick={onMarkerClick}
           selectedPosition={selectedPosition}
           showStatus
+          stabilizeSelectedInFollow={followEnabled && followRotateMap}
         />
         <MapCommunityReports
           publicReports={publicReports}
@@ -837,7 +838,6 @@ const MainMap = ({
 };
 
 export default MainMap;
-
 
 
 
