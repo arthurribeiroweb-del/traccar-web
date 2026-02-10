@@ -76,7 +76,9 @@ const MapStaticRadars = ({ enabled }) => {
 
     const loadData = async () => {
       try {
-        const response = await fetch('/radars/scdb-radars-br.geojson');
+        // Caminho relativo para funcionar tanto em desenvolvimento quanto em produção
+        // mesmo quando o Traccar é servido em subcaminhos (ex.: /rastreador/).
+        const response = await fetch('radars/scdb-radars-br.geojson');
         if (!response.ok) {
           // eslint-disable-next-line no-console
           console.warn('Falha ao carregar scdb-radars-br.geojson', response.status);

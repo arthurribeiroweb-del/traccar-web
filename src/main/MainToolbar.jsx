@@ -49,8 +49,6 @@ const MainToolbar = ({
   setFilterSort,
   filterMap,
   setFilterMap,
-  showRadars,
-  setShowRadars,
   onEventsClick,
   onReportClick,
   reportOpen,
@@ -206,10 +204,6 @@ const MainToolbar = ({
             <FormControlLabel
               control={<Checkbox checked={filterMap} onChange={(e) => setFilterMap(e.target.checked)} />}
               label={t('sharedFilterMap')}
-            />
-            <FormControlLabel
-              control={<Checkbox checked={showRadars} onChange={(e) => setShowRadars(e.target.checked)} />}
-              label={t('mapLayerRadars')}
             />
           </FormGroup>
         </div>
