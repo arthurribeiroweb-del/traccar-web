@@ -304,11 +304,9 @@ const MainMap = ({
 
     if (followEnabled) {
       dispatch(devicesActions.setFollowDeviceId(null));
-      showFollowMessage('Seguir desativado', 'warning');
     } else {
       dispatch(devicesActions.setFollowDeviceId(selectedId));
       setSelectedStale(false);
-      showFollowMessage('Seguindo veículo', 'info');
     }
   }, [dispatch, followEnabled, selectedId, showFollowMessage]);
 
@@ -317,8 +315,7 @@ const MainMap = ({
       return;
     }
     dispatch(devicesActions.setFollowDeviceId(null));
-    showFollowMessage('Seguir desativado', 'warning');
-  }, [dispatch, followEnabled, showFollowMessage]);
+  }, [dispatch, followEnabled]);
 
   useEffect(() => {
     const headingUpdates = {};

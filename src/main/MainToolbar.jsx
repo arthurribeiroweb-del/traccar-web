@@ -78,6 +78,12 @@ const MainToolbar = ({
   const [devicesAnchorEl, setDevicesAnchorEl] = useState(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
+  const handleOpenFilter = () => {
+    setDevicesAnchorEl(null);
+    setSearchFocused(false);
+    setFilterAnchorEl(inputRef.current);
+  };
+
   const deviceStatusCount = (status) => Object.values(devices).filter((d) => d.status === status).length;
   const displayValue = keyword || (searchFocused ? '' : (selectedDevice ? (getDeviceDisplayName(selectedDevice) || selectedDevice.name) : ''));
   const whatsappUrl = import.meta.env.VITE_WHATSAPP_URL || 'https://wa.me/559491796309';
@@ -111,7 +117,7 @@ const MainToolbar = ({
         }}
         endAdornment={(
           <InputAdornment position="end">
-            <IconButton size="small" edge="end" onClick={() => setFilterAnchorEl(inputRef.current)}>
+            <IconButton size="small" edge="end" onClick={handleOpenFilter}>
               <Badge color="info" variant="dot" invisible={!filter.statuses.length && !filter.groups.length}>
                 <TuneIcon fontSize="small" />
               </Badge>
@@ -136,8 +142,6 @@ const MainToolbar = ({
           },
         }}
         elevation={1}
-        disableAutoFocus
-        disableEnforceFocus
       >
         {filteredDevices.slice(0, 3).map((_, index) => (
           <DeviceRow key={filteredDevices[index].id} devices={filteredDevices} index={index} />
