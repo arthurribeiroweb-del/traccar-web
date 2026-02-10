@@ -133,6 +133,7 @@ const MainMap = ({
   const announcedStateRef = useRef({ stale: false, heading: null });
   const reportMoveTimerRef = useRef(null);
   const lastReportRequestRef = useRef(reportRequestId);
+  const publicReportsAbortRef = useRef(null);
 
   const showFollowMessage = useCallback((message, severity) => {
     setSnackbar({
@@ -222,7 +223,7 @@ const MainMap = ({
   }, [computeCancelable]);
 
   const loadPublicReports = useCallback(async () => {
-    if (!map || !map.loaded()) {
+    if (!map || !map.loaded() || document.visibilityState !== 'visible') {
       return;
     }
     const bounds = map.getBounds();
@@ -240,12 +241,28 @@ const MainMap = ({
       east + padLng,
       north + padLat,
     ].join(',');
+
+    if (publicReportsAbortRef.current) {
+      publicReportsAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    publicReportsAbortRef.current = controller;
+
     try {
-      const response = await fetchOrThrow(`/api/community/reports?scope=public&bounds=${encodeURIComponent(boundsParam)}`);
+      const response = await fetchOrThrow(`/api/community/reports?scope=public&bounds=${encodeURIComponent(boundsParam)}`, {
+        signal: controller.signal,
+      });
       const items = await response.json();
       setPublicReports(Array.isArray(items) ? items : []);
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        return;
+      }
       console.warn('loadPublicReports failed', err);
+    } finally {
+      if (publicReportsAbortRef.current === controller) {
+        publicReportsAbortRef.current = null;
+      }
     }
   }, []);
 
@@ -260,12 +277,24 @@ const MainMap = ({
   }, [administrator, onPendingCommunityCountChange]);
 
   const refreshCommunityReports = useCallback(async () => {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
     await Promise.all([
       loadPublicReports(),
       loadPendingReports(),
       loadAdminPendingCount(),
     ]);
   }, [loadAdminPendingCount, loadPendingReports, loadPublicReports]);
+
+  useEffect(() => {
+    return () => {
+      if (publicReportsAbortRef.current) {
+        publicReportsAbortRef.current.abort();
+        publicReportsAbortRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedId) {
@@ -503,10 +532,22 @@ const MainMap = ({
   }, [loadPublicReports, refreshCommunityReports]);
 
   useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCommunityReports().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     const timer = window.setInterval(() => {
-      refreshCommunityReports().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        refreshCommunityReports().catch(() => {});
+      }
     }, COMMUNITY_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(timer);
+    };
   }, [refreshCommunityReports]);
 
   useEffect(() => {
@@ -528,10 +569,23 @@ const MainMap = ({
     if (!administrator) {
       return undefined;
     }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadAdminPendingCount().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     const timer = window.setInterval(() => {
-      loadAdminPendingCount().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        loadAdminPendingCount().catch(() => {});
+      }
     }, 30000);
-    return () => window.clearInterval(timer);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(timer);
+    };
   }, [administrator, loadAdminPendingCount]);
 
   const handleReportTypeSelect = useCallback((type) => {
@@ -835,7 +889,6 @@ const MainMap = ({
 };
 
 export default MainMap;
-
 
 
 

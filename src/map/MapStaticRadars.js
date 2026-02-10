@@ -40,6 +40,10 @@ const RADAR_PROXIMITY_COOLDOWN_MS = 30000;
 const RADAR_ALERT_REPEAT_COUNT = 3;
 const RADAR_ALERT_REPEAT_GAP_MS = 450;
 const EARTH_RADIUS_METERS = 6371000;
+const PROXIMITY_GRID_CELL_DEGREES = 0.02;
+const PROXIMITY_MIN_QUERY_METERS = 300;
+const PROXIMITY_QUERY_BUFFER_METERS = 50;
+const STATIC_RADARS_DEFER_LOAD_MS = 400;
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
   features: [],
@@ -56,6 +60,83 @@ const distanceMeters = (latitudeA, longitudeA, latitudeB, longitudeB) => {
     + Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return EARTH_RADIUS_METERS * c;
+};
+
+const metersToLatitudeDegrees = (meters) => meters / 111320;
+
+const metersToLongitudeDegrees = (meters, latitude) => {
+  const cosLatitude = Math.abs(Math.cos(toRadians(latitude)));
+  const stableCosLatitude = Math.max(cosLatitude, 0.01);
+  return meters / (111320 * stableCosLatitude);
+};
+
+const gridKey = (latCell, lngCell) => `${latCell}:${lngCell}`;
+
+const buildProximityIndex = (features) => {
+  const cells = new Map();
+  let maxRadiusMeters = STATIC_RADARS_DEFAULT_RADIUS_METERS;
+
+  features.forEach((feature) => {
+    const coordinates = feature?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+      return;
+    }
+
+    const radarLng = Number(coordinates[0]);
+    const radarLat = Number(coordinates[1]);
+    if (!Number.isFinite(radarLng) || !Number.isFinite(radarLat)) {
+      return;
+    }
+
+    const radiusMeters = Number(feature?.properties?.radiusMeters);
+    if (Number.isFinite(radiusMeters) && radiusMeters > 0) {
+      maxRadiusMeters = Math.max(maxRadiusMeters, radiusMeters);
+    }
+
+    const latCell = Math.floor(radarLat / PROXIMITY_GRID_CELL_DEGREES);
+    const lngCell = Math.floor(radarLng / PROXIMITY_GRID_CELL_DEGREES);
+    const key = gridKey(latCell, lngCell);
+    const bucket = cells.get(key);
+    if (bucket) {
+      bucket.push(feature);
+    } else {
+      cells.set(key, [feature]);
+    }
+  });
+
+  return {
+    cells,
+    maxRadiusMeters,
+  };
+};
+
+const getProximityCandidates = (index, latitude, longitude) => {
+  if (!index?.cells?.size) {
+    return [];
+  }
+
+  const queryRadiusMeters = Math.max(
+    PROXIMITY_MIN_QUERY_METERS,
+    (index.maxRadiusMeters || STATIC_RADARS_DEFAULT_RADIUS_METERS) + PROXIMITY_QUERY_BUFFER_METERS,
+  );
+  const latDelta = metersToLatitudeDegrees(queryRadiusMeters);
+  const lngDelta = metersToLongitudeDegrees(queryRadiusMeters, latitude);
+
+  const minLatCell = Math.floor((latitude - latDelta) / PROXIMITY_GRID_CELL_DEGREES);
+  const maxLatCell = Math.floor((latitude + latDelta) / PROXIMITY_GRID_CELL_DEGREES);
+  const minLngCell = Math.floor((longitude - lngDelta) / PROXIMITY_GRID_CELL_DEGREES);
+  const maxLngCell = Math.floor((longitude + lngDelta) / PROXIMITY_GRID_CELL_DEGREES);
+
+  const candidates = [];
+  for (let latCell = minLatCell; latCell <= maxLatCell; latCell += 1) {
+    for (let lngCell = minLngCell; lngCell <= maxLngCell; lngCell += 1) {
+      const bucket = index.cells.get(gridKey(latCell, lngCell));
+      if (bucket?.length) {
+        candidates.push(...bucket);
+      }
+    }
+  }
+  return candidates;
 };
 
 const normalizeRadiusOverrides = (overrides) => {
@@ -186,6 +267,10 @@ const MapStaticRadars = ({ enabled }) => {
   const selectedRadiusBorderLayerId = `${id}-static-radars-selected-radius-border`;
   const popupRef = useRef(null);
   const sourceDataRef = useRef(EMPTY_FEATURE_COLLECTION);
+  const proximityIndexRef = useRef({ cells: new Map(), maxRadiusMeters: STATIC_RADARS_DEFAULT_RADIUS_METERS });
+  const dataLoadedRef = useRef(false);
+  const dataLoadingRef = useRef(false);
+  const deferredLoadTimerRef = useRef(null);
   const alertAudioRef = useRef(null);
   const alertSequenceTimersRef = useRef([]);
   const insideRadarKeysRef = useRef(new Set());
@@ -285,7 +370,7 @@ const MapStaticRadars = ({ enabled }) => {
 
     const latitude = Number(selectedPosition.latitude);
     const longitude = Number(selectedPosition.longitude);
-    const features = sourceDataRef.current?.features || [];
+    const features = getProximityCandidates(proximityIndexRef.current, latitude, longitude);
     if (!features.length) {
       insideRadarKeysRef.current = new Set();
       return;
@@ -355,6 +440,13 @@ const MapStaticRadars = ({ enabled }) => {
       }
     };
 
+    const clearDeferredLoad = () => {
+      if (deferredLoadTimerRef.current) {
+        window.clearTimeout(deferredLoadTimerRef.current);
+        deferredLoadTimerRef.current = null;
+      }
+    };
+
     const clearSelectedRadius = () => {
       map.getSource(selectedRadiusSourceId)?.setData(EMPTY_FEATURE_COLLECTION);
     };
@@ -372,6 +464,10 @@ const MapStaticRadars = ({ enabled }) => {
 
     if (!enabled) {
       sourceDataRef.current = EMPTY_FEATURE_COLLECTION;
+      proximityIndexRef.current = { cells: new Map(), maxRadiusMeters: STATIC_RADARS_DEFAULT_RADIUS_METERS };
+      dataLoadedRef.current = false;
+      dataLoadingRef.current = false;
+      clearDeferredLoad();
       setDataVersion((current) => current + 1);
       clearPopup();
       if (map.getLayer(layerId)) {
@@ -537,6 +633,7 @@ const MapStaticRadars = ({ enabled }) => {
         ...sourceDataRef.current,
         features: nextFeatures,
       };
+      proximityIndexRef.current = buildProximityIndex(nextFeatures);
       map.getSource(sourceId)?.setData(sourceDataRef.current);
       setDataVersion((current) => current + 1);
     };
@@ -702,6 +799,14 @@ const MapStaticRadars = ({ enabled }) => {
     }
 
     const loadData = async () => {
+      if (dataLoadedRef.current || dataLoadingRef.current) {
+        return;
+      }
+      if (map.getZoom() < STATIC_RADARS_MIN_ZOOM) {
+        return;
+      }
+
+      dataLoadingRef.current = true;
       try {
         const result = await loadStaticRadarsGeoJson();
         if (!result?.data) {
@@ -725,16 +830,47 @@ const MapStaticRadars = ({ enabled }) => {
 
         const normalizedData = normalizeStaticRadarsData(result.data, radiusOverrides);
         sourceDataRef.current = normalizedData;
+        proximityIndexRef.current = buildProximityIndex(normalizedData.features || []);
         map.getSource(sourceId)?.setData(normalizedData);
+        dataLoadedRef.current = true;
         setDataVersion((current) => current + 1);
       } catch (error) {
         console.warn(`Erro ao carregar ${STATIC_RADARS_FILE}`, error);
+      } finally {
+        dataLoadingRef.current = false;
       }
     };
 
-    loadData();
+    const scheduleLoadData = () => {
+      if (dataLoadedRef.current || dataLoadingRef.current) {
+        return;
+      }
+      if (map.getZoom() < STATIC_RADARS_MIN_ZOOM) {
+        return;
+      }
+      if (deferredLoadTimerRef.current) {
+        return;
+      }
+      deferredLoadTimerRef.current = window.setTimeout(() => {
+        deferredLoadTimerRef.current = null;
+        loadData();
+      }, STATIC_RADARS_DEFER_LOAD_MS);
+    };
+
+    map.on('zoomend', scheduleLoadData);
+    if (map.loaded()) {
+      scheduleLoadData();
+    } else {
+      map.once('load', () => {
+        scheduleLoadData();
+      });
+    }
 
     return () => {
+      clearDeferredLoad();
+      dataLoadedRef.current = false;
+      dataLoadingRef.current = false;
+      map.off('zoomend', scheduleLoadData);
       if (isAdmin) {
         map.off('mouseenter', layerId, onMouseEnter);
         map.off('mouseleave', layerId, onMouseLeave);
@@ -753,6 +889,8 @@ const MapStaticRadars = ({ enabled }) => {
           map.removeImage(imgId);
         }
       });
+      sourceDataRef.current = EMPTY_FEATURE_COLLECTION;
+      proximityIndexRef.current = { cells: new Map(), maxRadiusMeters: STATIC_RADARS_DEFAULT_RADIUS_METERS };
     };
   }, [
     enabled,
