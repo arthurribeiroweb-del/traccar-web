@@ -18,6 +18,55 @@ import speed120IconUrl from '../resources/images/icon/speed-limit-120-sign-icon.
 
 const STATIC_RADARS_MIN_ZOOM = 10;
 const RADAR_ICON_BASE_SIZE = 64;
+const STATIC_RADARS_FILE = 'scdb-radars-br.geojson';
+const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
+
+const resolveStaticRadarsUrls = () => {
+  const candidates = [
+    STATIC_RADARS_PATH,
+    `/${STATIC_RADARS_PATH}`,
+  ];
+
+  if (typeof window === 'undefined') {
+    return candidates;
+  }
+
+  const pathname = window.location.pathname || '/';
+  const normalizedPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+
+  if (normalizedPath && normalizedPath !== '/') {
+    candidates.push(`${normalizedPath}/${STATIC_RADARS_PATH}`);
+
+    const firstSegment = normalizedPath.split('/').filter(Boolean)[0];
+    if (firstSegment) {
+      candidates.push(`/${firstSegment}/${STATIC_RADARS_PATH}`);
+    }
+  }
+
+  return [...new Set(candidates)];
+};
+
+const loadStaticRadarsGeoJson = async () => {
+  const urls = resolveStaticRadarsUrls();
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        continue;
+      }
+
+      const data = await response.json();
+      if (data?.type === 'FeatureCollection' && Array.isArray(data.features)) {
+        return { data, url };
+      }
+    } catch (error) {
+      // Ignore and try the next candidate URL.
+    }
+  }
+
+  return { data: null, url: null, attemptedUrls: urls };
+};
 
 const MapStaticRadars = ({ enabled }) => {
   const id = useId();
@@ -132,19 +181,20 @@ const MapStaticRadars = ({ enabled }) => {
 
     const loadData = async () => {
       try {
-        // Caminho relativo para funcionar tanto em desenvolvimento quanto em produção
-        // mesmo quando o Traccar é servido em subcaminhos (ex.: /rastreador/).
-        const response = await fetch('radars/scdb-radars-br.geojson');
-        if (!response.ok) {
+        const result = await loadStaticRadarsGeoJson();
+        if (!result?.data) {
           // eslint-disable-next-line no-console
-          console.warn('Falha ao carregar scdb-radars-br.geojson', response.status);
+          console.warn(
+            `Falha ao carregar ${STATIC_RADARS_FILE}. URLs testadas:`,
+            result?.attemptedUrls || resolveStaticRadarsUrls(),
+          );
           return;
         }
-        const data = await response.json();
-        map.getSource(sourceId)?.setData(data);
+
+        map.getSource(sourceId)?.setData(result.data);
       } catch (error) {
         // eslint-disable-next-line no-console
-        console.warn('Erro ao carregar scdb-radars-br.geojson', error);
+        console.warn(`Erro ao carregar ${STATIC_RADARS_FILE}`, error);
       }
     };
 
