@@ -5,6 +5,23 @@ export default {
       disableTouchRipple: true,
     },
   },
+  MuiListItemButton: {
+    defaultProps: {
+      disableRipple: true,
+      disableTouchRipple: true,
+    },
+  },
+  MuiIconButton: {
+    defaultProps: {
+      disableRipple: true,
+      disableTouchRipple: true,
+    },
+  },
+  MuiBottomNavigationAction: {
+    defaultProps: {
+      disableRipple: true,
+    },
+  },
   MuiUseMediaQuery: {
     defaultProps: {
       noSsr: true,
@@ -41,6 +58,7 @@ export default {
     defaultProps: {
       enterDelay: 500,
       enterNextDelay: 500,
+      disableTouchListener: true,
     },
   },
   MuiTableCell: {

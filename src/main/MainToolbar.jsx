@@ -96,7 +96,12 @@ const MainToolbar = ({
 
   return (
     <Toolbar ref={toolbarRef} className={classes.toolbar}>
-      <IconButton edge="start" onClick={() => setDevicesOpen(!devicesOpen)}>
+      <IconButton
+        edge="start"
+        disableRipple
+        disableTouchRipple
+        onClick={() => setDevicesOpen(!devicesOpen)}
+      >
         {devicesOpen ? <MapIcon /> : <DnsIcon />}
       </IconButton>
       <OutlinedInput
@@ -117,7 +122,13 @@ const MainToolbar = ({
         }}
         endAdornment={(
           <InputAdornment position="end">
-            <IconButton size="small" edge="end" onClick={handleOpenFilter}>
+            <IconButton
+              size="small"
+              edge="end"
+              disableRipple
+              disableTouchRipple
+              onClick={handleOpenFilter}
+            >
               <Badge color="info" variant="dot" invisible={!filter.statuses.length && !filter.groups.length}>
                 <TuneIcon fontSize="small" />
               </Badge>
@@ -147,7 +158,12 @@ const MainToolbar = ({
           <DeviceRow key={filteredDevices[index].id} devices={filteredDevices} index={index} />
         ))}
         {filteredDevices.length > 3 && (
-          <ListItemButton alignItems="center" onClick={() => setDevicesOpen(true)}>
+          <ListItemButton
+            alignItems="center"
+            disableRipple
+            disableTouchRipple
+            onClick={() => setDevicesOpen(true)}
+          >
             <ListItemText
               primary={t('notificationAlways')}
               style={{ textAlign: 'center' }}
@@ -214,7 +230,12 @@ const MainToolbar = ({
       </Popover>
       {!features.disableEvents && (
         <Tooltip title={t('reportEvents')}>
-          <IconButton onClick={onEventsClick} className={classes.actionButton}>
+          <IconButton
+            disableRipple
+            disableTouchRipple
+            onClick={onEventsClick}
+            className={classes.actionButton}
+          >
             <Badge color="error" badgeContent={eventsBadgeCount} invisible={!eventsBadgeCount}>
               <NotificationsIcon />
             </Badge>
@@ -230,6 +251,8 @@ const MainToolbar = ({
             target="_blank"
             rel="noopener noreferrer"
             aria-label={t('whatsappSupport')}
+            disableRipple
+            disableTouchRipple
           >
             <WhatsAppIcon style={{ width: 24, height: 24 }} />
           </IconButton>
@@ -247,6 +270,8 @@ const MainToolbar = ({
               onClick={() => navigate('/settings/device')}
               disabled={deviceReadonly}
               aria-label={t('sharedAdd')}
+              disableRipple
+              disableTouchRipple
             >
               <AddIcon />
             </IconButton>
