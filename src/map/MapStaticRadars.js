@@ -37,13 +37,21 @@ const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
 const STATIC_RADARS_COMMON_PREFIXES = ['/login', '/rastreador'];
 const STATIC_RADARS_AUDIT_COLOR = '#E11D48';
 const RADAR_PROXIMITY_COOLDOWN_MS = 30000;
-const RADAR_ALERT_REPEAT_COUNT = 3;
+const RADAR_ALERT_REPEAT_COUNT = 1;
 const RADAR_ALERT_REPEAT_GAP_MS = 450;
+const RADAR_ALERT_BASE_WARNING_METERS = 80;
+const RADAR_ALERT_LOOKAHEAD_SECONDS = 10;
+const RADAR_ALERT_MIN_WARNING_METERS = 120;
+const RADAR_ALERT_MAX_WARNING_METERS = 450;
+const RADAR_ALERT_EXIT_HYSTERESIS_METERS = 80;
+const RADAR_ALERT_MAX_BEARING_DELTA_DEGREES = 55;
+const RADAR_ALERT_MIN_SPEED_MPS_FOR_DIRECTION = 2;
 const EARTH_RADIUS_METERS = 6371000;
 const PROXIMITY_GRID_CELL_DEGREES = 0.02;
 const PROXIMITY_MIN_QUERY_METERS = 300;
 const PROXIMITY_QUERY_BUFFER_METERS = 50;
 const STATIC_RADARS_DEFER_LOAD_MS = 400;
+const KNOTS_TO_METERS_PER_SECOND = 0.514444;
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
   features: [],
@@ -60,6 +68,48 @@ const distanceMeters = (latitudeA, longitudeA, latitudeB, longitudeB) => {
     + Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return EARTH_RADIUS_METERS * c;
+};
+
+const toDegrees = (value) => (value * 180) / Math.PI;
+
+const normalizeDegrees = (value) => {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  const normalized = ((value % 360) + 360) % 360;
+  return normalized;
+};
+
+const absoluteBearingDelta = (a, b) => {
+  const normalizedA = normalizeDegrees(a);
+  const normalizedB = normalizeDegrees(b);
+  if (!Number.isFinite(normalizedA) || !Number.isFinite(normalizedB)) {
+    return null;
+  }
+  const delta = Math.abs(normalizedA - normalizedB);
+  return Math.min(delta, 360 - delta);
+};
+
+const bearingDegrees = (latitudeA, longitudeA, latitudeB, longitudeB) => {
+  const lat1 = toRadians(latitudeA);
+  const lat2 = toRadians(latitudeB);
+  const deltaLongitude = toRadians(longitudeB - longitudeA);
+  const y = Math.sin(deltaLongitude) * Math.cos(lat2);
+  const x = (Math.cos(lat1) * Math.sin(lat2))
+    - (Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLongitude));
+  return normalizeDegrees(toDegrees(Math.atan2(y, x)));
+};
+
+const computeWarningDistanceMeters = (speedKnots) => {
+  const speedMetersPerSecond = Number.isFinite(speedKnots) && speedKnots > 0
+    ? speedKnots * KNOTS_TO_METERS_PER_SECOND
+    : 0;
+  const warningDistanceMeters = RADAR_ALERT_BASE_WARNING_METERS
+    + (speedMetersPerSecond * RADAR_ALERT_LOOKAHEAD_SECONDS);
+  return Math.min(
+    RADAR_ALERT_MAX_WARNING_METERS,
+    Math.max(RADAR_ALERT_MIN_WARNING_METERS, warningDistanceMeters),
+  );
 };
 
 const metersToLatitudeDegrees = (meters) => meters / 111320;
@@ -110,13 +160,13 @@ const buildProximityIndex = (features) => {
   };
 };
 
-const getProximityCandidates = (index, latitude, longitude) => {
+const getProximityCandidates = (index, latitude, longitude, queryRadiusHintMeters = PROXIMITY_MIN_QUERY_METERS) => {
   if (!index?.cells?.size) {
     return [];
   }
 
   const queryRadiusMeters = Math.max(
-    PROXIMITY_MIN_QUERY_METERS,
+    Number.isFinite(queryRadiusHintMeters) ? queryRadiusHintMeters : PROXIMITY_MIN_QUERY_METERS,
     (index.maxRadiusMeters || STATIC_RADARS_DEFAULT_RADIUS_METERS) + PROXIMITY_QUERY_BUFFER_METERS,
   );
   const latDelta = metersToLatitudeDegrees(queryRadiusMeters);
@@ -370,7 +420,19 @@ const MapStaticRadars = ({ enabled }) => {
 
     const latitude = Number(selectedPosition.latitude);
     const longitude = Number(selectedPosition.longitude);
-    const features = getProximityCandidates(proximityIndexRef.current, latitude, longitude);
+    const speedKnots = Number(selectedPosition.speed);
+    const speedMetersPerSecond = Number.isFinite(speedKnots) && speedKnots > 0
+      ? speedKnots * KNOTS_TO_METERS_PER_SECOND
+      : 0;
+    const courseDegrees = Number(selectedPosition.course);
+    const warningDistanceMeters = computeWarningDistanceMeters(speedKnots);
+    const queryRadiusMeters = warningDistanceMeters + PROXIMITY_QUERY_BUFFER_METERS;
+    const features = getProximityCandidates(
+      proximityIndexRef.current,
+      latitude,
+      longitude,
+      queryRadiusMeters,
+    );
     if (!features.length) {
       insideRadarKeysRef.current = new Set();
       return;
@@ -397,19 +459,37 @@ const MapStaticRadars = ({ enabled }) => {
         return;
       }
 
-      const distanceToRadar = distanceMeters(latitude, longitude, radarLat, radarLng);
-      if (distanceToRadar > radiusMeters) {
-        return;
-      }
-
       const externalId = typeof feature?.properties?.externalId === 'string'
         ? feature.properties.externalId.trim()
         : '';
       const fallbackKey = `${radarLat.toFixed(6)}:${radarLng.toFixed(6)}:${Math.round(radiusMeters)}`;
       const radarKey = externalId || fallbackKey;
+      const alertDistanceMeters = Math.max(warningDistanceMeters, radiusMeters + 20);
+      const releaseDistanceMeters = alertDistanceMeters + RADAR_ALERT_EXIT_HYSTERESIS_METERS;
+      const distanceToRadar = distanceMeters(latitude, longitude, radarLat, radarLng);
+      const wasInside = insideRadarKeysRef.current.has(radarKey);
+      const isInside = distanceToRadar <= alertDistanceMeters;
+
+      if (!isInside && (!wasInside || distanceToRadar > releaseDistanceMeters)) {
+        return;
+      }
+
+      const radarBearing = bearingDegrees(latitude, longitude, radarLat, radarLng);
+      const directionReliable = Number.isFinite(courseDegrees)
+        && speedMetersPerSecond >= RADAR_ALERT_MIN_SPEED_MPS_FOR_DIRECTION;
+      const headingDelta = directionReliable
+        ? absoluteBearingDelta(courseDegrees, radarBearing)
+        : null;
+      const approaching = !directionReliable
+        || (Number.isFinite(headingDelta) && headingDelta <= RADAR_ALERT_MAX_BEARING_DELTA_DEGREES);
+
+      if (!approaching && !wasInside) {
+        return;
+      }
+
       nextInsideKeys.add(radarKey);
 
-      if (!insideRadarKeysRef.current.has(radarKey)) {
+      if (!wasInside && approaching) {
         const previousAlertAt = radarCooldownRef.current[radarKey] || 0;
         if (now - previousAlertAt >= RADAR_PROXIMITY_COOLDOWN_MS) {
           radarCooldownRef.current[radarKey] = now;
