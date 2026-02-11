@@ -6,10 +6,10 @@ import {
 } from '@mui/material';
 
 import DescriptionIcon from '@mui/icons-material/Description';
-import SettingsIcon from '@mui/icons-material/Settings';
 import MapIcon from '@mui/icons-material/Map';
 import PersonIcon from '@mui/icons-material/Person';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
 
 import { sessionActions } from '../../store';
 import { useTranslation } from './LocalizationProvider';
@@ -25,6 +25,7 @@ const BottomMenu = () => {
   const readonly = useRestriction('readonly');
   const disableReports = useRestriction('disableReports');
   const devices = useSelector((state) => state.devices.items);
+  const positions = useSelector((state) => state.session.positions || {});
   const user = useSelector((state) => state.session.user);
   const socket = useSelector((state) => state.session.socket);
   const selectedDeviceId = useSelector((state) => state.devices.selectedId);
@@ -35,7 +36,7 @@ const BottomMenu = () => {
     if (location.pathname === `/settings/user/${user.id}`) {
       return 'account';
     } if (location.pathname.startsWith('/settings')) {
-      return 'settings';
+      return 'account';
     } if (location.pathname.startsWith('/reports')) {
       return 'reports';
     } if (location.pathname === '/') {
@@ -47,6 +48,38 @@ const BottomMenu = () => {
   const handleAccount = () => {
     setAnchorEl(null);
     navigate(`/settings/user/${user.id}`);
+  };
+
+  const handleSettings = () => {
+    setAnchorEl(null);
+    navigate('/settings/preferences?menu=true');
+  };
+
+  const getTargetDeviceId = () => {
+    if (selectedDeviceId != null) {
+      return selectedDeviceId;
+    }
+    const deviceIds = Object.keys(devices);
+    if (deviceIds.length === 1) {
+      return deviceIds[0];
+    }
+    return null;
+  };
+
+  const handleRoute = () => {
+    const id = getTargetDeviceId();
+    const position = id != null ? positions[id] : null;
+    const latitude = Number(position?.latitude);
+    const longitude = Number(position?.longitude);
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      const destination = `${latitude},${longitude}`;
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving&dir_action=navigate`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    window.open('https://www.google.com/maps', '_blank', 'noopener,noreferrer');
   };
 
   const handleLogout = async () => {
@@ -84,14 +117,7 @@ const BottomMenu = () => {
         navigate('/');
         break;
       case 'reports': {
-        let id = selectedDeviceId;
-        if (id == null) {
-          const deviceIds = Object.keys(devices);
-          if (deviceIds.length === 1) {
-            id = deviceIds[0];
-          }
-        }
-        
+        const id = getTargetDeviceId();
         if (id != null) {
           navigate(`/reports/combined?deviceId=${id}`);
         } else {
@@ -99,8 +125,8 @@ const BottomMenu = () => {
         }
         break;
       }
-      case 'settings':
-        navigate('/settings/preferences?menu=true');
+      case 'route':
+        handleRoute();
         break;
       case 'account':
         setAnchorEl(event.currentTarget);
@@ -128,7 +154,7 @@ const BottomMenu = () => {
         {!disableReports && (
           <BottomNavigationAction label={t('reportTitle')} icon={<DescriptionIcon />} value="reports" />
         )}
-        <BottomNavigationAction label={t('settingsTitle')} icon={<SettingsIcon />} value="settings" />
+        <BottomNavigationAction label="Rota" icon={<AltRouteIcon />} value="route" />
         {readonly ? (
           <BottomNavigationAction label={t('loginLogout')} icon={<ExitToAppIcon />} value="logout" />
         ) : (
@@ -138,6 +164,9 @@ const BottomMenu = () => {
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
         <MenuItem onClick={handleAccount}>
           <Typography color="textPrimary">{t('settingsUser')}</Typography>
+        </MenuItem>
+        <MenuItem onClick={handleSettings}>
+          <Typography color="textPrimary">{t('settingsTitle')}</Typography>
         </MenuItem>
         <MenuItem onClick={handleLogout}>
           <Typography color="error">{t('loginLogout')}</Typography>
