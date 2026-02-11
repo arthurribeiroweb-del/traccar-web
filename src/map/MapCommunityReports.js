@@ -29,6 +29,53 @@ const statusLabelMap = {
 const COMMUNITY_MIN_ZOOM = 17;
 const LOMBADA_MAX_VIEW_RADIUS_METERS = 500;
 const COMMUNITY_ICON_BASE_SIZE = 64;
+const COMMUNITY_POPUP_CLASS = 'community-report-popup';
+const COMMUNITY_POPUP_STYLE_ID = 'community-report-popup-style';
+
+const ensureCommunityPopupStyle = () => {
+  if (typeof document === 'undefined' || document.getElementById(COMMUNITY_POPUP_STYLE_ID)) {
+    return;
+  }
+
+  const style = document.createElement('style');
+  style.id = COMMUNITY_POPUP_STYLE_ID;
+  style.textContent = `
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS} .maplibregl-popup-content {
+      padding: 0;
+      border-radius: 18px;
+      background: rgba(250, 251, 255, 0.95);
+      border: 1px solid rgba(226, 232, 240, 0.92);
+      box-shadow: 0 20px 48px rgba(15, 23, 42, 0.2);
+      backdrop-filter: blur(18px) saturate(145%);
+      -webkit-backdrop-filter: blur(18px) saturate(145%);
+    }
+
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS} .maplibregl-popup-close-button {
+      display: none;
+    }
+
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+      border-bottom-color: rgba(250, 251, 255, 0.95);
+    }
+
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+      border-top-color: rgba(250, 251, 255, 0.95);
+    }
+
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+      border-right-color: rgba(250, 251, 255, 0.95);
+    }
+
+    .maplibregl-popup.${COMMUNITY_POPUP_CLASS}.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+      border-left-color: rgba(250, 251, 255, 0.95);
+    }
+  `;
+  document.head.appendChild(style);
+};
 
 const formatCreatedAt = (value) => {
   if (!value) {
@@ -167,6 +214,8 @@ const MapCommunityReports = ({
   }, [publicReports, pendingReports]);
 
   useEffect(() => {
+    ensureCommunityPopupStyle();
+
     const iconEntries = [
       { imageId: imageIds.BURACO, iconUrl: buracoIconUrl },
       { imageId: imageIds.BURACO_APPROVED, iconUrl: buracoIconUrl },
@@ -303,59 +352,209 @@ const MapCommunityReports = ({
 
       clearPopup();
 
+      const typeThemeMap = {
+        BURACO: {
+          accent: '#B45309',
+          accentSoft: '#FFF7ED',
+          border: '#FDBA74',
+          closeBg: '#FFEDD5',
+        },
+        QUEBRA_MOLAS: {
+          accent: '#0369A1',
+          accentSoft: '#ECFEFF',
+          border: '#7DD3FC',
+          closeBg: '#E0F2FE',
+        },
+        RADAR: {
+          accent: '#B91C1C',
+          accentSoft: '#FEF2F2',
+          border: '#FDA4AF',
+          closeBg: '#FEE2E2',
+        },
+      };
+      const theme = typeThemeMap[type] || {
+        accent: '#334155',
+        accentSoft: '#F8FAFC',
+        border: '#CBD5E1',
+        closeBg: '#F1F5F9',
+      };
+
+      const titleMap = {
+        BURACO: 'Buraco na pista',
+        QUEBRA_MOLAS: 'Lombada na pista',
+        RADAR: 'Radar na pista',
+      };
+
       const container = document.createElement('div');
-      container.style.minWidth = '220px';
+      container.style.minWidth = '260px';
+      container.style.maxWidth = '320px';
+      container.style.padding = '14px';
       container.style.display = 'flex';
       container.style.flexDirection = 'column';
-      container.style.gap = '8px';
+      container.style.gap = '10px';
+      container.style.color = '#0F172A';
+      container.style.fontFamily = '"SF Pro Text", "Segoe UI", sans-serif';
+      container.addEventListener('click', (event) => event.stopPropagation());
+      container.addEventListener('mousedown', (event) => event.stopPropagation());
+      container.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+      container.addEventListener('touchend', (event) => event.stopPropagation());
+
+      const header = document.createElement('div');
+      header.style.display = 'flex';
+      header.style.alignItems = 'flex-start';
+      header.style.justifyContent = 'space-between';
+      header.style.gap = '10px';
+      container.appendChild(header);
+
+      const headerInfo = document.createElement('div');
+      headerInfo.style.display = 'flex';
+      headerInfo.style.flexDirection = 'column';
+      headerInfo.style.gap = '6px';
+      headerInfo.style.flex = '1';
+      header.appendChild(headerInfo);
+
+      const chipsRow = document.createElement('div');
+      chipsRow.style.display = 'flex';
+      chipsRow.style.flexWrap = 'wrap';
+      chipsRow.style.gap = '6px';
+      headerInfo.appendChild(chipsRow);
+
+      const typeChip = document.createElement('span');
+      typeChip.style.display = 'inline-flex';
+      typeChip.style.alignItems = 'center';
+      typeChip.style.padding = '3px 10px';
+      typeChip.style.borderRadius = '999px';
+      typeChip.style.fontSize = '11px';
+      typeChip.style.fontWeight = '700';
+      typeChip.style.letterSpacing = '0.2px';
+      typeChip.style.background = theme.accentSoft;
+      typeChip.style.border = `1px solid ${theme.border}`;
+      typeChip.style.color = theme.accent;
+      typeChip.textContent = typeLabelMap[type] || type || '-';
+      chipsRow.appendChild(typeChip);
+
+      if (pending) {
+        const pendingChip = document.createElement('span');
+        pendingChip.style.display = 'inline-flex';
+        pendingChip.style.alignItems = 'center';
+        pendingChip.style.padding = '3px 10px';
+        pendingChip.style.borderRadius = '999px';
+        pendingChip.style.fontSize = '11px';
+        pendingChip.style.fontWeight = '700';
+        pendingChip.style.letterSpacing = '0.2px';
+        pendingChip.style.background = '#EEF2FF';
+        pendingChip.style.border = '1px solid #C7D2FE';
+        pendingChip.style.color = '#4338CA';
+        pendingChip.textContent = 'Aguardando aprovacao';
+        chipsRow.appendChild(pendingChip);
+      }
 
       const title = document.createElement('div');
       title.style.fontWeight = '700';
-      title.textContent = typeLabelMap[type] || type || '-';
-      container.appendChild(title);
+      title.style.fontSize = '15px';
+      title.style.lineHeight = '1.25';
+      title.textContent = titleMap[type] || (typeLabelMap[type] || type || '-');
+      headerInfo.appendChild(title);
 
-      if (type === 'BURACO' || type === 'QUEBRA_MOLAS' || type === 'RADAR') {
-        const descLine = document.createElement('div');
-        descLine.style.fontSize = '12px';
-        descLine.style.color = '#0F172A';
-        if (type === 'BURACO') {
-          descLine.textContent = `Buraco na pista, feito por ${authorName}`;
-        } else if (type === 'QUEBRA_MOLAS') {
-          descLine.textContent = `Lombada na pista, feito por ${authorName}`;
-        } else {
-          descLine.textContent = `Radar na pista, feito por ${authorName}`;
-        }
-        container.appendChild(descLine);
-      }
+      const subtitle = document.createElement('div');
+      subtitle.style.fontSize = '12px';
+      subtitle.style.color = '#475569';
+      subtitle.style.lineHeight = '1.3';
+      subtitle.textContent = `Reportado por ${authorName}`;
+      headerInfo.appendChild(subtitle);
+
+      const closeButton = document.createElement('button');
+      closeButton.type = 'button';
+      closeButton.setAttribute('aria-label', 'Fechar');
+      closeButton.style.width = '28px';
+      closeButton.style.height = '28px';
+      closeButton.style.borderRadius = '999px';
+      closeButton.style.border = '1px solid #D1D5DB';
+      closeButton.style.background = theme.closeBg;
+      closeButton.style.color = '#0F172A';
+      closeButton.style.display = 'inline-flex';
+      closeButton.style.alignItems = 'center';
+      closeButton.style.justifyContent = 'center';
+      closeButton.style.fontSize = '18px';
+      closeButton.style.lineHeight = '1';
+      closeButton.style.fontWeight = '500';
+      closeButton.style.cursor = 'pointer';
+      closeButton.style.flexShrink = '0';
+      closeButton.textContent = '\u00D7';
+      closeButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        clearPopup();
+      });
+      closeButton.addEventListener('mousedown', (event) => event.stopPropagation());
+      closeButton.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+      closeButton.addEventListener('touchend', (event) => event.stopPropagation());
+      header.appendChild(closeButton);
+
+      const metaBlock = document.createElement('div');
+      metaBlock.style.display = 'flex';
+      metaBlock.style.flexDirection = 'column';
+      metaBlock.style.gap = '5px';
+      metaBlock.style.padding = '10px';
+      metaBlock.style.borderRadius = '12px';
+      metaBlock.style.background = 'rgba(255, 255, 255, 0.78)';
+      metaBlock.style.border = '1px solid rgba(226, 232, 240, 0.9)';
+      container.appendChild(metaBlock);
 
       const statusLine = document.createElement('div');
       statusLine.style.fontSize = '12px';
       statusLine.style.color = '#334155';
       statusLine.textContent = `Status: ${statusLabelMap[status] || status || '-'}`;
-      container.appendChild(statusLine);
+      metaBlock.appendChild(statusLine);
+
+      const createdLine = document.createElement('div');
+      createdLine.style.fontSize = '12px';
+      createdLine.style.color = '#334155';
+      createdLine.textContent = `Criado em: ${formatCreatedAt(createdAt)}`;
+      metaBlock.appendChild(createdLine);
+
+      if (type === 'RADAR' && Number.isFinite(radarSpeedLimit) && radarSpeedLimit > 0) {
+        const speedLine = document.createElement('div');
+        speedLine.style.fontSize = '12px';
+        speedLine.style.color = '#334155';
+        speedLine.textContent = `Velocidade: ${radarSpeedLimit} km/h`;
+        metaBlock.appendChild(speedLine);
+      }
+
+      const votesBlock = document.createElement('div');
+      votesBlock.style.display = 'flex';
+      votesBlock.style.flexDirection = 'column';
+      votesBlock.style.gap = '6px';
+      votesBlock.style.padding = '10px';
+      votesBlock.style.borderRadius = '12px';
+      votesBlock.style.background = 'rgba(248, 250, 252, 0.9)';
+      votesBlock.style.border = '1px solid rgba(203, 213, 225, 0.88)';
+      container.appendChild(votesBlock);
 
       const voteLine = document.createElement('div');
-      voteLine.style.fontSize = '12px';
+      voteLine.style.fontSize = '13px';
+      voteLine.style.fontWeight = '700';
       voteLine.style.color = '#0F172A';
-      container.appendChild(voteLine);
-
-      const feedbackLine = document.createElement('div');
-      feedbackLine.style.fontSize = '11px';
-      feedbackLine.style.color = '#B91C1C';
-      feedbackLine.style.minHeight = '14px';
-      container.appendChild(feedbackLine);
+      votesBlock.appendChild(voteLine);
 
       const lastVoteLine = document.createElement('div');
       lastVoteLine.style.fontSize = '11px';
-      lastVoteLine.style.color = '#475569';
-      container.appendChild(lastVoteLine);
+      lastVoteLine.style.color = '#64748B';
+      votesBlock.appendChild(lastVoteLine);
+
+      const feedbackLine = document.createElement('div');
+      feedbackLine.style.fontSize = '11px';
+      feedbackLine.style.fontWeight = '600';
+      feedbackLine.style.minHeight = '14px';
+      feedbackLine.style.color = '#B91C1C';
+      votesBlock.appendChild(feedbackLine);
 
       const updateVoteInfo = (data) => {
         const exists = data?.existsVotes ?? 0;
         const gone = data?.goneVotes ?? 0;
-        voteLine.textContent = `Votos: Existe ${exists} | Sumiu ${gone}`;
+        voteLine.textContent = `Votos: Ainda existe ${exists} | Sumiu ${gone}`;
         if (data?.lastVotedAt) {
-          lastVoteLine.textContent = `Último voto: ${formatCreatedAt(data.lastVotedAt)}`;
+          lastVoteLine.textContent = `Ultimo voto: ${formatCreatedAt(data.lastVotedAt)}`;
         } else {
           lastVoteLine.textContent = '';
         }
@@ -365,39 +564,60 @@ const MapCommunityReports = ({
       const buttonsRow = document.createElement('div');
       buttonsRow.style.display = 'flex';
       buttonsRow.style.gap = '8px';
-      buttonsRow.style.margin = '4px 0';
+      buttonsRow.style.marginTop = '2px';
       buttonsRow.addEventListener('click', (event) => event.stopPropagation());
       buttonsRow.addEventListener('mousedown', (event) => event.stopPropagation());
       buttonsRow.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
       buttonsRow.addEventListener('touchend', (event) => event.stopPropagation());
       container.appendChild(buttonsRow);
+
       const voteButtons = [];
       const setVoteButtonsDisabled = (disabled) => {
         voteButtons.forEach((button) => {
           button.disabled = disabled;
-          button.style.opacity = disabled ? '0.7' : '1';
+          button.style.opacity = disabled ? '0.65' : '1';
           button.style.cursor = disabled ? 'not-allowed' : 'pointer';
         });
       };
 
-      const renderButton = (label, value, accent) => {
+      const renderButton = (label, value) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.style.flex = '1';
-        button.style.minHeight = '36px';
-        button.style.borderRadius = '8px';
-        button.style.border = `1px solid ${accent ? '#0EA5E9' : '#CBD5E1'}`;
+        button.style.minHeight = '40px';
+        button.style.borderRadius = '11px';
+        button.style.border = '1px solid #CBD5E1';
         button.style.background = '#FFFFFF';
         button.style.color = '#0F172A';
-        button.style.fontWeight = '600';
+        button.style.fontWeight = '700';
+        button.style.fontSize = '13px';
         button.style.cursor = 'pointer';
         button.style.touchAction = 'manipulation';
+        button.style.transition = 'all 0.18s ease';
         button.textContent = label;
         voteButtons.push(button);
+
         const applyActive = (active) => {
-          button.style.background = active ? '#E0F2FE' : '#FFFFFF';
-          button.style.borderColor = active ? '#0EA5E9' : '#CBD5E1';
+          if (active && value === 'EXISTS') {
+            button.style.background = 'linear-gradient(135deg, #38BDF8 0%, #0284C7 100%)';
+            button.style.borderColor = '#0284C7';
+            button.style.color = '#FFFFFF';
+            button.style.boxShadow = '0 8px 18px rgba(2, 132, 199, 0.28)';
+            return;
+          }
+          if (active && value === 'GONE') {
+            button.style.background = 'linear-gradient(135deg, #64748B 0%, #334155 100%)';
+            button.style.borderColor = '#334155';
+            button.style.color = '#FFFFFF';
+            button.style.boxShadow = '0 8px 18px rgba(51, 65, 85, 0.26)';
+            return;
+          }
+          button.style.background = '#FFFFFF';
+          button.style.borderColor = '#CBD5E1';
+          button.style.color = '#0F172A';
+          button.style.boxShadow = 'none';
         };
+
         applyActive(initialVotes.userVote === value);
         button.onclick = async (event) => {
           event.preventDefault();
@@ -421,7 +641,7 @@ const MapCommunityReports = ({
               if (currentData?.nextVoteAt) {
                 feedbackLine.textContent = `Voce podera votar novamente em ${formatCreatedAt(currentData.nextVoteAt)}.`;
               } else {
-                feedbackLine.textContent = 'Voce ja votou neste buraco recentemente.';
+                feedbackLine.textContent = 'Voce ja votou neste ponto recentemente.';
               }
               feedbackLine.style.color = '#92400E';
               setVoteButtonsDisabled(true);
@@ -443,8 +663,8 @@ const MapCommunityReports = ({
         return applyActive;
       };
 
-      const applyExistsActive = renderButton('Ainda existe', 'EXISTS', true);
-      const applyGoneActive = renderButton('Sumiu', 'GONE', false);
+      const applyExistsActive = renderButton('Ainda existe', 'EXISTS');
+      const applyGoneActive = renderButton('Sumiu', 'GONE');
       const applyUserVote = (data) => {
         applyExistsActive(data?.userVote === 'EXISTS');
         applyGoneActive(data?.userVote === 'GONE');
@@ -456,64 +676,46 @@ const MapCommunityReports = ({
         feedbackLine.textContent = `Voce podera votar novamente em ${formatCreatedAt(initialVotes.nextVoteAt)}.`;
       }
 
-      const createdLine = document.createElement('div');
-      createdLine.style.fontSize = '12px';
-      createdLine.style.color = '#334155';
-      createdLine.textContent = `Criado em: ${formatCreatedAt(createdAt)}`;
-      container.appendChild(createdLine);
-
-      if (type === 'RADAR' && Number.isFinite(radarSpeedLimit) && radarSpeedLimit > 0) {
-        const speedLine = document.createElement('div');
-        speedLine.style.fontSize = '12px';
-        speedLine.style.color = '#334155';
-        speedLine.textContent = `Velocidade: ${radarSpeedLimit} km/h`;
-        container.appendChild(speedLine);
-      }
-
-      if (pending) {
-        const chip = document.createElement('div');
-        chip.style.display = 'inline-flex';
-        chip.style.width = 'fit-content';
-        chip.style.padding = '4px 8px';
-        chip.style.borderRadius = '999px';
-        chip.style.background = '#E2E8F0';
-        chip.style.fontSize = '11px';
-        chip.style.fontWeight = '600';
-        chip.style.color = '#1E293B';
-        chip.textContent = 'Aguardando aprovação';
-        container.appendChild(chip);
-      }
-
       if (pending && cancelable && onCancelPending) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.style.minHeight = '44px';
-        button.style.padding = '10px 12px';
-        button.style.border = '1px solid #CBD5E1';
-        button.style.borderRadius = '8px';
-        button.style.background = '#FFFFFF';
-        button.style.cursor = 'pointer';
-        button.style.textAlign = 'left';
-        button.style.fontWeight = '600';
-        button.textContent = 'Cancelar envio';
-        button.onclick = async () => {
-          button.disabled = true;
-          button.textContent = 'Cancelando...';
+        const cancelButton = document.createElement('button');
+        cancelButton.type = 'button';
+        cancelButton.style.minHeight = '40px';
+        cancelButton.style.padding = '10px 12px';
+        cancelButton.style.border = '1px solid #CBD5E1';
+        cancelButton.style.borderRadius = '11px';
+        cancelButton.style.background = '#FFFFFF';
+        cancelButton.style.color = '#334155';
+        cancelButton.style.fontWeight = '700';
+        cancelButton.style.cursor = 'pointer';
+        cancelButton.style.textAlign = 'center';
+        cancelButton.textContent = 'Cancelar envio';
+        cancelButton.addEventListener('mousedown', (event) => event.stopPropagation());
+        cancelButton.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true });
+        cancelButton.addEventListener('touchend', (event) => event.stopPropagation());
+        cancelButton.onclick = async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          cancelButton.disabled = true;
+          cancelButton.style.opacity = '0.7';
+          cancelButton.textContent = 'Cancelando...';
           try {
             await onCancelPending(reportId);
             clearPopup();
           } catch {
-            button.disabled = false;
-            button.textContent = 'Cancelar envio';
+            cancelButton.disabled = false;
+            cancelButton.style.opacity = '1';
+            cancelButton.textContent = 'Cancelar envio';
           }
         };
-        container.appendChild(button);
+        container.appendChild(cancelButton);
       }
 
       popupRef.current = new maplibregl.Popup({
-        closeButton: true,
+        className: COMMUNITY_POPUP_CLASS,
+        closeButton: false,
         closeOnClick: false,
-        maxWidth: '280px',
+        maxWidth: '340px',
+        offset: 14,
       })
         .setLngLat(event.lngLat)
         .setDOMContent(container)
@@ -602,3 +804,4 @@ const MapCommunityReports = ({
 };
 
 export default MapCommunityReports;
+
