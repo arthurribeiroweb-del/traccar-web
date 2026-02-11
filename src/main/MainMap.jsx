@@ -85,10 +85,15 @@ const PHONE_ASSIST_MAX_SPEED_DIFF_KMH = 45;
 const PHONE_ASSIST_MIN_SPEED_DIFF_CHECK_KMH = 8;
 const PHONE_ASSIST_MAX_COURSE_DELTA_DEGREES = 80;
 const PHONE_ASSIST_MIN_SPEED_COURSE_CHECK_KMH = 15;
+const PHONE_ASSIST_MAX_PHONE_SPEED_KMH = 220;
+const PHONE_ASSIST_TRACKER_COMPARISON_MAX_AGE_MS = 6000;
+const PHONE_ASSIST_TRACKER_LAG_ALLOWANCE_MAX_AGE_MS = 45000;
+const PHONE_ASSIST_MAX_LOCK_LAG_ALLOWANCE_METERS = 80;
+const PHONE_ASSIST_MAX_RELEASE_LAG_ALLOWANCE_METERS = 320;
 const PHONE_ASSIST_MIN_MOVE_FOR_BEARING_METERS = 4;
 const PHONE_ASSIST_MIN_MOVE_FOR_SPEED_METERS = 2;
 const PHONE_ASSIST_MIN_INTERVAL_FOR_SPEED_MS = 700;
-const PHONE_ASSIST_SMOOTHING_FACTOR = 0.45;
+const PHONE_ASSIST_SMOOTHING_FACTOR = 0.65;
 const PHONE_ASSIST_MAX_SMOOTH_JUMP_METERS = 120;
 
 const COMMUNITY_TYPES = [
@@ -217,6 +222,14 @@ const bearingBetweenCoordinates = (latitudeA, longitudeA, latitudeB, longitudeB)
 const toSpeedKmh = (speedKnots) => (
   Number.isFinite(speedKnots) && speedKnots >= 0 ? speedKnots * 1.852 : null
 );
+
+const parseTimestampMs = (value) => {
+  if (!value) {
+    return null;
+  }
+  const timestampMs = Date.parse(value);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+};
 
 const buildUserPrefetchBounds = (position) => {
   if (!isValidCoordinate(position?.latitude, position?.longitude)) {
@@ -655,13 +668,57 @@ const MainMap = ({
 
     const trackerSpeedKmh = toSpeedKmh(Number(selectedLivePosition.speed));
     const phoneSpeedKmh = toSpeedKmh(Number(phoneSample.speedKnots));
-    const shouldCheckSpeed = Number.isFinite(phoneSpeedKmh) && Number.isFinite(trackerSpeedKmh)
+    const trackerFixTimestampMs = parseTimestampMs(selectedLivePosition.fixTime)
+      ?? parseTimestampMs(selectedLivePosition.deviceTime)
+      ?? parseTimestampMs(selectedLivePosition.serverTime);
+    const trackerAgeMs = Number.isFinite(trackerFixTimestampMs)
+      ? Math.max(0, assistNowMs - trackerFixTimestampMs)
+      : null;
+
+    const referenceSpeedKmh = Number.isFinite(phoneSpeedKmh)
+      ? phoneSpeedKmh
+      : (Number.isFinite(trackerSpeedKmh) ? trackerSpeedKmh : 0);
+    const referenceSpeedMetersPerSecond = Math.max(0, referenceSpeedKmh / 3.6);
+    const trackerLagAgeMs = Number.isFinite(trackerAgeMs)
+      ? Math.min(trackerAgeMs, PHONE_ASSIST_TRACKER_LAG_ALLOWANCE_MAX_AGE_MS)
+      : 0;
+    const expectedLagMeters = referenceSpeedMetersPerSecond * (trackerLagAgeMs / 1000);
+
+    const lockLagDistanceMeters = Math.min(
+      PHONE_ASSIST_MAX_LOCK_LAG_ALLOWANCE_METERS,
+      expectedLagMeters * (phoneAssistLocked ? 0.5 : 0.25),
+    );
+    const releaseLagDistanceMeters = Math.min(
+      PHONE_ASSIST_MAX_RELEASE_LAG_ALLOWANCE_METERS,
+      expectedLagMeters,
+    );
+    const lockDistanceThreshold = PHONE_ASSIST_LOCK_DISTANCE_METERS + lockLagDistanceMeters;
+    const releaseDistanceThreshold = PHONE_ASSIST_RELEASE_DISTANCE_METERS + releaseLagDistanceMeters;
+    const withinLockDistance = distanceMeters <= lockDistanceThreshold;
+    const withinReleaseDistance = distanceMeters <= releaseDistanceThreshold;
+
+    if (Number.isFinite(phoneSpeedKmh) && phoneSpeedKmh > PHONE_ASSIST_MAX_PHONE_SPEED_KMH) {
+      return {
+        ready: false,
+        withinLockDistance,
+        withinReleaseDistance,
+        distanceMeters,
+        reason: 'GPS do celular instavel',
+      };
+    }
+
+    const trackerComparable = Number.isFinite(trackerAgeMs)
+      && trackerAgeMs <= PHONE_ASSIST_TRACKER_COMPARISON_MAX_AGE_MS;
+
+    const shouldCheckSpeed = trackerComparable
+      && Number.isFinite(phoneSpeedKmh)
+      && Number.isFinite(trackerSpeedKmh)
       && Math.max(phoneSpeedKmh, trackerSpeedKmh) >= PHONE_ASSIST_MIN_SPEED_DIFF_CHECK_KMH;
     if (shouldCheckSpeed && Math.abs(phoneSpeedKmh - trackerSpeedKmh) > PHONE_ASSIST_MAX_SPEED_DIFF_KMH) {
       return {
         ready: false,
-        withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
-        withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+        withinLockDistance,
+        withinReleaseDistance,
         distanceMeters,
         reason: 'Velocidade do celular diverge do rastreador',
       };
@@ -669,26 +726,29 @@ const MainMap = ({
 
     const trackerCourse = Number(selectedLivePosition.course);
     const phoneCourse = Number(phoneSample.course);
-    const shouldCheckCourse = Number.isFinite(trackerCourse) && Number.isFinite(phoneCourse)
+    const shouldCheckCourse = trackerComparable
+      && Number.isFinite(trackerCourse) && Number.isFinite(phoneCourse)
       && Math.max(phoneSpeedKmh || 0, trackerSpeedKmh || 0) >= PHONE_ASSIST_MIN_SPEED_COURSE_CHECK_KMH;
     if (shouldCheckCourse && angularDistance(trackerCourse, phoneCourse) > PHONE_ASSIST_MAX_COURSE_DELTA_DEGREES) {
       return {
         ready: false,
-        withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
-        withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+        withinLockDistance,
+        withinReleaseDistance,
         distanceMeters,
         reason: 'Direcao do celular diverge do rastreador',
       };
     }
 
+    const trackerLagSeconds = Number.isFinite(trackerAgeMs) ? Math.round(trackerAgeMs / 1000) : 0;
+    const lagHint = trackerLagSeconds >= 3 ? `, atraso rastreador ${trackerLagSeconds}s` : '';
     return {
       ready: true,
-      withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
-      withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+      withinLockDistance,
+      withinReleaseDistance,
       distanceMeters,
-      reason: `Celular sincronizado (${Math.round(distanceMeters)}m)`,
+      reason: `Celular sincronizado (${Math.round(distanceMeters)}m${lagHint})`,
     };
-  }, [assistNowMs, phoneAssistEnabled, phoneSample, selectedId, selectedLivePosition]);
+  }, [assistNowMs, phoneAssistEnabled, phoneAssistLocked, phoneSample, selectedId, selectedLivePosition]);
 
   useEffect(() => {
     if (!phoneAssistEnabled) {
