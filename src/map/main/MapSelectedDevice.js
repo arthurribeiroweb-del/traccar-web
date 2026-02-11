@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import dimensions from '../../common/theme/dimensions';
 import { map } from '../core/MapView';
@@ -21,6 +21,7 @@ const MapSelectedDevice = ({
   selectedHeading,
   rotateMapWithHeading,
   suspendFollow,
+  positionOverride = null,
 }) => {
   const currentTime = useSelector((state) => state.devices.selectTime);
   const currentId = useSelector((state) => state.devices.selectedId);
@@ -31,8 +32,16 @@ const MapSelectedDevice = ({
   const userZoomingRef = useRef(false);
 
   const position = useSelector((state) => state.session.positions[currentId]);
+  const effectivePosition = useMemo(() => {
+    const overrideLatitude = Number(positionOverride?.latitude);
+    const overrideLongitude = Number(positionOverride?.longitude);
+    if (Number.isFinite(overrideLatitude) && Number.isFinite(overrideLongitude)) {
+      return positionOverride;
+    }
+    return position;
+  }, [position, positionOverride]);
 
-  const previousPosition = usePrevious(position);
+  const previousPosition = usePrevious(effectivePosition);
   const previousFollow = usePrevious(followEnabled);
   const previousHeading = usePrevious(selectedHeading);
 
@@ -85,8 +94,9 @@ const MapSelectedDevice = ({
   useEffect(() => {
     if (!mapReady) return;
 
-    const positionChanged = position && (!previousPosition
-      || position.latitude !== previousPosition.latitude || position.longitude !== previousPosition.longitude);
+    const positionChanged = effectivePosition && (!previousPosition
+      || effectivePosition.latitude !== previousPosition.latitude
+      || effectivePosition.longitude !== previousPosition.longitude);
     const headingChanged = Number.isFinite(selectedHeading) && selectedHeading !== previousHeading;
 
     const selectionChanged = currentId !== previousId || currentTime !== previousTime;
@@ -94,12 +104,12 @@ const MapSelectedDevice = ({
 
     const shouldFollowMove = followEnabled
       && !suspendFollow
-      && position
+      && effectivePosition
       && (positionChanged || followActivated || headingChanged);
 
     if (shouldFollowMove) {
       map.easeTo({
-        center: [position.longitude, position.latitude],
+        center: [effectivePosition.longitude, effectivePosition.latitude],
         zoom: map.getZoom(),
         offset: [0, 0],
         duration: 280,
@@ -111,11 +121,11 @@ const MapSelectedDevice = ({
       return;
     }
 
-    if (!followEnabled && selectionChanged && position) {
+    if (!followEnabled && selectionChanged && effectivePosition) {
       const storedZoom = getStoredZoom();
       const userHasZoomed = hasUserZoomed();
       const applyDefault = selectionChanged && shouldApplyDefaultZoom();
-      const defaultZoom = Math.min(map.getMaxZoom(), zoomForScale(DEFAULT_SCALE_METERS, position.latitude));
+      const defaultZoom = Math.min(map.getMaxZoom(), zoomForScale(DEFAULT_SCALE_METERS, effectivePosition.latitude));
       const targetZoom = selectZoom > 0
         ? selectZoom
         : (storedZoom ?? defaultZoom);
@@ -123,7 +133,7 @@ const MapSelectedDevice = ({
       const shouldApplyZoom = selectionChanged && !userHasZoomed && applyDefault;
 
       map.easeTo({
-        center: [position.longitude, position.latitude],
+        center: [effectivePosition.longitude, effectivePosition.latitude],
         zoom: shouldApplyZoom ? targetZoom : map.getZoom(),
         offset: [0, -dimensions.popupMapOffset / 2],
       });
@@ -146,7 +156,7 @@ const MapSelectedDevice = ({
     previousTime,
     followEnabled,
     previousFollow,
-    position,
+    effectivePosition,
     previousPosition,
     previousHeading,
     selectedHeading,

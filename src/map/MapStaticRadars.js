@@ -304,12 +304,18 @@ const normalizeStaticRadarsData = (data, radiusOverrides = {}) => {
   };
 };
 
-const MapStaticRadars = ({ enabled }) => {
+const hasValidCoordinates = (position) => Number.isFinite(Number(position?.latitude))
+  && Number.isFinite(Number(position?.longitude));
+
+const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
   const id = useId();
   const isAdmin = useAdministrator();
   const selectedId = useSelector((state) => state.devices.selectedId);
   const positionsByDeviceId = useSelector((state) => state.session.positions || {});
-  const selectedPosition = selectedId != null ? positionsByDeviceId[selectedId] : null;
+  const trackedSelectedPosition = selectedId != null ? positionsByDeviceId[selectedId] : null;
+  const selectedPosition = useMemo(() => (
+    hasValidCoordinates(selectedPositionOverride) ? selectedPositionOverride : trackedSelectedPosition
+  ), [selectedPositionOverride, trackedSelectedPosition]);
   const sourceId = `${id}-static-radars-source`;
   const layerId = `${id}-static-radars-layer`;
   const selectedRadiusSourceId = `${id}-static-radars-selected-radius-source`;

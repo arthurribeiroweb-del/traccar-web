@@ -44,6 +44,7 @@ import MapGeocoder from '../map/geocoder/MapGeocoder';
 import MapScale from '../map/MapScale';
 import MapNotification from '../map/notification/MapNotification';
 import MapFollow from '../map/main/MapFollow';
+import MapPhoneAssist from '../map/main/MapPhoneAssist';
 import MapCommunityReports from '../map/MapCommunityReports';
 import useFeatures from '../common/util/useFeatures';
 import { useAttributePreference } from '../common/util/preferences';
@@ -75,6 +76,21 @@ const COMMUNITY_PREFETCH_MAX_AHEAD_METERS = 4000;
 const PUBLIC_REPORTS_MIN_FETCH_INTERVAL_MS = 700;
 const EARTH_RADIUS_METERS = 6371000;
 const EARTH_METERS_PER_DEGREE = 111320;
+const KNOTS_TO_METERS_PER_SECOND = 0.514444;
+const METERS_PER_SECOND_TO_KNOTS = 1.9438444924406;
+const PHONE_ASSIST_MAX_ACCURACY_METERS = 35;
+const PHONE_ASSIST_LOCK_DISTANCE_METERS = 35;
+const PHONE_ASSIST_RELEASE_DISTANCE_METERS = 90;
+const PHONE_ASSIST_MAX_SAMPLE_AGE_MS = 12000;
+const PHONE_ASSIST_MAX_SPEED_DIFF_KMH = 45;
+const PHONE_ASSIST_MIN_SPEED_DIFF_CHECK_KMH = 8;
+const PHONE_ASSIST_MAX_COURSE_DELTA_DEGREES = 80;
+const PHONE_ASSIST_MIN_SPEED_COURSE_CHECK_KMH = 15;
+const PHONE_ASSIST_MIN_MOVE_FOR_BEARING_METERS = 4;
+const PHONE_ASSIST_MIN_MOVE_FOR_SPEED_METERS = 2;
+const PHONE_ASSIST_MIN_INTERVAL_FOR_SPEED_MS = 700;
+const PHONE_ASSIST_SMOOTHING_FACTOR = 0.45;
+const PHONE_ASSIST_MAX_SMOOTH_JUMP_METERS = 120;
 
 const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
@@ -171,6 +187,38 @@ const projectCoordinate = (latitude, longitude, courseDegrees, distanceMeters) =
   };
 };
 
+const normalizeAngle = (value) => ((value % 360) + 360) % 360;
+
+const angularDistance = (from, to) => {
+  const delta = Math.abs(normalizeAngle(from) - normalizeAngle(to));
+  return Math.min(delta, 360 - delta);
+};
+
+const haversineDistanceMeters = (latitudeA, longitudeA, latitudeB, longitudeB) => {
+  const lat1 = toRadians(latitudeA);
+  const lat2 = toRadians(latitudeB);
+  const deltaLat = toRadians(latitudeB - latitudeA);
+  const deltaLng = toRadians(longitudeB - longitudeA);
+  const a = (Math.sin(deltaLat / 2) ** 2)
+    + Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return EARTH_RADIUS_METERS * c;
+};
+
+const bearingBetweenCoordinates = (latitudeA, longitudeA, latitudeB, longitudeB) => {
+  const lat1 = toRadians(latitudeA);
+  const lat2 = toRadians(latitudeB);
+  const deltaLng = toRadians(longitudeB - longitudeA);
+  const y = Math.sin(deltaLng) * Math.cos(lat2);
+  const x = (Math.cos(lat1) * Math.sin(lat2))
+    - (Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng));
+  return normalizeAngle(toDegrees(Math.atan2(y, x)));
+};
+
+const toSpeedKmh = (speedKnots) => (
+  Number.isFinite(speedKnots) && speedKnots >= 0 ? speedKnots * 1.852 : null
+);
+
 const buildUserPrefetchBounds = (position) => {
   if (!isValidCoordinate(position?.latitude, position?.longitude)) {
     return null;
@@ -188,7 +236,7 @@ const buildUserPrefetchBounds = (position) => {
     return baseBounds;
   }
 
-  const speedMetersPerSecond = speedKnots * 0.514444;
+  const speedMetersPerSecond = speedKnots * KNOTS_TO_METERS_PER_SECOND;
   const aheadMeters = Math.min(
     speedMetersPerSecond * COMMUNITY_PREFETCH_AHEAD_SECONDS,
     COMMUNITY_PREFETCH_MAX_AHEAD_METERS,
@@ -277,6 +325,12 @@ const MainMap = ({
   const [publicReports, setPublicReports] = useState([]);
   const [pendingReports, setPendingReports] = useState([]);
   const [optimisticReports, setOptimisticReports] = useState([]);
+  const [phoneAssistEnabled, setPhoneAssistEnabled] = useState(false);
+  const [phoneAssistPermission, setPhoneAssistPermission] = useState('unknown');
+  const [phoneSample, setPhoneSample] = useState(null);
+  const [phoneAssistLocked, setPhoneAssistLocked] = useState(false);
+  const [phoneAssistReason, setPhoneAssistReason] = useState('Modo pronto');
+  const [assistNowMs, setAssistNowMs] = useState(() => Date.now());
 
   const headingBuffersRef = useRef({});
   const headingMetaRef = useRef({});
@@ -298,6 +352,8 @@ const MainMap = ({
     signature: null,
     lastAt: 0,
   });
+  const geolocationWatchIdRef = useRef(null);
+  const phoneSampleRef = useRef(null);
 
   const showFollowMessage = useCallback((message, severity) => {
     setSnackbar({
@@ -306,6 +362,40 @@ const MainMap = ({
       severity,
     });
   }, []);
+
+  const phoneAssistSupported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
+  const phoneAssistAvailable = phoneAssistSupported && phoneAssistPermission !== 'denied';
+
+  useEffect(() => {
+    if (!phoneAssistSupported || !navigator.permissions?.query) {
+      return undefined;
+    }
+
+    let mounted = true;
+    let permissionStatus;
+
+    navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+      if (!mounted) {
+        return;
+      }
+      permissionStatus = status;
+      setPhoneAssistPermission(status.state || 'unknown');
+      status.onchange = () => {
+        setPhoneAssistPermission(status.state || 'unknown');
+      };
+    }).catch(() => {
+      if (mounted) {
+        setPhoneAssistPermission('unknown');
+      }
+    });
+
+    return () => {
+      mounted = false;
+      if (permissionStatus) {
+        permissionStatus.onchange = null;
+      }
+    };
+  }, [phoneAssistSupported]);
 
   const mapReportErrorToMessage = useCallback((error) => {
     const text = error?.message || '';
@@ -368,6 +458,340 @@ const MainMap = ({
     }
     return 'Nao foi possivel enviar. Tente novamente.';
   }, []);
+
+  const clearPhoneAssistWatch = useCallback(() => {
+    if (geolocationWatchIdRef.current != null && phoneAssistSupported) {
+      navigator.geolocation.clearWatch(geolocationWatchIdRef.current);
+      geolocationWatchIdRef.current = null;
+    }
+  }, [phoneAssistSupported]);
+
+  useEffect(() => {
+    return () => {
+      clearPhoneAssistWatch();
+    };
+  }, [clearPhoneAssistWatch]);
+
+  const mergePhoneSample = useCallback((previous, incoming) => {
+    if (!previous) {
+      return incoming;
+    }
+    const jumpDistanceMeters = haversineDistanceMeters(
+      previous.latitude,
+      previous.longitude,
+      incoming.latitude,
+      incoming.longitude,
+    );
+    if (!Number.isFinite(jumpDistanceMeters) || jumpDistanceMeters > PHONE_ASSIST_MAX_SMOOTH_JUMP_METERS) {
+      return incoming;
+    }
+    const factor = PHONE_ASSIST_SMOOTHING_FACTOR;
+    return {
+      ...incoming,
+      latitude: previous.latitude + ((incoming.latitude - previous.latitude) * factor),
+      longitude: previous.longitude + ((incoming.longitude - previous.longitude) * factor),
+    };
+  }, []);
+
+  useEffect(() => {
+    phoneSampleRef.current = phoneSample;
+  }, [phoneSample]);
+
+  useEffect(() => {
+    if (!phoneAssistEnabled) {
+      clearPhoneAssistWatch();
+      setPhoneSample(null);
+      setPhoneAssistLocked(false);
+      setPhoneAssistReason('Modo pronto');
+      return undefined;
+    }
+
+    if (!phoneAssistSupported) {
+      setPhoneAssistEnabled(false);
+      setPhoneAssistReason('Navegador sem suporte a GPS');
+      showFollowMessage('Seu navegador nao suporta geolocalizacao.', 'warning');
+      return undefined;
+    }
+
+    if (phoneAssistPermission === 'denied') {
+      setPhoneAssistEnabled(false);
+      setPhoneAssistReason('Permissao de localizacao negada');
+      showFollowMessage('Permita localizacao do celular para usar modo premium.', 'warning');
+      return undefined;
+    }
+
+    setPhoneAssistReason('Aguardando GPS do celular');
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const latitude = Number(position?.coords?.latitude);
+        const longitude = Number(position?.coords?.longitude);
+        if (!isValidCoordinate(latitude, longitude)) {
+          return;
+        }
+
+        const accuracy = Number(position?.coords?.accuracy);
+        const timestampMs = Number(position?.timestamp) || Date.now();
+        const previous = phoneSampleRef.current;
+        const movedMeters = previous
+          ? haversineDistanceMeters(previous.latitude, previous.longitude, latitude, longitude)
+          : 0;
+
+        const rawHeading = Number(position?.coords?.heading);
+        let course = Number.isFinite(rawHeading) && rawHeading >= 0
+          ? normalizeAngle(rawHeading)
+          : null;
+        if (!Number.isFinite(course) && previous && movedMeters >= PHONE_ASSIST_MIN_MOVE_FOR_BEARING_METERS) {
+          course = bearingBetweenCoordinates(previous.latitude, previous.longitude, latitude, longitude);
+        }
+
+        const rawSpeedMetersPerSecond = Number(position?.coords?.speed);
+        let speedMetersPerSecond = Number.isFinite(rawSpeedMetersPerSecond) && rawSpeedMetersPerSecond >= 0
+          ? rawSpeedMetersPerSecond
+          : null;
+        if (!Number.isFinite(speedMetersPerSecond) && previous && movedMeters >= PHONE_ASSIST_MIN_MOVE_FOR_SPEED_METERS) {
+          const elapsedMs = Math.max(timestampMs - previous.timestampMs, 0);
+          if (elapsedMs >= PHONE_ASSIST_MIN_INTERVAL_FOR_SPEED_MS) {
+            speedMetersPerSecond = movedMeters / (elapsedMs / 1000);
+          }
+        }
+        const speedKnots = Number.isFinite(speedMetersPerSecond) && speedMetersPerSecond >= 0
+          ? speedMetersPerSecond * METERS_PER_SECOND_TO_KNOTS
+          : null;
+
+        const nextSample = mergePhoneSample(previous, {
+          latitude,
+          longitude,
+          accuracy: Number.isFinite(accuracy) && accuracy > 0 ? accuracy : null,
+          course: Number.isFinite(course) ? course : null,
+          speedKnots,
+          timestampMs,
+          fixTime: new Date(timestampMs).toISOString(),
+        });
+
+        phoneSampleRef.current = nextSample;
+        setPhoneSample(nextSample);
+      },
+      (error) => {
+        if (error?.code === 1) {
+          setPhoneAssistPermission('denied');
+          setPhoneAssistEnabled(false);
+          setPhoneAssistReason('Permissao de localizacao negada');
+          showFollowMessage('Permissao de localizacao negada no celular.', 'warning');
+          return;
+        }
+        setPhoneAssistReason('Falha ao ler GPS do celular');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 1000,
+      },
+    );
+
+    geolocationWatchIdRef.current = watchId;
+    return () => {
+      if (geolocationWatchIdRef.current === watchId) {
+        clearPhoneAssistWatch();
+      }
+    };
+  }, [phoneAssistEnabled, phoneAssistPermission, phoneAssistSupported, clearPhoneAssistWatch, mergePhoneSample, showFollowMessage]);
+
+  useEffect(() => {
+    if (!phoneAssistEnabled) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setAssistNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [phoneAssistEnabled]);
+
+  const phoneAssistDiagnostics = useMemo(() => {
+    if (!phoneAssistEnabled) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'Modo pronto',
+      };
+    }
+
+    if (!selectedId) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'Selecione um veiculo',
+      };
+    }
+
+    if (!isValidCoordinate(selectedLivePosition?.latitude, selectedLivePosition?.longitude)) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'Sem coordenadas do rastreador',
+      };
+    }
+
+    if (!isValidCoordinate(phoneSample?.latitude, phoneSample?.longitude)) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'Aguardando GPS do celular',
+      };
+    }
+
+    const phoneAgeMs = assistNowMs - Number(phoneSample.timestampMs || 0);
+    if (!Number.isFinite(phoneAgeMs) || phoneAgeMs > PHONE_ASSIST_MAX_SAMPLE_AGE_MS) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'GPS do celular atrasado',
+      };
+    }
+
+    if (!Number.isFinite(phoneSample.accuracy) || phoneSample.accuracy > PHONE_ASSIST_MAX_ACCURACY_METERS) {
+      return {
+        ready: false,
+        withinLockDistance: false,
+        withinReleaseDistance: false,
+        distanceMeters: null,
+        reason: 'Precisao baixa do GPS do celular',
+      };
+    }
+
+    const distanceMeters = haversineDistanceMeters(
+      selectedLivePosition.latitude,
+      selectedLivePosition.longitude,
+      phoneSample.latitude,
+      phoneSample.longitude,
+    );
+
+    const trackerSpeedKmh = toSpeedKmh(Number(selectedLivePosition.speed));
+    const phoneSpeedKmh = toSpeedKmh(Number(phoneSample.speedKnots));
+    const shouldCheckSpeed = Number.isFinite(phoneSpeedKmh) && Number.isFinite(trackerSpeedKmh)
+      && Math.max(phoneSpeedKmh, trackerSpeedKmh) >= PHONE_ASSIST_MIN_SPEED_DIFF_CHECK_KMH;
+    if (shouldCheckSpeed && Math.abs(phoneSpeedKmh - trackerSpeedKmh) > PHONE_ASSIST_MAX_SPEED_DIFF_KMH) {
+      return {
+        ready: false,
+        withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
+        withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+        distanceMeters,
+        reason: 'Velocidade do celular diverge do rastreador',
+      };
+    }
+
+    const trackerCourse = Number(selectedLivePosition.course);
+    const phoneCourse = Number(phoneSample.course);
+    const shouldCheckCourse = Number.isFinite(trackerCourse) && Number.isFinite(phoneCourse)
+      && Math.max(phoneSpeedKmh || 0, trackerSpeedKmh || 0) >= PHONE_ASSIST_MIN_SPEED_COURSE_CHECK_KMH;
+    if (shouldCheckCourse && angularDistance(trackerCourse, phoneCourse) > PHONE_ASSIST_MAX_COURSE_DELTA_DEGREES) {
+      return {
+        ready: false,
+        withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
+        withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+        distanceMeters,
+        reason: 'Direcao do celular diverge do rastreador',
+      };
+    }
+
+    return {
+      ready: true,
+      withinLockDistance: distanceMeters <= PHONE_ASSIST_LOCK_DISTANCE_METERS,
+      withinReleaseDistance: distanceMeters <= PHONE_ASSIST_RELEASE_DISTANCE_METERS,
+      distanceMeters,
+      reason: `Celular sincronizado (${Math.round(distanceMeters)}m)`,
+    };
+  }, [assistNowMs, phoneAssistEnabled, phoneSample, selectedId, selectedLivePosition]);
+
+  useEffect(() => {
+    if (!phoneAssistEnabled) {
+      setPhoneAssistLocked(false);
+      setPhoneAssistReason('Modo pronto');
+      return;
+    }
+
+    setPhoneAssistLocked((current) => {
+      if (!phoneAssistDiagnostics.ready) {
+        return false;
+      }
+      if (current) {
+        return phoneAssistDiagnostics.withinReleaseDistance;
+      }
+      return phoneAssistDiagnostics.withinLockDistance;
+    });
+    setPhoneAssistReason(phoneAssistDiagnostics.reason);
+  }, [phoneAssistDiagnostics, phoneAssistEnabled]);
+
+  const phoneAssistActive = phoneAssistEnabled
+    && phoneAssistLocked
+    && phoneAssistDiagnostics.ready
+    && phoneAssistDiagnostics.withinReleaseDistance;
+
+  const selectedAssistedLivePosition = useMemo(() => {
+    if (!phoneAssistActive || !selectedLivePosition || !phoneSample) {
+      return selectedLivePosition;
+    }
+    return {
+      ...selectedLivePosition,
+      latitude: phoneSample.latitude,
+      longitude: phoneSample.longitude,
+      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
+      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
+      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedLivePosition.accuracy,
+      fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
+      attributes: {
+        ...(selectedLivePosition.attributes || {}),
+        phoneAssist: true,
+      },
+    };
+  }, [phoneAssistActive, phoneSample, selectedLivePosition]);
+
+  const selectedAssistedMapPosition = useMemo(() => {
+    if (!phoneAssistActive || !selectedPosition || !phoneSample) {
+      return selectedPosition;
+    }
+    return {
+      ...selectedPosition,
+      latitude: phoneSample.latitude,
+      longitude: phoneSample.longitude,
+      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedPosition.speed,
+      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedPosition.course,
+      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedPosition.accuracy,
+      fixTime: phoneSample.fixTime || selectedPosition.fixTime,
+      attributes: {
+        ...(selectedPosition.attributes || {}),
+        phoneAssist: true,
+      },
+    };
+  }, [phoneAssistActive, phoneSample, selectedPosition]);
+
+  const displayPositions = useMemo(() => {
+    if (!phoneAssistActive || selectedId == null || !selectedAssistedMapPosition) {
+      return filteredPositions;
+    }
+    return filteredPositions.map((position) => (
+      String(position.deviceId) === String(selectedId)
+        ? selectedAssistedMapPosition
+        : position
+    ));
+  }, [filteredPositions, phoneAssistActive, selectedAssistedMapPosition, selectedId]);
+
+  const effectiveSelectedHeading = useMemo(() => {
+    if (phoneAssistActive && Number.isFinite(Number(phoneSample?.course))) {
+      return normalizeAngle(Number(phoneSample.course));
+    }
+    return selectedHeading;
+  }, [phoneAssistActive, phoneSample, selectedHeading]);
 
   const computeCancelable = useCallback((report) => {
     const createdAt = new Date(report.createdAt || 0).getTime();
@@ -526,6 +950,28 @@ const MainMap = ({
     }
   }, [dispatch, followEnabled, selectedId, showFollowMessage]);
 
+  const handlePhoneAssistToggle = useCallback(() => {
+    if (phoneAssistEnabled) {
+      setPhoneAssistEnabled(false);
+      showFollowMessage('Modo premium por celular desativado.', 'info');
+      return;
+    }
+    if (!selectedId) {
+      showFollowMessage('Selecione um veiculo para ativar modo premium.', 'warning');
+      return;
+    }
+    if (!phoneAssistSupported) {
+      showFollowMessage('Seu navegador nao suporta geolocalizacao.', 'error');
+      return;
+    }
+    if (phoneAssistPermission === 'denied') {
+      showFollowMessage('Permissao de localizacao negada no celular.', 'warning');
+      return;
+    }
+    setPhoneAssistEnabled(true);
+    showFollowMessage('Modo premium ativado. Aguardando sincronizar celular e rastreador...', 'info');
+  }, [phoneAssistEnabled, selectedId, phoneAssistSupported, phoneAssistPermission, showFollowMessage]);
+
   const handleAutoDisableFollow = useCallback(() => {
     if (!followEnabled) {
       return;
@@ -603,17 +1049,17 @@ const MainMap = ({
   }, [dispatch, headingByDeviceId, positionsByDeviceId, selectedId]);
 
   useEffect(() => {
-    selectedLivePositionRef.current = selectedLivePosition || null;
-  }, [selectedLivePosition]);
+    selectedLivePositionRef.current = selectedAssistedLivePosition || null;
+  }, [selectedAssistedLivePosition]);
 
   useEffect(() => {
-    if (!selectedId || !selectedLivePosition) {
+    if (!selectedId || !selectedAssistedLivePosition) {
       selectedUpdateRef.current = { deviceId: null, signature: null, lastAt: 0 };
       setSelectedStale(false);
       return;
     }
 
-    const signature = `${selectedLivePosition.id ?? ''}:${selectedLivePosition.fixTime ?? ''}:${selectedLivePosition.latitude}:${selectedLivePosition.longitude}`;
+    const signature = `${selectedAssistedLivePosition.id ?? ''}:${selectedAssistedLivePosition.fixTime ?? ''}:${selectedAssistedLivePosition.latitude}:${selectedAssistedLivePosition.longitude}`;
     if (
       selectedUpdateRef.current.deviceId !== String(selectedId)
       || selectedUpdateRef.current.signature !== signature
@@ -625,22 +1071,22 @@ const MainMap = ({
       };
       setSelectedStale(false);
     }
-  }, [selectedId, selectedLivePosition]);
+  }, [selectedAssistedLivePosition, selectedId]);
 
   useEffect(() => {
-    if (!followEnabled || !selectedLivePosition) {
+    if (!followEnabled || !selectedAssistedLivePosition) {
       followDrivenReloadRef.current = { signature: null, lastAt: 0 };
       return;
     }
-    if (!isValidCoordinate(selectedLivePosition.latitude, selectedLivePosition.longitude)) {
+    if (!isValidCoordinate(selectedAssistedLivePosition.latitude, selectedAssistedLivePosition.longitude)) {
       return;
     }
 
     const signature = [
-      selectedLivePosition.latitude.toFixed(5),
-      selectedLivePosition.longitude.toFixed(5),
-      Number(selectedLivePosition.speed || 0).toFixed(2),
-      Number(selectedLivePosition.course || 0).toFixed(1),
+      selectedAssistedLivePosition.latitude.toFixed(5),
+      selectedAssistedLivePosition.longitude.toFixed(5),
+      Number(selectedAssistedLivePosition.speed || 0).toFixed(2),
+      Number(selectedAssistedLivePosition.course || 0).toFixed(1),
     ].join(':');
 
     const now = Date.now();
@@ -657,7 +1103,7 @@ const MainMap = ({
 
     followDrivenReloadRef.current = { signature, lastAt: now };
     loadPublicReports().catch(() => {});
-  }, [followEnabled, loadPublicReports, selectedLivePosition]);
+  }, [followEnabled, loadPublicReports, selectedAssistedLivePosition]);
 
   useEffect(() => {
     if (!followEnabled) {
@@ -950,13 +1396,16 @@ const MainMap = ({
         <MapOverlay />
         <MapGeofence />
         <MapRadar enabled={showRadars} />
-        <MapStaticRadars enabled={showRadars} />
-        <MapAccuracy positions={filteredPositions} />
-        <MapLiveRoutes deviceIds={filteredPositions.map((p) => p.deviceId)} />
+        <MapStaticRadars
+          enabled={showRadars}
+          selectedPositionOverride={selectedAssistedLivePosition}
+        />
+        <MapAccuracy positions={displayPositions} />
+        <MapLiveRoutes deviceIds={displayPositions.map((p) => p.deviceId)} />
         <MapPositions
-          positions={filteredPositions}
+          positions={displayPositions}
           onMarkerClick={onMarkerClick}
-          selectedPosition={selectedPosition}
+          selectedPosition={selectedAssistedMapPosition}
           showStatus
           stabilizeSelectedInFollow={followEnabled && followRotateMap}
         />
@@ -968,9 +1417,10 @@ const MainMap = ({
         <MapDefaultCamera />
         <MapSelectedDevice
           followEnabled={followEnabled}
-          selectedHeading={selectedHeading}
+          selectedHeading={effectiveSelectedHeading}
           rotateMapWithHeading={followRotateMap}
           suspendFollow={selectedStale}
+          positionOverride={selectedAssistedLivePosition}
           onDisableFollow={handleAutoDisableFollow}
         />
         <PoiMap />
@@ -984,6 +1434,19 @@ const MainMap = ({
           onToggle={handleFollowToggle}
           titleOn="Seguindo (toque para parar)"
           titleOff="Seguir veículo"
+        />
+      )}
+      {!HIDE_MAP_SHORTCUTS.follow && (
+        <MapPhoneAssist
+          enabled={phoneAssistEnabled}
+          active={phoneAssistActive}
+          available={phoneAssistAvailable}
+          visible
+          onToggle={handlePhoneAssistToggle}
+          titleOn="Modo premium ativo"
+          titleOff="Ativar modo premium por celular"
+          titlePending={phoneAssistReason || 'Sincronizando celular e rastreador'}
+          titleUnavailable="GPS do celular indisponivel"
         />
       )}
       {!HIDE_MAP_SHORTCUTS.search && <MapGeocoder />}
