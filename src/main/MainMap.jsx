@@ -44,7 +44,6 @@ import MapGeocoder from '../map/geocoder/MapGeocoder';
 import MapScale from '../map/MapScale';
 import MapNotification from '../map/notification/MapNotification';
 import MapFollow from '../map/main/MapFollow';
-import MapPhoneAssist from '../map/main/MapPhoneAssist';
 import MapCommunityReports from '../map/MapCommunityReports';
 import useFeatures from '../common/util/useFeatures';
 import { useAttributePreference } from '../common/util/preferences';
@@ -325,11 +324,9 @@ const MainMap = ({
   const [publicReports, setPublicReports] = useState([]);
   const [pendingReports, setPendingReports] = useState([]);
   const [optimisticReports, setOptimisticReports] = useState([]);
-  const [phoneAssistEnabled, setPhoneAssistEnabled] = useState(false);
   const [phoneAssistPermission, setPhoneAssistPermission] = useState('unknown');
   const [phoneSample, setPhoneSample] = useState(null);
   const [phoneAssistLocked, setPhoneAssistLocked] = useState(false);
-  const [phoneAssistReason, setPhoneAssistReason] = useState('Modo pronto');
   const [assistNowMs, setAssistNowMs] = useState(() => Date.now());
 
   const headingBuffersRef = useRef({});
@@ -364,7 +361,9 @@ const MainMap = ({
   }, []);
 
   const phoneAssistSupported = typeof navigator !== 'undefined' && 'geolocation' in navigator;
-  const phoneAssistAvailable = phoneAssistSupported && phoneAssistPermission !== 'denied';
+  const phoneAssistEnabled = Boolean(selectedId)
+    && phoneAssistSupported
+    && phoneAssistPermission !== 'denied';
 
   useEffect(() => {
     if (!phoneAssistSupported || !navigator.permissions?.query) {
@@ -502,25 +501,8 @@ const MainMap = ({
       clearPhoneAssistWatch();
       setPhoneSample(null);
       setPhoneAssistLocked(false);
-      setPhoneAssistReason('Modo pronto');
       return undefined;
     }
-
-    if (!phoneAssistSupported) {
-      setPhoneAssistEnabled(false);
-      setPhoneAssistReason('Navegador sem suporte a GPS');
-      showFollowMessage('Seu navegador nao suporta geolocalizacao.', 'warning');
-      return undefined;
-    }
-
-    if (phoneAssistPermission === 'denied') {
-      setPhoneAssistEnabled(false);
-      setPhoneAssistReason('Permissao de localizacao negada');
-      showFollowMessage('Permita localizacao do celular para usar modo premium.', 'warning');
-      return undefined;
-    }
-
-    setPhoneAssistReason('Aguardando GPS do celular');
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -575,12 +557,7 @@ const MainMap = ({
       (error) => {
         if (error?.code === 1) {
           setPhoneAssistPermission('denied');
-          setPhoneAssistEnabled(false);
-          setPhoneAssistReason('Permissao de localizacao negada');
-          showFollowMessage('Permissao de localizacao negada no celular.', 'warning');
-          return;
         }
-        setPhoneAssistReason('Falha ao ler GPS do celular');
       },
       {
         enableHighAccuracy: true,
@@ -595,7 +572,7 @@ const MainMap = ({
         clearPhoneAssistWatch();
       }
     };
-  }, [phoneAssistEnabled, phoneAssistPermission, phoneAssistSupported, clearPhoneAssistWatch, mergePhoneSample, showFollowMessage]);
+  }, [phoneAssistEnabled, clearPhoneAssistWatch, mergePhoneSample]);
 
   useEffect(() => {
     if (!phoneAssistEnabled) {
@@ -716,7 +693,6 @@ const MainMap = ({
   useEffect(() => {
     if (!phoneAssistEnabled) {
       setPhoneAssistLocked(false);
-      setPhoneAssistReason('Modo pronto');
       return;
     }
 
@@ -729,7 +705,6 @@ const MainMap = ({
       }
       return phoneAssistDiagnostics.withinLockDistance;
     });
-    setPhoneAssistReason(phoneAssistDiagnostics.reason);
   }, [phoneAssistDiagnostics, phoneAssistEnabled]);
 
   const phoneAssistActive = phoneAssistEnabled
@@ -949,28 +924,6 @@ const MainMap = ({
       setSelectedStale(false);
     }
   }, [dispatch, followEnabled, selectedId, showFollowMessage]);
-
-  const handlePhoneAssistToggle = useCallback(() => {
-    if (phoneAssistEnabled) {
-      setPhoneAssistEnabled(false);
-      showFollowMessage('Modo premium por celular desativado.', 'info');
-      return;
-    }
-    if (!selectedId) {
-      showFollowMessage('Selecione um veiculo para ativar modo premium.', 'warning');
-      return;
-    }
-    if (!phoneAssistSupported) {
-      showFollowMessage('Seu navegador nao suporta geolocalizacao.', 'error');
-      return;
-    }
-    if (phoneAssistPermission === 'denied') {
-      showFollowMessage('Permissao de localizacao negada no celular.', 'warning');
-      return;
-    }
-    setPhoneAssistEnabled(true);
-    showFollowMessage('Modo premium ativado. Aguardando sincronizar celular e rastreador...', 'info');
-  }, [phoneAssistEnabled, selectedId, phoneAssistSupported, phoneAssistPermission, showFollowMessage]);
 
   const handleAutoDisableFollow = useCallback(() => {
     if (!followEnabled) {
@@ -1434,19 +1387,6 @@ const MainMap = ({
           onToggle={handleFollowToggle}
           titleOn="Seguindo (toque para parar)"
           titleOff="Seguir veículo"
-        />
-      )}
-      {!HIDE_MAP_SHORTCUTS.follow && (
-        <MapPhoneAssist
-          enabled={phoneAssistEnabled}
-          active={phoneAssistActive}
-          available={phoneAssistAvailable}
-          visible
-          onToggle={handlePhoneAssistToggle}
-          titleOn="Modo premium ativo"
-          titleOff="Ativar modo premium por celular"
-          titlePending={phoneAssistReason || 'Sincronizando celular e rastreador'}
-          titleUnavailable="GPS do celular indisponivel"
         />
       )}
       {!HIDE_MAP_SHORTCUTS.search && <MapGeocoder />}
