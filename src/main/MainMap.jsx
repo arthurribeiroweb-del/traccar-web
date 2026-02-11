@@ -68,7 +68,13 @@ const HIDE_MAP_SHORTCUTS = {
 const BUFFER_SIZE = 5;
 const NO_UPDATE_TIMEOUT_MS = 30000;
 const REPORT_MOVE_DEBOUNCE_MS = 300;
-const COMMUNITY_REFRESH_INTERVAL_MS = 15000;
+const COMMUNITY_REFRESH_INTERVAL_MS = 8000;
+const COMMUNITY_PREFETCH_RADIUS_METERS = 2500;
+const COMMUNITY_PREFETCH_AHEAD_SECONDS = 90;
+const COMMUNITY_PREFETCH_MAX_AHEAD_METERS = 4000;
+const PUBLIC_REPORTS_MIN_FETCH_INTERVAL_MS = 700;
+const EARTH_RADIUS_METERS = 6371000;
+const EARTH_METERS_PER_DEGREE = 111320;
 
 const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
@@ -80,6 +86,153 @@ const RADAR_SPEED_OPTIONS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 const getCommunityTypeLabel = (type) => COMMUNITY_TYPES
   .find((item) => item.key === type)?.label || type || 'Aviso';
+
+const isValidCoordinate = (latitude, longitude) => Number.isFinite(latitude)
+  && Number.isFinite(longitude)
+  && latitude >= -90
+  && latitude <= 90
+  && longitude >= -180
+  && longitude <= 180;
+
+const clampLatitude = (value) => Math.max(-90, Math.min(90, value));
+const clampLongitude = (value) => Math.max(-180, Math.min(180, value));
+const toRadians = (value) => (value * Math.PI) / 180;
+const toDegrees = (value) => (value * 180) / Math.PI;
+
+const metersToLatitudeDelta = (meters) => meters / EARTH_METERS_PER_DEGREE;
+const metersToLongitudeDelta = (meters, latitude) => {
+  const cosine = Math.max(Math.cos(toRadians(latitude)), 0.01);
+  return meters / (EARTH_METERS_PER_DEGREE * cosine);
+};
+
+const boundsAroundPoint = (latitude, longitude, radiusMeters) => {
+  const latitudeDelta = metersToLatitudeDelta(radiusMeters);
+  const longitudeDelta = metersToLongitudeDelta(radiusMeters, latitude);
+  return {
+    west: clampLongitude(longitude - longitudeDelta),
+    south: clampLatitude(latitude - latitudeDelta),
+    east: clampLongitude(longitude + longitudeDelta),
+    north: clampLatitude(latitude + latitudeDelta),
+  };
+};
+
+const mergeBounds = (primaryBounds, extraBounds) => {
+  if (!primaryBounds) {
+    return extraBounds || null;
+  }
+  if (!extraBounds) {
+    return primaryBounds;
+  }
+  return {
+    west: Math.max(-180, Math.min(primaryBounds.west, extraBounds.west)),
+    south: Math.max(-90, Math.min(primaryBounds.south, extraBounds.south)),
+    east: Math.min(180, Math.max(primaryBounds.east, extraBounds.east)),
+    north: Math.min(90, Math.max(primaryBounds.north, extraBounds.north)),
+  };
+};
+
+const buildPaddedMapBounds = (mapInstance) => {
+  const bounds = mapInstance.getBounds();
+  const west = bounds.getWest();
+  const south = bounds.getSouth();
+  const east = bounds.getEast();
+  const north = bounds.getNorth();
+  const latSpan = Math.max(north - south, 0.002);
+  const lngSpan = Math.max(east - west, 0.002);
+  const padLat = latSpan * 0.2;
+  const padLng = lngSpan * 0.2;
+
+  return {
+    west: clampLongitude(west - padLng),
+    south: clampLatitude(south - padLat),
+    east: clampLongitude(east + padLng),
+    north: clampLatitude(north + padLat),
+  };
+};
+
+const projectCoordinate = (latitude, longitude, courseDegrees, distanceMeters) => {
+  const angularDistance = distanceMeters / EARTH_RADIUS_METERS;
+  const bearing = toRadians(courseDegrees);
+  const latRad = toRadians(latitude);
+  const lngRad = toRadians(longitude);
+
+  const projectedLatitudeRad = Math.asin(
+    (Math.sin(latRad) * Math.cos(angularDistance))
+      + (Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)),
+  );
+  const projectedLongitudeRad = lngRad + Math.atan2(
+    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
+    Math.cos(angularDistance) - (Math.sin(latRad) * Math.sin(projectedLatitudeRad)),
+  );
+
+  return {
+    latitude: clampLatitude(toDegrees(projectedLatitudeRad)),
+    longitude: clampLongitude(toDegrees(projectedLongitudeRad)),
+  };
+};
+
+const buildUserPrefetchBounds = (position) => {
+  if (!isValidCoordinate(position?.latitude, position?.longitude)) {
+    return null;
+  }
+
+  const baseBounds = boundsAroundPoint(
+    position.latitude,
+    position.longitude,
+    COMMUNITY_PREFETCH_RADIUS_METERS,
+  );
+  const speedKnots = Number(position?.speed);
+  const course = Number(position?.course);
+
+  if (!Number.isFinite(speedKnots) || speedKnots <= 0 || !Number.isFinite(course)) {
+    return baseBounds;
+  }
+
+  const speedMetersPerSecond = speedKnots * 0.514444;
+  const aheadMeters = Math.min(
+    speedMetersPerSecond * COMMUNITY_PREFETCH_AHEAD_SECONDS,
+    COMMUNITY_PREFETCH_MAX_AHEAD_METERS,
+  );
+
+  if (!Number.isFinite(aheadMeters) || aheadMeters < 20) {
+    return baseBounds;
+  }
+
+  const projected = projectCoordinate(
+    position.latitude,
+    position.longitude,
+    course,
+    aheadMeters,
+  );
+  if (!isValidCoordinate(projected.latitude, projected.longitude)) {
+    return baseBounds;
+  }
+
+  const projectedBounds = boundsAroundPoint(
+    projected.latitude,
+    projected.longitude,
+    COMMUNITY_PREFETCH_RADIUS_METERS,
+  );
+  return mergeBounds(baseBounds, projectedBounds);
+};
+
+const toBoundsParam = (bounds) => {
+  if (!bounds) {
+    return null;
+  }
+  return [
+    bounds.west,
+    bounds.south,
+    bounds.east,
+    bounds.north,
+  ].map((value) => Number(value).toFixed(6)).join(',');
+};
+
+const buildPublicBoundsParam = (mapInstance, selectedPosition) => {
+  const mapBounds = buildPaddedMapBounds(mapInstance);
+  const userBounds = buildUserPrefetchBounds(selectedPosition);
+  return toBoundsParam(mergeBounds(mapBounds, userBounds));
+};
 
 const MainMap = ({
   filteredPositions,
@@ -134,6 +287,17 @@ const MainMap = ({
   const reportMoveTimerRef = useRef(null);
   const lastReportRequestRef = useRef(reportRequestId);
   const publicReportsAbortRef = useRef(null);
+  const selectedLivePositionRef = useRef(selectedLivePosition || null);
+  const publicReportsFetchStateRef = useRef({
+    inFlight: false,
+    queuedBoundsParam: null,
+    lastBoundsParam: null,
+    lastRequestAt: 0,
+  });
+  const followDrivenReloadRef = useRef({
+    signature: null,
+    lastAt: 0,
+  });
 
   const showFollowMessage = useCallback((message, severity) => {
     setSnackbar({
@@ -222,25 +386,27 @@ const MainMap = ({
     })));
   }, [computeCancelable]);
 
-  const loadPublicReports = useCallback(async () => {
-    if (!map || !map.loaded() || document.visibilityState !== 'visible') {
+  const executePublicReportsLoad = useCallback(async (boundsParam) => {
+    if (!boundsParam) {
       return;
     }
-    const bounds = map.getBounds();
-    const west = bounds.getWest();
-    const south = bounds.getSouth();
-    const east = bounds.getEast();
-    const north = bounds.getNorth();
-    const latSpan = Math.max(north - south, 0.002);
-    const lngSpan = Math.max(east - west, 0.002);
-    const padLat = latSpan * 0.2;
-    const padLng = lngSpan * 0.2;
-    const boundsParam = [
-      west - padLng,
-      south - padLat,
-      east + padLng,
-      north + padLat,
-    ].join(',');
+    const state = publicReportsFetchStateRef.current;
+    if (state.inFlight) {
+      state.queuedBoundsParam = boundsParam;
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      state.lastBoundsParam === boundsParam
+      && now - state.lastRequestAt < PUBLIC_REPORTS_MIN_FETCH_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    state.inFlight = true;
+    state.lastBoundsParam = boundsParam;
+    state.lastRequestAt = now;
 
     if (publicReportsAbortRef.current) {
       publicReportsAbortRef.current.abort();
@@ -263,8 +429,22 @@ const MainMap = ({
       if (publicReportsAbortRef.current === controller) {
         publicReportsAbortRef.current = null;
       }
+      state.inFlight = false;
+      const queuedBoundsParam = state.queuedBoundsParam;
+      state.queuedBoundsParam = null;
+      if (queuedBoundsParam && queuedBoundsParam !== boundsParam) {
+        executePublicReportsLoad(queuedBoundsParam).catch(() => {});
+      }
     }
   }, []);
+
+  const loadPublicReports = useCallback(async () => {
+    if (!map || !map.loaded() || document.visibilityState !== 'visible') {
+      return;
+    }
+    const boundsParam = buildPublicBoundsParam(map, selectedLivePositionRef.current);
+    await executePublicReportsLoad(boundsParam);
+  }, [executePublicReportsLoad]);
 
   const loadAdminPendingCount = useCallback(async () => {
     if (!administrator) {
@@ -293,6 +473,13 @@ const MainMap = ({
         publicReportsAbortRef.current.abort();
         publicReportsAbortRef.current = null;
       }
+      publicReportsFetchStateRef.current = {
+        inFlight: false,
+        queuedBoundsParam: null,
+        lastBoundsParam: null,
+        lastRequestAt: 0,
+      };
+      followDrivenReloadRef.current = { signature: null, lastAt: 0 };
     };
   }, []);
 
@@ -416,6 +603,10 @@ const MainMap = ({
   }, [dispatch, headingByDeviceId, positionsByDeviceId, selectedId]);
 
   useEffect(() => {
+    selectedLivePositionRef.current = selectedLivePosition || null;
+  }, [selectedLivePosition]);
+
+  useEffect(() => {
     if (!selectedId || !selectedLivePosition) {
       selectedUpdateRef.current = { deviceId: null, signature: null, lastAt: 0 };
       setSelectedStale(false);
@@ -435,6 +626,38 @@ const MainMap = ({
       setSelectedStale(false);
     }
   }, [selectedId, selectedLivePosition]);
+
+  useEffect(() => {
+    if (!followEnabled || !selectedLivePosition) {
+      followDrivenReloadRef.current = { signature: null, lastAt: 0 };
+      return;
+    }
+    if (!isValidCoordinate(selectedLivePosition.latitude, selectedLivePosition.longitude)) {
+      return;
+    }
+
+    const signature = [
+      selectedLivePosition.latitude.toFixed(5),
+      selectedLivePosition.longitude.toFixed(5),
+      Number(selectedLivePosition.speed || 0).toFixed(2),
+      Number(selectedLivePosition.course || 0).toFixed(1),
+    ].join(':');
+
+    const now = Date.now();
+    if (
+      followDrivenReloadRef.current.signature === signature
+      && now - followDrivenReloadRef.current.lastAt < PUBLIC_REPORTS_MIN_FETCH_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    if (now - followDrivenReloadRef.current.lastAt < PUBLIC_REPORTS_MIN_FETCH_INTERVAL_MS) {
+      return;
+    }
+
+    followDrivenReloadRef.current = { signature, lastAt: now };
+    loadPublicReports().catch(() => {});
+  }, [followEnabled, loadPublicReports, selectedLivePosition]);
 
   useEffect(() => {
     if (!followEnabled) {
@@ -889,6 +1112,3 @@ const MainMap = ({
 };
 
 export default MainMap;
-
-
-
