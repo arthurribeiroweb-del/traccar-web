@@ -95,6 +95,16 @@ const PHONE_ASSIST_MIN_MOVE_FOR_SPEED_METERS = 2;
 const PHONE_ASSIST_MIN_INTERVAL_FOR_SPEED_MS = 700;
 const PHONE_ASSIST_SMOOTHING_FACTOR = 0.65;
 const PHONE_ASSIST_MAX_SMOOTH_JUMP_METERS = 120;
+const TRACKER_PREDICTION_START_AGE_MS = 1500;
+const TRACKER_PREDICTION_MAX_AGE_MS = 20000;
+const TRACKER_PREDICTION_MIN_SPEED_KMH = 8;
+const TRACKER_PREDICTION_MAX_AHEAD_SECONDS = 3.5;
+const TRACKER_PREDICTION_MAX_DISTANCE_METERS = 140;
+const TRACKER_PREDICTION_TURN_MAX_DISTANCE_METERS = 28;
+const TRACKER_PREDICTION_MAX_TURN_DELTA_DEGREES = 38;
+const TRACKER_PREDICTION_MIN_SEGMENT_METERS = 4;
+const TRACKER_PREDICTION_TRAIL_MAX_POINTS = 6;
+const TRACKER_PREDICTION_TRAIL_MAX_AGE_MS = 25000;
 
 const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
@@ -364,6 +374,8 @@ const MainMap = ({
   });
   const geolocationWatchIdRef = useRef(null);
   const phoneSampleRef = useRef(null);
+  const selectedTrackerTrailRef = useRef([]);
+  const selectedTrackerTrailKeyRef = useRef(null);
 
   const showFollowMessage = useCallback((message, severity) => {
     setSnackbar({
@@ -587,15 +599,17 @@ const MainMap = ({
     };
   }, [phoneAssistEnabled, clearPhoneAssistWatch, mergePhoneSample]);
 
+  const shouldRunRealtimeClock = phoneAssistEnabled || Boolean(selectedId);
+
   useEffect(() => {
-    if (!phoneAssistEnabled) {
+    if (!shouldRunRealtimeClock) {
       return undefined;
     }
     const timer = window.setInterval(() => {
       setAssistNowMs(Date.now());
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [phoneAssistEnabled]);
+  }, [shouldRunRealtimeClock]);
 
   const phoneAssistDiagnostics = useMemo(() => {
     if (!phoneAssistEnabled) {
@@ -750,6 +764,139 @@ const MainMap = ({
     };
   }, [assistNowMs, phoneAssistEnabled, phoneAssistLocked, phoneSample, selectedId, selectedLivePosition]);
 
+  const trackerPrediction = useMemo(() => {
+    if (!selectedId || !isValidCoordinate(selectedLivePosition?.latitude, selectedLivePosition?.longitude)) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs: null,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    const trackerFixTimestampMs = parseTimestampMs(selectedLivePosition.fixTime)
+      ?? parseTimestampMs(selectedLivePosition.deviceTime)
+      ?? parseTimestampMs(selectedLivePosition.serverTime);
+    const trackerAgeMs = Number.isFinite(trackerFixTimestampMs)
+      ? Math.max(0, assistNowMs - trackerFixTimestampMs)
+      : null;
+    if (!Number.isFinite(trackerAgeMs)
+      || trackerAgeMs < TRACKER_PREDICTION_START_AGE_MS
+      || trackerAgeMs > TRACKER_PREDICTION_MAX_AGE_MS) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    const speedKmh = toSpeedKmh(Number(selectedLivePosition.speed));
+    if (!Number.isFinite(speedKmh) || speedKmh < TRACKER_PREDICTION_MIN_SPEED_KMH) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    const selectedKey = String(selectedId);
+    const trail = selectedTrackerTrailRef.current
+      .filter((point) => point.deviceId === selectedKey
+        && isValidCoordinate(point.latitude, point.longitude)
+        && Number.isFinite(point.timestampMs))
+      .slice(-TRACKER_PREDICTION_TRAIL_MAX_POINTS);
+
+    const segments = [];
+    for (let index = 1; index < trail.length; index += 1) {
+      const previousPoint = trail[index - 1];
+      const currentPoint = trail[index];
+      const segmentDistanceMeters = haversineDistanceMeters(
+        previousPoint.latitude,
+        previousPoint.longitude,
+        currentPoint.latitude,
+        currentPoint.longitude,
+      );
+      if (!Number.isFinite(segmentDistanceMeters) || segmentDistanceMeters < TRACKER_PREDICTION_MIN_SEGMENT_METERS) {
+        continue;
+      }
+      segments.push({
+        bearing: bearingBetweenCoordinates(
+          previousPoint.latitude,
+          previousPoint.longitude,
+          currentPoint.latitude,
+          currentPoint.longitude,
+        ),
+        distanceMeters: segmentDistanceMeters,
+      });
+    }
+
+    let heading = Number(selectedLivePosition.course);
+    const lastSegment = segments.length ? segments[segments.length - 1] : null;
+    if (lastSegment && Number.isFinite(lastSegment.bearing)) {
+      heading = lastSegment.bearing;
+    }
+    if (!Number.isFinite(heading)) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    const previousSegment = segments.length > 1 ? segments[segments.length - 2] : null;
+    const turnDeltaDegrees = previousSegment && lastSegment
+      ? angularDistance(previousSegment.bearing, lastSegment.bearing)
+      : null;
+    const sharpTurn = Number.isFinite(turnDeltaDegrees)
+      && turnDeltaDegrees >= TRACKER_PREDICTION_MAX_TURN_DELTA_DEGREES;
+
+    const speedMetersPerSecond = speedKmh / 3.6;
+    const ageBeyondStartMs = Math.max(0, trackerAgeMs - TRACKER_PREDICTION_START_AGE_MS);
+    const aheadSeconds = Math.min(TRACKER_PREDICTION_MAX_AHEAD_SECONDS, ageBeyondStartMs / 1000);
+    let predictedDistanceMeters = Math.min(
+      TRACKER_PREDICTION_MAX_DISTANCE_METERS,
+      speedMetersPerSecond * aheadSeconds,
+    );
+    if (sharpTurn) {
+      predictedDistanceMeters = Math.min(predictedDistanceMeters, TRACKER_PREDICTION_TURN_MAX_DISTANCE_METERS);
+    }
+    if (!Number.isFinite(predictedDistanceMeters) || predictedDistanceMeters < 2) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    const projected = projectCoordinate(
+      Number(selectedLivePosition.latitude),
+      Number(selectedLivePosition.longitude),
+      heading,
+      predictedDistanceMeters,
+    );
+    if (!isValidCoordinate(projected.latitude, projected.longitude)) {
+      return {
+        active: false,
+        heading: null,
+        trackerAgeMs,
+        predictedDistanceMeters: 0,
+      };
+    }
+
+    return {
+      active: true,
+      latitude: projected.latitude,
+      longitude: projected.longitude,
+      heading: normalizeAngle(heading),
+      trackerAgeMs,
+      predictedDistanceMeters,
+    };
+  }, [assistNowMs, selectedId, selectedLivePosition]);
+
   useEffect(() => {
     if (!phoneAssistEnabled) {
       setPhoneAssistLocked(false);
@@ -772,46 +919,85 @@ const MainMap = ({
     && phoneAssistDiagnostics.ready
     && phoneAssistDiagnostics.withinReleaseDistance;
 
+  const trackerPredictionActive = !phoneAssistActive && trackerPrediction.active;
+
   const selectedAssistedLivePosition = useMemo(() => {
-    if (!phoneAssistActive || !selectedLivePosition || !phoneSample) {
+    if (!selectedLivePosition) {
       return selectedLivePosition;
     }
-    return {
-      ...selectedLivePosition,
-      latitude: phoneSample.latitude,
-      longitude: phoneSample.longitude,
-      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
-      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
-      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedLivePosition.accuracy,
-      fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
-      attributes: {
-        ...(selectedLivePosition.attributes || {}),
-        phoneAssist: true,
-      },
-    };
-  }, [phoneAssistActive, phoneSample, selectedLivePosition]);
+    if (phoneAssistActive && phoneSample) {
+      return {
+        ...selectedLivePosition,
+        latitude: phoneSample.latitude,
+        longitude: phoneSample.longitude,
+        speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
+        course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
+        accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedLivePosition.accuracy,
+        fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
+        attributes: {
+          ...(selectedLivePosition.attributes || {}),
+          phoneAssist: true,
+        },
+      };
+    }
+    if (trackerPredictionActive) {
+      return {
+        ...selectedLivePosition,
+        latitude: trackerPrediction.latitude,
+        longitude: trackerPrediction.longitude,
+        course: Number.isFinite(trackerPrediction.heading) ? trackerPrediction.heading : selectedLivePosition.course,
+        attributes: {
+          ...(selectedLivePosition.attributes || {}),
+          predictedPosition: true,
+          predictedDistanceMeters: Math.round(trackerPrediction.predictedDistanceMeters || 0),
+          trackerAgeMs: Math.round(trackerPrediction.trackerAgeMs || 0),
+        },
+      };
+    }
+    return selectedLivePosition;
+  }, [phoneAssistActive, phoneSample, selectedLivePosition, trackerPrediction, trackerPredictionActive]);
 
   const selectedAssistedMapPosition = useMemo(() => {
-    if (!phoneAssistActive || !selectedPosition || !phoneSample) {
+    if (!selectedPosition) {
       return selectedPosition;
     }
-    return {
-      ...selectedPosition,
-      latitude: phoneSample.latitude,
-      longitude: phoneSample.longitude,
-      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedPosition.speed,
-      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedPosition.course,
-      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedPosition.accuracy,
-      fixTime: phoneSample.fixTime || selectedPosition.fixTime,
-      attributes: {
-        ...(selectedPosition.attributes || {}),
-        phoneAssist: true,
-      },
-    };
-  }, [phoneAssistActive, phoneSample, selectedPosition]);
+    if (phoneAssistActive && phoneSample) {
+      return {
+        ...selectedPosition,
+        latitude: phoneSample.latitude,
+        longitude: phoneSample.longitude,
+        speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedPosition.speed,
+        course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedPosition.course,
+        accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedPosition.accuracy,
+        fixTime: phoneSample.fixTime || selectedPosition.fixTime,
+        attributes: {
+          ...(selectedPosition.attributes || {}),
+          phoneAssist: true,
+        },
+      };
+    }
+    if (trackerPredictionActive) {
+      return {
+        ...selectedPosition,
+        latitude: trackerPrediction.latitude,
+        longitude: trackerPrediction.longitude,
+        course: Number.isFinite(trackerPrediction.heading) ? trackerPrediction.heading : selectedPosition.course,
+        attributes: {
+          ...(selectedPosition.attributes || {}),
+          predictedPosition: true,
+          predictedDistanceMeters: Math.round(trackerPrediction.predictedDistanceMeters || 0),
+          trackerAgeMs: Math.round(trackerPrediction.trackerAgeMs || 0),
+        },
+      };
+    }
+    return selectedPosition;
+  }, [phoneAssistActive, phoneSample, selectedPosition, trackerPrediction, trackerPredictionActive]);
 
   const displayPositions = useMemo(() => {
-    if (!phoneAssistActive || selectedId == null || !selectedAssistedMapPosition) {
+    if (selectedId == null || !selectedAssistedMapPosition) {
+      return filteredPositions;
+    }
+    if (!phoneAssistActive && !trackerPredictionActive) {
       return filteredPositions;
     }
     return filteredPositions.map((position) => (
@@ -819,14 +1005,23 @@ const MainMap = ({
         ? selectedAssistedMapPosition
         : position
     ));
-  }, [filteredPositions, phoneAssistActive, selectedAssistedMapPosition, selectedId]);
+  }, [
+    filteredPositions,
+    phoneAssistActive,
+    selectedAssistedMapPosition,
+    selectedId,
+    trackerPredictionActive,
+  ]);
 
   const effectiveSelectedHeading = useMemo(() => {
     if (phoneAssistActive && Number.isFinite(Number(phoneSample?.course))) {
       return normalizeAngle(Number(phoneSample.course));
     }
+    if (trackerPredictionActive && Number.isFinite(Number(trackerPrediction.heading))) {
+      return normalizeAngle(Number(trackerPrediction.heading));
+    }
     return selectedHeading;
-  }, [phoneAssistActive, phoneSample, selectedHeading]);
+  }, [phoneAssistActive, phoneSample, selectedHeading, trackerPrediction, trackerPredictionActive]);
 
   const computeCancelable = useCallback((report) => {
     const createdAt = new Date(report.createdAt || 0).getTime();
@@ -1060,6 +1255,37 @@ const MainMap = ({
       setSelectedHeadingState(headingMetaRef.current[selectedId]?.status || 'loading');
     }
   }, [dispatch, headingByDeviceId, positionsByDeviceId, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || !isValidCoordinate(selectedLivePosition?.latitude, selectedLivePosition?.longitude)) {
+      selectedTrackerTrailRef.current = [];
+      selectedTrackerTrailKeyRef.current = null;
+      return;
+    }
+
+    const key = `${selectedId}:${selectedLivePosition.id ?? ''}:${selectedLivePosition.fixTime ?? ''}:${selectedLivePosition.latitude}:${selectedLivePosition.longitude}`;
+    if (selectedTrackerTrailKeyRef.current === key) {
+      return;
+    }
+    selectedTrackerTrailKeyRef.current = key;
+
+    const trackerTimestampMs = parseTimestampMs(selectedLivePosition.fixTime)
+      ?? parseTimestampMs(selectedLivePosition.deviceTime)
+      ?? parseTimestampMs(selectedLivePosition.serverTime)
+      ?? Date.now();
+    const nextPoint = {
+      deviceId: String(selectedId),
+      latitude: Number(selectedLivePosition.latitude),
+      longitude: Number(selectedLivePosition.longitude),
+      timestampMs: trackerTimestampMs,
+    };
+
+    const minTimestampMs = Date.now() - TRACKER_PREDICTION_TRAIL_MAX_AGE_MS;
+    const nextTrail = [...selectedTrackerTrailRef.current, nextPoint]
+      .filter((point) => Number.isFinite(point.timestampMs) && point.timestampMs >= minTimestampMs)
+      .slice(-TRACKER_PREDICTION_TRAIL_MAX_POINTS);
+    selectedTrackerTrailRef.current = nextTrail;
+  }, [selectedId, selectedLivePosition]);
 
   useEffect(() => {
     selectedLivePositionRef.current = selectedAssistedLivePosition || null;
