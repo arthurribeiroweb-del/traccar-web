@@ -20,6 +20,7 @@ import speed70IconUrl from '../resources/images/icon/speed-limit-70-sign-icon.sv
 import speed80IconUrl from '../resources/images/icon/speed-limit-80-sign-icon.svg';
 import speed90IconUrl from '../resources/images/icon/speed-limit-90-sign-icon.svg';
 import speed100IconUrl from '../resources/images/icon/speed-limit-100-sign-icon.svg';
+import speed110IconUrl from '../resources/images/icon/speed-limit-110-sign-icon.svg';
 import speed120IconUrl from '../resources/images/icon/speed-limit-120-sign-icon.svg';
 import beepSoundUrl from '../resources/bipe.mp3';
 import { useAdministrator } from '../common/util/permissions';
@@ -438,6 +439,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
     SPEED_80: `${id}-static-radars-80`,
     SPEED_90: `${id}-static-radars-90`,
     SPEED_100: `${id}-static-radars-100`,
+    SPEED_110: `${id}-static-radars-110`,
     SPEED_120: `${id}-static-radars-120`,
   }), [id]);
 
@@ -675,6 +677,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       { imageId: imageIds.SPEED_80, iconUrl: speed80IconUrl },
       { imageId: imageIds.SPEED_90, iconUrl: speed90IconUrl },
       { imageId: imageIds.SPEED_100, iconUrl: speed100IconUrl },
+      { imageId: imageIds.SPEED_110, iconUrl: speed110IconUrl },
       { imageId: imageIds.SPEED_120, iconUrl: speed120IconUrl },
     ];
 
@@ -762,6 +765,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
             80, imageIds.SPEED_80,
             90, imageIds.SPEED_90,
             100, imageIds.SPEED_100,
+            110, imageIds.SPEED_110,
             120, imageIds.SPEED_120,
             imageIds.DEFAULT,
           ],
