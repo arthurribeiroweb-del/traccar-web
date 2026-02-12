@@ -35,6 +35,11 @@ const STATIC_RADARS_EDIT_MAX_RADIUS_METERS = 200;
 const STATIC_RADARS_FILE = 'scdb-radars-br.geojson';
 const STATIC_RADARS_PATH = `radars/${STATIC_RADARS_FILE}`;
 const STATIC_RADARS_COMMON_PREFIXES = ['/login', '/rastreador'];
+const STATIC_RADARS_CACHE_DB_NAME = 'traccar-static-radars';
+const STATIC_RADARS_CACHE_DB_VERSION = 1;
+const STATIC_RADARS_CACHE_STORE_NAME = 'geojson';
+const STATIC_RADARS_CACHE_KEY = STATIC_RADARS_FILE;
+const STATIC_RADARS_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const STATIC_RADARS_AUDIT_COLOR = '#E11D48';
 const RADAR_PROXIMITY_COOLDOWN_MS = 30000;
 const RADAR_ALERT_REPEAT_COUNT = 1;
@@ -50,7 +55,8 @@ const EARTH_RADIUS_METERS = 6371000;
 const PROXIMITY_GRID_CELL_DEGREES = 0.02;
 const PROXIMITY_MIN_QUERY_METERS = 300;
 const PROXIMITY_QUERY_BUFFER_METERS = 50;
-const STATIC_RADARS_DEFER_LOAD_MS = 400;
+const STATIC_RADARS_DEFER_LOAD_MS = 120;
+const STATIC_RADARS_RETRY_LOAD_MS = 30000;
 const KNOTS_TO_METERS_PER_SECOND = 0.514444;
 const EMPTY_FEATURE_COLLECTION = {
   type: 'FeatureCollection',
@@ -252,6 +258,93 @@ const loadStaticRadarsGeoJson = async () => {
   }
 
   return { data: null, url: null, attemptedUrls: urls };
+};
+
+const openStaticRadarsCacheDb = () => new Promise((resolve) => {
+  if (typeof window === 'undefined' || !window.indexedDB) {
+    resolve(null);
+    return;
+  }
+  try {
+    const request = window.indexedDB.open(STATIC_RADARS_CACHE_DB_NAME, STATIC_RADARS_CACHE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STATIC_RADARS_CACHE_STORE_NAME)) {
+        db.createObjectStore(STATIC_RADARS_CACHE_STORE_NAME, { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => {
+      resolve(request.result);
+    };
+    request.onerror = () => {
+      resolve(null);
+    };
+  } catch {
+    resolve(null);
+  }
+});
+
+const readStaticRadarsCache = async () => {
+  const db = await openStaticRadarsCacheDb();
+  if (!db) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STATIC_RADARS_CACHE_STORE_NAME, 'readonly');
+      const store = tx.objectStore(STATIC_RADARS_CACHE_STORE_NAME);
+      const request = store.get(STATIC_RADARS_CACHE_KEY);
+      request.onsuccess = () => {
+        const value = request.result;
+        resolve(value || null);
+      };
+      request.onerror = () => {
+        resolve(null);
+      };
+      tx.oncomplete = () => {
+        db.close();
+      };
+      tx.onerror = () => {
+        db.close();
+      };
+    } catch {
+      db.close();
+      resolve(null);
+    }
+  });
+};
+
+const writeStaticRadarsCache = async (data, sourceUrl = '') => {
+  if (!data) {
+    return;
+  }
+  const db = await openStaticRadarsCacheDb();
+  if (!db) {
+    return;
+  }
+  await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STATIC_RADARS_CACHE_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STATIC_RADARS_CACHE_STORE_NAME);
+      store.put({
+        id: STATIC_RADARS_CACHE_KEY,
+        data,
+        sourceUrl,
+        updatedAt: Date.now(),
+      });
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve();
+      };
+    } catch {
+      db.close();
+      resolve();
+    }
+  });
 };
 
 const normalizeStaticRadarsData = (data, radiusOverrides = {}) => {
@@ -884,54 +977,84 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       map.on('click', layerId, onRadarClick);
     }
 
-    const loadData = async () => {
-      if (dataLoadedRef.current || dataLoadingRef.current) {
+    const loadRadiusOverrides = async () => {
+      if (!isAdmin) {
+        return {};
+      }
+      try {
+        const response = await fetchOrThrow('/api/admin/static-radars/radius');
+        const payload = await response.json();
+        return normalizeRadiusOverrides(payload?.overrides);
+      } catch {
+        return {};
+      }
+    };
+
+    const applyRadarsData = (rawData, radiusOverrides = {}) => {
+      if (!rawData) {
         return;
       }
-      if (map.getZoom() < STATIC_RADARS_MIN_ZOOM) {
+      const normalizedData = normalizeStaticRadarsData(rawData, radiusOverrides);
+      sourceDataRef.current = normalizedData;
+      proximityIndexRef.current = buildProximityIndex(normalizedData.features || []);
+      map.getSource(sourceId)?.setData(normalizedData);
+      dataLoadedRef.current = true;
+      setDataVersion((current) => current + 1);
+    };
+
+    const scheduleRetryLoad = () => {
+      if (dataLoadedRef.current || dataLoadingRef.current || deferredLoadTimerRef.current) {
+        return;
+      }
+      deferredLoadTimerRef.current = window.setTimeout(() => {
+        deferredLoadTimerRef.current = null;
+        loadData();
+      }, STATIC_RADARS_RETRY_LOAD_MS);
+    };
+
+    const loadData = async () => {
+      if (dataLoadedRef.current || dataLoadingRef.current) {
         return;
       }
 
       dataLoadingRef.current = true;
       try {
-        const result = await loadStaticRadarsGeoJson();
-        if (!result?.data) {
-          console.warn(
-            `Falha ao carregar ${STATIC_RADARS_FILE}. URLs testadas:`,
-            result?.attemptedUrls || resolveStaticRadarsUrls(),
-          );
-          return;
+        const radiusOverrides = await loadRadiusOverrides();
+        const cachedEntry = await readStaticRadarsCache();
+        if (cachedEntry?.data) {
+          applyRadarsData(cachedEntry.data, radiusOverrides);
         }
 
-        let radiusOverrides = {};
-        if (isAdmin) {
-          try {
-            const response = await fetchOrThrow('/api/admin/static-radars/radius');
-            const payload = await response.json();
-            radiusOverrides = normalizeRadiusOverrides(payload?.overrides);
-          } catch {
-            radiusOverrides = {};
+        const cachedUpdatedAt = Number(cachedEntry?.updatedAt);
+        const cacheAgeMs = Number.isFinite(cachedUpdatedAt)
+          ? Date.now() - cachedUpdatedAt
+          : Number.POSITIVE_INFINITY;
+        const cacheIsFresh = cacheAgeMs >= 0 && cacheAgeMs <= STATIC_RADARS_CACHE_MAX_AGE_MS;
+
+        if (!cacheIsFresh || !cachedEntry?.data) {
+          const networkResult = await loadStaticRadarsGeoJson();
+          if (networkResult?.data) {
+            applyRadarsData(networkResult.data, radiusOverrides);
+            await writeStaticRadarsCache(networkResult.data, networkResult.url);
+          } else if (!cachedEntry?.data) {
+            console.warn(
+              `Falha ao carregar ${STATIC_RADARS_FILE}. URLs testadas:`,
+              networkResult?.attemptedUrls || resolveStaticRadarsUrls(),
+            );
           }
         }
-
-        const normalizedData = normalizeStaticRadarsData(result.data, radiusOverrides);
-        sourceDataRef.current = normalizedData;
-        proximityIndexRef.current = buildProximityIndex(normalizedData.features || []);
-        map.getSource(sourceId)?.setData(normalizedData);
-        dataLoadedRef.current = true;
-        setDataVersion((current) => current + 1);
       } catch (error) {
         console.warn(`Erro ao carregar ${STATIC_RADARS_FILE}`, error);
       } finally {
         dataLoadingRef.current = false;
+        if (!dataLoadedRef.current) {
+          scheduleRetryLoad();
+        }
       }
     };
 
     const scheduleLoadData = () => {
       if (dataLoadedRef.current || dataLoadingRef.current) {
-        return;
-      }
-      if (map.getZoom() < STATIC_RADARS_MIN_ZOOM) {
         return;
       }
       if (deferredLoadTimerRef.current) {
@@ -943,7 +1066,6 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       }, STATIC_RADARS_DEFER_LOAD_MS);
     };
 
-    map.on('zoomend', scheduleLoadData);
     if (map.loaded()) {
       scheduleLoadData();
     } else {
@@ -956,7 +1078,6 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       clearDeferredLoad();
       dataLoadedRef.current = false;
       dataLoadingRef.current = false;
-      map.off('zoomend', scheduleLoadData);
       if (isAdmin) {
         map.off('mouseenter', layerId, onMouseEnter);
         map.off('mouseleave', layerId, onMouseLeave);
