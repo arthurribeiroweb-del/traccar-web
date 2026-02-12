@@ -112,10 +112,10 @@ const SettingsMenu = () => {
             )}
             {!features.disableMaintenance && (
               <MenuItem
-                title={t('sharedMaintenance')}
-                link="/settings/maintenances"
+                title={t('maintenanceMenuTitle')}
+                link="/settings/maintenance-center"
                 icon={<BuildIcon />}
-                selected={location.pathname.startsWith('/settings/maintenance')}
+                selected={location.pathname.startsWith('/settings/maintenance-center')}
               />
             )}
             {!features.disableSavedCommands && (

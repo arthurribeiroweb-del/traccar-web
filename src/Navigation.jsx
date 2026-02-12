@@ -68,6 +68,7 @@ const BackupPage = lazy(() => import('./settings/BackupPage'));
 const EmulatorPage = lazy(() => import('./other/EmulatorPage'));
 const AuditPage = lazy(() => import('./reports/AuditPage'));
 const CommunityReportsPendingPage = lazy(() => import('./settings/CommunityReportsPendingPage'));
+const VehicleMaintenancePage = lazy(() => import('./settings/VehicleMaintenancePage'));
 
 const RestrictedReportRoute = ({ children }) => {
   const reportsAccess = useReportsAccess();
@@ -294,6 +295,7 @@ const Navigation = () => {
           <Route path="maintenances" element={<MaintenancesPage />} />
           <Route path="maintenance/:id" element={<MaintenancePage />} />
           <Route path="maintenance" element={<MaintenancePage />} />
+          <Route path="maintenance-center" element={<VehicleMaintenancePage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="notification/:id" element={<NotificationPage />} />
           <Route path="notification" element={<NotificationPage />} />
