@@ -348,6 +348,7 @@ const MainMap = ({
   const lastAutoFollowSelectedRef = useRef(null);
   const selectedUpdateRef = useRef({ deviceId: null, signature: null, lastAt: 0 });
   const announcedStateRef = useRef({ stale: false, heading: null });
+  const phoneAssistAnnouncedRef = useRef({ active: false, permission: null });
   const reportMoveTimerRef = useRef(null);
   const lastReportRequestRef = useRef(reportRequestId);
   const publicReportsAbortRef = useRef(null);
@@ -771,6 +772,33 @@ const MainMap = ({
     && phoneAssistLocked
     && phoneAssistDiagnostics.ready
     && phoneAssistDiagnostics.withinReleaseDistance;
+
+  useEffect(() => {
+    if (!phoneAssistSupported) {
+      phoneAssistAnnouncedRef.current = { active: false, permission: null };
+      return;
+    }
+
+    const announced = phoneAssistAnnouncedRef.current;
+    if (phoneAssistPermission === 'denied' && announced.permission !== 'denied') {
+      showFollowMessage('GPS do celular negado. Libere a localização no Android.', 'warning');
+    }
+    announced.permission = phoneAssistPermission;
+
+    if (phoneAssistActive && !announced.active) {
+      showFollowMessage('GPS do celular ativo para apoio de posição.', 'success');
+    } else if (!phoneAssistActive && announced.active) {
+      const reason = phoneAssistDiagnostics?.reason || 'Apoio de GPS indisponível';
+      showFollowMessage(`GPS do celular inativo: ${reason}`, 'info');
+    }
+    announced.active = phoneAssistActive;
+  }, [
+    phoneAssistActive,
+    phoneAssistDiagnostics,
+    phoneAssistPermission,
+    phoneAssistSupported,
+    showFollowMessage,
+  ]);
 
   const selectedAssistedLivePosition = useMemo(() => {
     if (!phoneAssistActive || !selectedLivePosition || !phoneSample) {
