@@ -1070,18 +1070,23 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       }, STATIC_RADARS_DEFER_LOAD_MS);
     };
 
-    if (map.loaded()) {
+    // Keep a resilient load trigger. In some sessions map.loaded() can be false
+    // after initial style load, and waiting only for a future 'load' event can miss the fetch.
+    const triggerLoadData = () => {
       scheduleLoadData();
-    } else {
-      map.once('load', () => {
-        scheduleLoadData();
-      });
-    }
+    };
+    map.once('load', triggerLoadData);
+    map.on('styledata', triggerLoadData);
+    map.on('idle', triggerLoadData);
+    scheduleLoadData();
 
     return () => {
       clearDeferredLoad();
       dataLoadedRef.current = false;
       dataLoadingRef.current = false;
+      map.off('load', triggerLoadData);
+      map.off('styledata', triggerLoadData);
+      map.off('idle', triggerLoadData);
       if (isAdmin) {
         map.off('mouseenter', layerId, onMouseEnter);
         map.off('mouseleave', layerId, onMouseLeave);
