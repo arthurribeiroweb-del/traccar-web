@@ -55,6 +55,8 @@ const RADAR_ALERT_BASE_WARNING_METERS = 80;
 const RADAR_ALERT_LOOKAHEAD_SECONDS = 10;
 const RADAR_ALERT_MIN_WARNING_METERS = 120;
 const RADAR_ALERT_MAX_WARNING_METERS = 450;
+const RADAR_ALERT_FAR_DISTANCE_METERS = 1000;
+const RADAR_ALERT_NEAR_MIN_DISTANCE_METERS = 250;
 const RADAR_ALERT_EXIT_HYSTERESIS_METERS = 80;
 const RADAR_ALERT_MAX_BEARING_DELTA_DEGREES = 55;
 const RADAR_ALERT_MIN_SPEED_MPS_FOR_DIRECTION = 2;
@@ -431,7 +433,8 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
   const deferredLoadTimerRef = useRef(null);
   const alertAudioRef = useRef(null);
   const alertSequenceTimersRef = useRef([]);
-  const insideRadarKeysRef = useRef(new Set());
+  const insideRadarFarKeysRef = useRef(new Set());
+  const insideRadarNearKeysRef = useRef(new Set());
   const radarCooldownRef = useRef({});
   const [dataVersion, setDataVersion] = useState(0);
   const [visibilityVersion, setVisibilityVersion] = useState(0);
@@ -547,19 +550,22 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
 
   useEffect(() => {
     if (!enabled) {
-      insideRadarKeysRef.current = new Set();
+      insideRadarFarKeysRef.current = new Set();
+      insideRadarNearKeysRef.current = new Set();
       clearAlertSequence();
       return;
     }
 
     if (!selectedPosition || !Number.isFinite(Number(selectedPosition.latitude))
       || !Number.isFinite(Number(selectedPosition.longitude))) {
-      insideRadarKeysRef.current = new Set();
+      insideRadarFarKeysRef.current = new Set();
+      insideRadarNearKeysRef.current = new Set();
       return;
     }
 
     if (document.visibilityState !== 'visible') {
-      insideRadarKeysRef.current = new Set();
+      insideRadarFarKeysRef.current = new Set();
+      insideRadarNearKeysRef.current = new Set();
       clearAlertSequence();
       return;
     }
@@ -572,7 +578,8 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       : 0;
     const courseDegrees = Number(selectedPosition.course);
     const warningDistanceMeters = computeWarningDistanceMeters(speedKnots);
-    const queryRadiusMeters = warningDistanceMeters + PROXIMITY_QUERY_BUFFER_METERS;
+    const queryRadiusMeters = Math.max(warningDistanceMeters, RADAR_ALERT_FAR_DISTANCE_METERS)
+      + PROXIMITY_QUERY_BUFFER_METERS;
 
     // Static features
     const staticFeatures = getProximityCandidates(
@@ -602,12 +609,14 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
     }
 
     if (!features.length) {
-      insideRadarKeysRef.current = new Set();
+      insideRadarFarKeysRef.current = new Set();
+      insideRadarNearKeysRef.current = new Set();
       return;
     }
 
     const now = Date.now();
-    const nextInsideKeys = new Set();
+    const nextInsideFarKeys = new Set();
+    const nextInsideNearKeys = new Set();
     let shouldPlayAlert = false;
 
     features.forEach((feature) => {
@@ -632,13 +641,24 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
         : '';
       const fallbackKey = `${radarLat.toFixed(6)}:${radarLng.toFixed(6)}:${Math.round(radiusMeters)}`;
       const radarKey = externalId || fallbackKey;
-      const alertDistanceMeters = Math.max(warningDistanceMeters, radiusMeters + 20);
-      const releaseDistanceMeters = alertDistanceMeters + RADAR_ALERT_EXIT_HYSTERESIS_METERS;
+      const nearDistanceMeters = Math.max(
+        RADAR_ALERT_NEAR_MIN_DISTANCE_METERS,
+        warningDistanceMeters,
+        radiusMeters + 20,
+      );
+      const farDistanceMeters = Math.max(
+        RADAR_ALERT_FAR_DISTANCE_METERS,
+        nearDistanceMeters + 100,
+      );
+      const farReleaseDistanceMeters = farDistanceMeters + RADAR_ALERT_EXIT_HYSTERESIS_METERS;
+      const nearReleaseDistanceMeters = nearDistanceMeters + RADAR_ALERT_EXIT_HYSTERESIS_METERS;
       const distanceToRadar = distanceMeters(latitude, longitude, radarLat, radarLng);
-      const wasInside = insideRadarKeysRef.current.has(radarKey);
-      const isInside = distanceToRadar <= alertDistanceMeters;
+      const wasInsideFar = insideRadarFarKeysRef.current.has(radarKey);
+      const wasInsideNear = insideRadarNearKeysRef.current.has(radarKey);
+      const isInsideFar = distanceToRadar <= farDistanceMeters;
+      const isInsideNear = distanceToRadar <= nearDistanceMeters;
 
-      if (!isInside && (!wasInside || distanceToRadar > releaseDistanceMeters)) {
+      if (!isInsideFar && (!wasInsideFar || distanceToRadar > farReleaseDistanceMeters)) {
         return;
       }
 
@@ -651,22 +671,38 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       const approaching = !directionReliable
         || (Number.isFinite(headingDelta) && headingDelta <= RADAR_ALERT_MAX_BEARING_DELTA_DEGREES);
 
-      if (!approaching && !wasInside) {
+      if (!approaching && !wasInsideFar && !wasInsideNear) {
         return;
       }
 
-      nextInsideKeys.add(radarKey);
+      if (isInsideFar || (wasInsideFar && distanceToRadar <= farReleaseDistanceMeters)) {
+        nextInsideFarKeys.add(radarKey);
+      }
+      if (isInsideNear || (wasInsideNear && distanceToRadar <= nearReleaseDistanceMeters)) {
+        nextInsideNearKeys.add(radarKey);
+      }
 
-      if (!wasInside && approaching) {
-        const previousAlertAt = radarCooldownRef.current[radarKey] || 0;
+      if (!wasInsideFar && approaching && isInsideFar) {
+        const cooldownKey = `${radarKey}:far`;
+        const previousAlertAt = radarCooldownRef.current[cooldownKey] || 0;
         if (now - previousAlertAt >= RADAR_PROXIMITY_COOLDOWN_MS) {
-          radarCooldownRef.current[radarKey] = now;
+          radarCooldownRef.current[cooldownKey] = now;
+          shouldPlayAlert = true;
+        }
+      }
+
+      if (!wasInsideNear && approaching && isInsideNear) {
+        const cooldownKey = `${radarKey}:near`;
+        const previousAlertAt = radarCooldownRef.current[cooldownKey] || 0;
+        if (now - previousAlertAt >= RADAR_PROXIMITY_COOLDOWN_MS) {
+          radarCooldownRef.current[cooldownKey] = now;
           shouldPlayAlert = true;
         }
       }
     });
 
-    insideRadarKeysRef.current = nextInsideKeys;
+    insideRadarFarKeysRef.current = nextInsideFarKeys;
+    insideRadarNearKeysRef.current = nextInsideNearKeys;
 
     if (shouldPlayAlert) {
       playRadarAlertSequence();
