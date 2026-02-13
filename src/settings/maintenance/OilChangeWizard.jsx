@@ -29,16 +29,16 @@ import {
 import { useTranslation } from '../../common/components/LocalizationProvider';
 
 const PRESET_OPTIONS = {
-  basic: { intervalKm: 5000, intervalMonths: 6 },
+  severe: { intervalKm: 5000, intervalMonths: 6 },
   normal: { intervalKm: 10000, intervalMonths: 12 },
-  severe: { intervalKm: 5000, intervalMonths: 4 },
+  synthetic: { intervalKm: 15000, intervalMonths: 12 },
   custom: { intervalKm: null, intervalMonths: null },
 };
 
-const resolvePresetKey = (intervalKm, intervalMonths) => {
-  if (intervalKm === 5000 && intervalMonths === 6) return 'basic';
-  if (intervalKm === 10000 && intervalMonths === 12) return 'normal';
-  if (intervalKm === 5000 && intervalMonths === 4) return 'severe';
+const resolvePresetKey = (intervalKm) => {
+  if (intervalKm === 5000) return 'severe';
+  if (intervalKm === 10000) return 'normal';
+  if (intervalKm === 15000) return 'synthetic';
   return 'custom';
 };
 
@@ -58,9 +58,9 @@ const OilChangeWizard = ({
   const [lastServiceOdometer, setLastServiceOdometer] = useState(null);
   const [lastServiceDate, setLastServiceDate] = useState('');
 
-  const [planPreset, setPlanPreset] = useState('basic');
-  const [intervalKm, setIntervalKm] = useState(5000);
-  const [intervalMonths, setIntervalMonths] = useState(6);
+  const [planPreset, setPlanPreset] = useState('normal');
+  const [intervalKm, setIntervalKm] = useState(10000);
+  const [intervalMonths, setIntervalMonths] = useState(12);
 
   const [stepError, setStepError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -77,8 +77,8 @@ const OilChangeWizard = ({
     const nextCurrent = existingOil?.odometerCurrent != null ? Number(existingOil.odometerCurrent) : null;
     const nextLastKm = existingOil?.lastServiceOdometer != null ? Number(existingOil.lastServiceOdometer) : null;
     const nextLastDate = dateToInputValue(existingOil?.lastServiceDate);
-    const nextIntervalKm = existingOil?.intervalKm != null ? Number(existingOil.intervalKm) : PRESET_OPTIONS.basic.intervalKm;
-    const nextIntervalMonths = existingOil?.intervalMonths != null ? Number(existingOil.intervalMonths) : PRESET_OPTIONS.basic.intervalMonths;
+    const nextIntervalKm = existingOil?.intervalKm != null ? Number(existingOil.intervalKm) : PRESET_OPTIONS.normal.intervalKm;
+    const nextIntervalMonths = existingOil?.intervalMonths != null ? Number(existingOil.intervalMonths) : PRESET_OPTIONS.normal.intervalMonths;
 
     // Determine initial mode based on existing data
     let initialMode = 'none';
@@ -95,7 +95,7 @@ const OilChangeWizard = ({
     setLastServiceOdometer(Number.isFinite(nextLastKm) ? nextLastKm : null);
     setLastServiceDate(nextLastDate || dateToInputValue(new Date())); // Default to today if empty
 
-    setPlanPreset(resolvePresetKey(nextIntervalKm, nextIntervalMonths));
+    setPlanPreset(resolvePresetKey(nextIntervalKm));
     setIntervalKm(Number.isFinite(nextIntervalKm) ? nextIntervalKm : null);
     setIntervalMonths(Number.isFinite(nextIntervalMonths) ? nextIntervalMonths : null);
 
@@ -303,10 +303,10 @@ const OilChangeWizard = ({
           orientation="vertical"
           sx={{ mt: 1 }}
         >
-          <ToggleButton value="basic">{t('maintenancePlanBasic')}</ToggleButton>
-          <ToggleButton value="normal">{t('maintenancePlanNormal')}</ToggleButton>
           <ToggleButton value="severe">{t('maintenancePlanSevere')}</ToggleButton>
-          <ToggleButton value="custom">{t('reportCustom')}</ToggleButton>
+          <ToggleButton value="normal">{t('maintenancePlanNormal')}</ToggleButton>
+          <ToggleButton value="synthetic">{t('maintenancePlanSynthetic')}</ToggleButton>
+          <ToggleButton value="custom">{t('maintenancePlanCustom')}</ToggleButton>
         </ToggleButtonGroup>
       </FormControl>
 
