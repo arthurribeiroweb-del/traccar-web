@@ -180,23 +180,30 @@ const VehicleMaintenancePage = () => {
     }
 
     const previousDevice = selectedDevice;
-    const nextDevice = {
-      ...selectedDevice,
+
+    // Build the device with the intended oil config
+    const buildDeviceWithOil = (base, oilData) => ({
+      ...base,
       attributes: {
-        ...(selectedDevice.attributes || {}),
+        ...(base.attributes || {}),
         maintenance: {
-          ...(selectedDevice.attributes?.maintenance || {}),
-          oil: nextOilConfig,
+          ...(base.attributes?.maintenance || {}),
+          oil: oilData,
         },
       },
-    };
+    });
+
+    const nextDevice = buildDeviceWithOil(selectedDevice, nextOilConfig);
 
     setLoading(true);
     setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: nextDevice }));
 
     try {
       const persisted = await putDeviceWithRetry(nextDevice);
-      const resolvedDevice = persisted || nextDevice;
+      // CRITICAL: Always merge our oil config into the resolved device.
+      // The API response may not preserve nested attributes, or may return
+      // stale data from before the save propagated.
+      const resolvedDevice = buildDeviceWithOil(persisted || nextDevice, nextOilConfig);
       setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: resolvedDevice }));
       dispatch(devicesActions.update([resolvedDevice]));
       showSuccess(successMessage);
@@ -207,7 +214,7 @@ const VehicleMaintenancePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDevice, showSuccess, t]);
+  }, [selectedDevice, dispatch, showSuccess, t]);
 
   const handleWizardSave = useCallback(async (nextOilConfig) => {
     try {
