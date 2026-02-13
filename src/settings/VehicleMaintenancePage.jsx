@@ -103,7 +103,6 @@ const VehicleMaintenancePage = () => {
   const t = useTranslation();
   const dispatch = useDispatch();
   const devicesMap = useSelector((state) => state.devices.items || {});
-  const selectedStoreDeviceId = useSelector((state) => state.devices.selectedId);
   const livePositions = useSelector((state) => state.session.positions || {});
 
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
@@ -145,9 +144,8 @@ const VehicleMaintenancePage = () => {
       return;
     }
 
-    const fromStore = devices.find((device) => String(device.id) === String(selectedStoreDeviceId));
-    setSelectedDeviceId(fromStore ? fromStore.id : devices[0].id);
-  }, [devices, selectedDeviceId, selectedStoreDeviceId]);
+    setSelectedDeviceId(null);
+  }, [devices, selectedDeviceId]);
 
   const selectedDevice = useMemo(
     () => devices.find((device) => String(device.id) === String(selectedDeviceId)) || null,
@@ -253,11 +251,15 @@ const VehicleMaintenancePage = () => {
 
   const handleWizardSave = useCallback(async (nextOilConfig) => {
     try {
+      console.debug('[OilChange] save', {
+        selectedVehicleId: selectedDevice?.id ?? null,
+        payload: nextOilConfig,
+      });
       await saveOilConfig(nextOilConfig, t('maintenanceSaved'));
     } catch {
       throw new Error(t('maintenanceSaveError'));
     }
-  }, [saveOilConfig, t]);
+  }, [saveOilConfig, selectedDevice, t]);
 
   const handleToggleEnabled = useCallback(async () => {
     if (!effectiveOilConfig) {
@@ -322,19 +324,28 @@ const VehicleMaintenancePage = () => {
             <Alert severity="info">{t('maintenanceNoVehicles')}</Alert>
           )}
 
-          {devices.length > 1 && (
+          {devices.length > 0 && (
             <TextField
               select
-              label={t('maintenanceVehicleLabel')}
+              label={`${t('maintenanceVehicleLabel')} *`}
               value={selectedDeviceId || ''}
               onChange={(event) => setSelectedDeviceId(event.target.value)}
             >
+              {devices.length > 1 && (
+                <MenuItem value="">
+                  {t('maintenanceVehicleRequired')}
+                </MenuItem>
+              )}
               {devices.map((device) => (
                 <MenuItem key={device.id} value={device.id}>
                   {getDeviceDisplayName(device) || device.name || `${device.id}`}
                 </MenuItem>
               ))}
             </TextField>
+          )}
+
+          {!selectedDevice && devices.length > 1 && (
+            <Alert severity="info">{t('maintenanceVehicleRequired')}</Alert>
           )}
 
           {selectedDevice && (
