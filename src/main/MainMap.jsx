@@ -823,6 +823,55 @@ const MainMap = ({
     };
   }, [phoneAssistActive, phoneSample, selectedLivePosition]);
 
+  const selectedRadarAlertPosition = useMemo(() => {
+    if (isValidCoordinate(
+      Number(selectedAssistedLivePosition?.latitude),
+      Number(selectedAssistedLivePosition?.longitude),
+    )) {
+      return selectedAssistedLivePosition;
+    }
+
+    if (!phoneAssistEnabled || !selectedLivePosition || !phoneSample) {
+      return selectedLivePosition;
+    }
+
+    const phoneLatitude = Number(phoneSample.latitude);
+    const phoneLongitude = Number(phoneSample.longitude);
+    if (!isValidCoordinate(phoneLatitude, phoneLongitude)) {
+      return selectedLivePosition;
+    }
+
+    const phoneAgeMs = assistNowMs - Number(phoneSample.timestampMs || 0);
+    const phoneAccuracy = Number(phoneSample.accuracy);
+    if (!Number.isFinite(phoneAgeMs) || phoneAgeMs > PHONE_ASSIST_MAX_SAMPLE_AGE_MS) {
+      return selectedLivePosition;
+    }
+    if (!Number.isFinite(phoneAccuracy) || phoneAccuracy > PHONE_ASSIST_MAX_ACCURACY_METERS) {
+      return selectedLivePosition;
+    }
+
+    return {
+      ...selectedLivePosition,
+      latitude: phoneLatitude,
+      longitude: phoneLongitude,
+      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
+      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
+      accuracy: phoneAccuracy,
+      fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
+      attributes: {
+        ...(selectedLivePosition.attributes || {}),
+        phoneAssist: true,
+        phoneAssistRadar: true,
+      },
+    };
+  }, [
+    assistNowMs,
+    phoneAssistEnabled,
+    phoneSample,
+    selectedAssistedLivePosition,
+    selectedLivePosition,
+  ]);
+
   const selectedAssistedMapPosition = useMemo(() => {
     if (!phoneAssistActive || !selectedPosition || !phoneSample) {
       return selectedPosition;
@@ -1443,7 +1492,7 @@ const MainMap = ({
         <MapRadar enabled={showRadars} />
         <MapStaticRadars
           enabled={showRadars}
-          selectedPositionOverride={selectedAssistedLivePosition}
+          selectedPositionOverride={selectedRadarAlertPosition}
         />
         <MapAccuracy positions={displayPositions} />
         <MapLiveRoutes deviceIds={displayPositions.map((p) => p.deviceId)} />
