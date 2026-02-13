@@ -798,6 +798,8 @@
     "maintenanceDaysRemaining": "faltam {{value}} dias",
     "maintenanceCompleteConfig": "Completar configuracao",
     "maintenanceMarkDone": "Marcar como feito",
+    "maintenanceWizardOptionJustChanged": "Troquei agora (resetar)",
+    "maintenanceWizardOptionChangedBefore": "Ja troquei antes (informar km/data)",
     "maintenanceDisableReminders": "Desativar lembretes",
     "maintenanceEnableReminders": "Ativar lembretes",
     "maintenanceAriaMainAction": "Marcar troca de oleo",

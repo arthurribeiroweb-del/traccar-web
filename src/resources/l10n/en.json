@@ -800,6 +800,8 @@
     "maintenanceDaysRemaining": "{{value}} days remaining",
     "maintenanceCompleteConfig": "Complete setup",
     "maintenanceMarkDone": "Mark as done",
+    "maintenanceWizardOptionJustChanged": "Changed now (reset)",
+    "maintenanceWizardOptionChangedBefore": "Changed before (set manually)",
     "maintenanceDisableReminders": "Disable reminders",
     "maintenanceEnableReminders": "Enable reminders",
     "maintenanceAriaMainAction": "Mark oil change",

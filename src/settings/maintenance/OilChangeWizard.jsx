@@ -22,7 +22,6 @@ import {
 } from '@mui/material';
 import {
   dateToInputValue,
-  formatDateLabel,
   formatOdometer,
   getOilConfig,
   parseIntegerInput,
@@ -52,12 +51,17 @@ const OilChangeWizard = ({
   const t = useTranslation();
   const [activeStep, setActiveStep] = useState(0);
   const [odometerCurrent, setOdometerCurrent] = useState(null);
-  const [baseMode, setBaseMode] = useState('none');
+
+  // 'none' (not selected), 'current' (just changed), 'previous' (changed before)
+  const [changeMode, setChangeMode] = useState('none');
+
   const [lastServiceOdometer, setLastServiceOdometer] = useState(null);
   const [lastServiceDate, setLastServiceDate] = useState('');
+
   const [planPreset, setPlanPreset] = useState('basic');
   const [intervalKm, setIntervalKm] = useState(5000);
   const [intervalMonths, setIntervalMonths] = useState(6);
+
   const [stepError, setStepError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -76,23 +80,25 @@ const OilChangeWizard = ({
     const nextIntervalKm = existingOil?.intervalKm != null ? Number(existingOil.intervalKm) : PRESET_OPTIONS.basic.intervalKm;
     const nextIntervalMonths = existingOil?.intervalMonths != null ? Number(existingOil.intervalMonths) : PRESET_OPTIONS.basic.intervalMonths;
 
-    let mode = 'none';
+    // Determine initial mode based on existing data
+    let initialMode = 'none';
     if (nextLastKm != null && nextLastDate) {
-      mode = 'km';
-    } else if (nextLastKm != null) {
-      mode = 'km';
-    } else if (nextLastDate) {
-      mode = 'date';
+      // If we have data, we assume it was a previous change or current if they match
+      // But for simplicity in wizard, if reopening, we might default to 'previous' to show the data
+      initialMode = 'previous';
     }
 
     setActiveStep(0);
     setOdometerCurrent(Number.isFinite(nextCurrent) ? nextCurrent : null);
-    setBaseMode(mode);
+    setChangeMode(initialMode);
+
     setLastServiceOdometer(Number.isFinite(nextLastKm) ? nextLastKm : null);
-    setLastServiceDate(nextLastDate);
+    setLastServiceDate(nextLastDate || dateToInputValue(new Date())); // Default to today if empty
+
     setPlanPreset(resolvePresetKey(nextIntervalKm, nextIntervalMonths));
     setIntervalKm(Number.isFinite(nextIntervalKm) ? nextIntervalKm : null);
     setIntervalMonths(Number.isFinite(nextIntervalMonths) ? nextIntervalMonths : null);
+
     setStepError('');
     setSaveError('');
     setSaving(false);
@@ -103,17 +109,20 @@ const OilChangeWizard = ({
   const canContinueStepOne = Number.isFinite(odometerCurrent) && odometerCurrent >= 0;
 
   const validateStepTwo = () => {
-    if (baseMode === 'km') {
+    if (changeMode === 'none') {
+      return t('maintenanceBaseNotInformed'); // Or a strictly better error
+    }
+
+    if (changeMode === 'previous') {
       if (!Number.isFinite(lastServiceOdometer)) {
         return t('maintenanceLastKmRequired');
       }
       if (lastServiceOdometer > odometerCurrent) {
         return t('maintenanceLastKmGreaterError');
       }
-    }
-
-    if (baseMode === 'date' && !lastServiceDate) {
-      return t('maintenanceLastDateRequired');
+      if (!lastServiceDate) {
+        return t('maintenanceLastDateRequired');
+      }
     }
 
     if (planPreset === 'custom') {
@@ -129,19 +138,16 @@ const OilChangeWizard = ({
 
   const buildPayload = () => {
     const baseDateToday = new Date().toISOString();
-    const keepPreviousDate = existingOil?.lastServiceDate || null;
-    const keepPreviousKm = existingOil?.lastServiceOdometer != null ? Number(existingOil.lastServiceOdometer) : null;
 
-    let nextLastKm = keepPreviousKm;
-    let nextLastDate = keepPreviousDate;
+    let nextLastKm = null;
+    let nextLastDate = null;
 
-    if (baseMode === 'km') {
-      nextLastKm = Number.isFinite(lastServiceOdometer) ? lastServiceOdometer : null;
-    } else if (baseMode === 'date') {
-      nextLastDate = lastServiceDate ? new Date(lastServiceDate).toISOString() : null;
-    } else if (baseMode === 'today') {
+    if (changeMode === 'current') {
       nextLastKm = odometerCurrent;
       nextLastDate = baseDateToday;
+    } else if (changeMode === 'previous') {
+      nextLastKm = lastServiceOdometer;
+      nextLastDate = lastServiceDate ? new Date(lastServiceDate).toISOString() : null;
     }
 
     const nextIntervalKm = planPreset === 'custom'
@@ -214,10 +220,12 @@ const OilChangeWizard = ({
     }
   };
 
-  const handleModeChange = (event) => {
+  const handleChangeMode = (event) => {
     const mode = event.target.value;
-    setBaseMode(mode);
-    if (mode === 'today') {
+    setChangeMode(mode);
+    setStepError('');
+    if (mode === 'current') {
+      // Reset manual inputs to sensible defaults in case they switch back
       setLastServiceOdometer(odometerCurrent);
       setLastServiceDate(dateToInputValue(new Date()));
     }
@@ -245,13 +253,23 @@ const OilChangeWizard = ({
   const renderStepTwo = () => (
     <Stack spacing={2}>
       <Box>
-        <Typography variant="subtitle2">{t('maintenanceWhenLastChange')}</Typography>
-        <RadioGroup value={baseMode} onChange={handleModeChange}>
-          <FormControlLabel value="none" control={<Radio />} label={t('maintenanceBaseNotInformed')} />
-          <FormControlLabel value="km" control={<Radio />} label={t('maintenanceBaseByKm')} />
-          {baseMode === 'km' && (
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>{t('maintenanceWhenLastChange')}</Typography>
+        <RadioGroup value={changeMode} onChange={handleChangeMode}>
+          <FormControlLabel
+            value="current"
+            control={<Radio />}
+            label={t('maintenanceWizardOptionJustChanged') || "Troquei agora (resetar)"}
+          />
+          <FormControlLabel
+            value="previous"
+            control={<Radio />}
+            label={t('maintenanceWizardOptionChangedBefore') || "Já troquei antes (informar manualmente)"}
+          />
+        </RadioGroup>
+
+        {changeMode === 'previous' && (
+          <Stack spacing={2} sx={{ mt: 2, ml: 4, borderLeft: '2px solid #eee', pl: 2 }}>
             <TextField
-              sx={{ ml: 4, mt: 1 }}
               label={t('maintenanceLastKmLabel')}
               value={lastServiceOdometer == null ? '' : formatOdometer(lastServiceOdometer)}
               onChange={(event) => {
@@ -259,12 +277,9 @@ const OilChangeWizard = ({
                 setStepError('');
               }}
               inputProps={{ inputMode: 'numeric', min: 0 }}
+              fullWidth
             />
-          )}
-          <FormControlLabel value="date" control={<Radio />} label={t('maintenanceBaseByDate')} />
-          {baseMode === 'date' && (
             <TextField
-              sx={{ ml: 4, mt: 1 }}
               type="date"
               label={t('maintenanceLastDateLabel')}
               value={lastServiceDate}
@@ -273,17 +288,13 @@ const OilChangeWizard = ({
                 setStepError('');
               }}
               InputLabelProps={{ shrink: true }}
+              fullWidth
             />
-          )}
-          <FormControlLabel
-            value="today"
-            control={<Radio />}
-            label={t('maintenanceBaseToday').replace('{{date}}', formatDateLabel(new Date()))}
-          />
-        </RadioGroup>
+          </Stack>
+        )}
       </Box>
 
-      <FormControl fullWidth>
+      <FormControl fullWidth sx={{ mt: 2 }}>
         <Typography variant="subtitle2">{t('maintenancePlan')}</Typography>
         <ToggleButtonGroup
           exclusive
@@ -385,7 +396,7 @@ const OilChangeWizard = ({
         ) : (
           <>
             <Button onClick={() => setActiveStep(0)} disabled={saving}>{t('sharedBack')}</Button>
-            <Button variant="contained" onClick={handleSave} disabled={saving}>
+            <Button variant="contained" onClick={handleSave} disabled={saving || changeMode === 'none'}>
               {t('sharedSave')}
             </Button>
           </>
