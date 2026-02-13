@@ -9,11 +9,15 @@ import { map } from '../map/core/MapView';
 import buracoIconUrl from '../resources/images/icon/035_pothole.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/bump-ahead-sign-icon.svg';
+import faixaPedestreIconUrl from '../resources/images/icon/community-faixa-pedestre.svg';
+import sinalTransitoIconUrl from '../resources/images/icon/community-sinal-transito.svg';
 
 const typeLabelMap = {
   RADAR: 'Radar',
   BURACO: 'Buraco',
   QUEBRA_MOLAS: 'Lombada',
+  FAIXA_PEDESTRE: 'Faixa de Pedestre',
+  SINAL_TRANSITO: 'Sinal de Transito',
 };
 
 const MapPendingReports = ({
@@ -32,6 +36,8 @@ const MapPendingReports = ({
     BURACO: `${id}-pending-icon-buraco`,
     RADAR: `${id}-pending-icon-radar`,
     QUEBRA_MOLAS: `${id}-pending-icon-quebra-molas`,
+    FAIXA_PEDESTRE: `${id}-pending-icon-faixa-pedestre`,
+    SINAL_TRANSITO: `${id}-pending-icon-sinal-transito`,
   }), [id]);
 
   const features = useMemo(() => {
@@ -80,6 +86,8 @@ const MapPendingReports = ({
       { imageId: imageIds.BURACO, iconUrl: buracoIconUrl },
       { imageId: imageIds.RADAR, iconUrl: radarIconUrl },
       { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
+      { imageId: imageIds.FAIXA_PEDESTRE, iconUrl: faixaPedestreIconUrl },
+      { imageId: imageIds.SINAL_TRANSITO, iconUrl: sinalTransitoIconUrl },
     ];
 
     const loadSvgAsMapImage = (imageId, iconUrl) => {
@@ -127,9 +135,13 @@ const MapPendingReports = ({
           imageIds.BURACO,
           'QUEBRA_MOLAS',
           imageIds.QUEBRA_MOLAS,
-          imageIds.RADAR,
+          'FAIXA_PEDESTRE',
+          imageIds.FAIXA_PEDESTRE,
+          'SINAL_TRANSITO',
+          imageIds.SINAL_TRANSITO,
+          imageIds.BURACO,
         ],
-        'icon-size': ['*', 0.6, ['match', ['get', 'type'], 'RADAR', 1.1, 'QUEBRA_MOLAS', 1.1, 1]],
+        'icon-size': ['*', 0.6, ['match', ['get', 'type'], 'RADAR', 1.1, 'QUEBRA_MOLAS', 1.1, 'FAIXA_PEDESTRE', 1.0, 'SINAL_TRANSITO', 1.0, 1]],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-padding': 8,

@@ -26,6 +26,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import SpeedIcon from '@mui/icons-material/Speed';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk';
+import TrafficIcon from '@mui/icons-material/Traffic';
 import MapView from '../map/core/MapView';
 import MapSelectedDevice from '../map/main/MapSelectedDevice';
 import MapAccuracy from '../map/main/MapAccuracy';
@@ -100,6 +102,8 @@ const COMMUNITY_TYPES = [
   { key: 'BURACO', label: 'Buraco', icon: DangerousIcon },
   { key: 'QUEBRA_MOLAS', label: 'Lombada', icon: SpeedIcon },
   { key: 'RADAR', label: 'Radar', icon: CameraAltIcon },
+  { key: 'FAIXA_PEDESTRE', label: 'Faixa de Pedestre', icon: DirectionsWalkIcon },
+  { key: 'SINAL_TRANSITO', label: 'Sinal de Transito', icon: TrafficIcon },
 ];
 
 const RADAR_SPEED_OPTIONS = [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
@@ -418,7 +422,7 @@ const MainMap = ({
     const backendCode = (codeMatch?.[1] || '').toUpperCase();
 
     if (backendCode.includes('DUPLICATE') || backendCode.includes('TOO_CLOSE')) {
-      return 'Ja existe um buraco marcado aqui.';
+      return 'Ja existe um aviso parecido aqui.';
     }
     if (backendCode.includes('COOLDOWN_ACTIVE')) {
       return 'Aguarde 30s para enviar outro aviso.';
@@ -430,7 +434,7 @@ const MainMap = ({
       return 'Localizacao invalida no mapa. Tente novamente.';
     }
     if (text.includes('DUPLICATE_NEARBY')) {
-      return 'Ja existe um buraco marcado aqui.';
+      return 'Ja existe um aviso parecido aqui.';
     }
     if (text.includes('COOLDOWN_ACTIVE')) {
       return 'Aguarde 30s para enviar outro aviso.';
@@ -781,7 +785,7 @@ const MainMap = ({
 
     const announced = phoneAssistAnnouncedRef.current;
     if (phoneAssistPermission === 'denied' && announced.permission !== 'denied') {
-      showFollowMessage('GPS do celular negado. Libere a localização no Android.', 'warning');
+      showFollowMessage('GPS do celular negado. Libere a localização no celular.', 'warning');
     }
     announced.permission = phoneAssistPermission;
 
@@ -1303,7 +1307,7 @@ const MainMap = ({
     setReportClickPosition(null);
     setReportTypeWaitingClick(type);
     setWaitingForMapClick(true);
-    showFollowMessage(`Clique no mapa onde esta a ${getCommunityTypeLabel(type).toLowerCase()}.`, 'info');
+    showFollowMessage(`Clique no mapa no local do aviso: ${getCommunityTypeLabel(type)}.`, 'info');
   }, [showFollowMessage]);
 
   useEffect(() => {

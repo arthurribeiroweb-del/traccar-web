@@ -47,6 +47,10 @@ const typeLabel = (type) => {
       return 'Buraco';
     case 'QUEBRA_MOLAS':
       return 'Lombada';
+    case 'FAIXA_PEDESTRE':
+      return 'Faixa de Pedestre';
+    case 'SINAL_TRANSITO':
+      return 'Sinal de Transito';
     default:
       return type || '-';
   }
@@ -89,7 +93,9 @@ const CommunityReportsPendingPage = () => {
 
   const displayItems = items.filter((item) => item.type === 'BURACO'
     || item.type === 'QUEBRA_MOLAS'
-    || item.type === 'RADAR');
+    || item.type === 'RADAR'
+    || item.type === 'FAIXA_PEDESTRE'
+    || item.type === 'SINAL_TRANSITO');
 
   const loadItems = useCatch(async () => {
     setLoading(true);
@@ -234,7 +240,7 @@ const CommunityReportsPendingPage = () => {
               </Button>
             </Stack>
             <Typography variant="h6" sx={{ mb: 2 }}>
-              {pendingMode ? 'Buracos pendentes para aprovacao' : 'Buracos ativos no mapa'}
+              {pendingMode ? 'Avisos pendentes para aprovacao' : 'Avisos ativos no mapa'}
             </Typography>
             {inlineError && (
               <Typography variant="body2" color="error" sx={{ mb: 2 }}>
@@ -345,7 +351,7 @@ const CommunityReportsPendingPage = () => {
                 {!loading && displayItems.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} align="center">
-                      {pendingMode ? 'Nenhum buraco pendente.' : 'Nenhum buraco ativo.'}
+                      {pendingMode ? 'Nenhum aviso pendente.' : 'Nenhum aviso ativo.'}
                     </TableCell>
                   </TableRow>
                 )}

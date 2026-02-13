@@ -12,11 +12,15 @@ import fetchOrThrow from '../common/util/fetchOrThrow';
 import buracoIconUrl from '../resources/images/icon/035_pothole.svg';
 import radarIconUrl from '../resources/images/icon/community-radar.png';
 import quebraMolasIconUrl from '../resources/images/icon/bump-ahead-sign-icon.svg';
+import faixaPedestreIconUrl from '../resources/images/icon/community-faixa-pedestre.svg';
+import sinalTransitoIconUrl from '../resources/images/icon/community-sinal-transito.svg';
 
 const typeLabelMap = {
   RADAR: 'Radar',
   BURACO: 'Buraco',
   QUEBRA_MOLAS: 'Lombada',
+  FAIXA_PEDESTRE: 'Faixa de Pedestre',
+  SINAL_TRANSITO: 'Sinal de Transito',
 };
 
 const statusLabelMap = {
@@ -178,6 +182,8 @@ const MapCommunityReports = ({
     BURACO_APPROVED: `${id}-community-icon-buraco-approved`,
     RADAR: `${id}-community-icon-radar`,
     QUEBRA_MOLAS: `${id}-community-icon-quebra-molas`,
+    FAIXA_PEDESTRE: `${id}-community-icon-faixa-pedestre`,
+    SINAL_TRANSITO: `${id}-community-icon-sinal-transito`,
   }), [id]);
 
   const features = useMemo(() => {
@@ -221,6 +227,8 @@ const MapCommunityReports = ({
       { imageId: imageIds.BURACO_APPROVED, iconUrl: buracoIconUrl },
       { imageId: imageIds.RADAR, iconUrl: radarIconUrl },
       { imageId: imageIds.QUEBRA_MOLAS, iconUrl: quebraMolasIconUrl },
+      { imageId: imageIds.FAIXA_PEDESTRE, iconUrl: faixaPedestreIconUrl },
+      { imageId: imageIds.SINAL_TRANSITO, iconUrl: sinalTransitoIconUrl },
     ];
 
     const loadSvgAsMapImage = (imageId, iconUrl) => {
@@ -268,7 +276,11 @@ const MapCommunityReports = ({
           ['case', ['to-boolean', ['get', 'pending']], imageIds.BURACO, imageIds.BURACO_APPROVED],
           'RADAR',
           imageIds.RADAR,
-          imageIds.RADAR,
+          'FAIXA_PEDESTRE',
+          imageIds.FAIXA_PEDESTRE,
+          'SINAL_TRANSITO',
+          imageIds.SINAL_TRANSITO,
+          imageIds.BURACO_APPROVED,
         ],
         // icon-size must have zoom at the top level; apply type scaling per stop
         'icon-size': [
@@ -276,11 +288,11 @@ const MapCommunityReports = ({
           ['linear'],
           ['zoom'],
           16,
-          ['*', 0.35, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
+          ['*', 0.35, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 'FAIXA_PEDESTRE', 1.0, 'SINAL_TRANSITO', 1.0, 1.0]],
           17.5,
-          ['*', 0.45, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
+          ['*', 0.45, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 'FAIXA_PEDESTRE', 1.0, 'SINAL_TRANSITO', 1.0, 1.0]],
           19,
-          ['*', 0.55, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 1.1]],
+          ['*', 0.55, ['match', ['get', 'type'], 'BURACO', 0.8, 'RADAR', 1.1, 'FAIXA_PEDESTRE', 1.0, 'SINAL_TRANSITO', 1.0, 1.0]],
         ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
@@ -371,6 +383,18 @@ const MapCommunityReports = ({
           border: '#FDA4AF',
           closeBg: '#FEE2E2',
         },
+        FAIXA_PEDESTRE: {
+          accent: '#0C4A6E',
+          accentSoft: '#F0F9FF',
+          border: '#7DD3FC',
+          closeBg: '#E0F2FE',
+        },
+        SINAL_TRANSITO: {
+          accent: '#166534',
+          accentSoft: '#F0FDF4',
+          border: '#86EFAC',
+          closeBg: '#DCFCE7',
+        },
       };
       const theme = typeThemeMap[type] || {
         accent: '#334155',
@@ -383,6 +407,8 @@ const MapCommunityReports = ({
         BURACO: 'Buraco na pista',
         QUEBRA_MOLAS: 'Lombada na pista',
         RADAR: 'Radar na pista',
+        FAIXA_PEDESTRE: 'Faixa de pedestre',
+        SINAL_TRANSITO: 'Sinal de transito',
       };
 
       const container = document.createElement('div');
@@ -804,4 +830,3 @@ const MapCommunityReports = ({
 };
 
 export default MapCommunityReports;
-
