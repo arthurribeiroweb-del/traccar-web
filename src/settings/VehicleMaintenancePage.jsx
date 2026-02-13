@@ -26,8 +26,10 @@ import SettingsMenu from './components/SettingsMenu';
 import useSettingsStyles from './common/useSettingsStyles';
 import {
   computeOilStatus,
+  deriveCurrentOdometerKm,
   formatDateLabel,
   formatOdometer,
+  getPositionDistanceKm,
   getOilConfig,
   OIL_SAVE_MAX_ATTEMPTS,
   OIL_SAVE_RETRY_DELAY_MS,
@@ -102,6 +104,7 @@ const VehicleMaintenancePage = () => {
   const dispatch = useDispatch();
   const devicesMap = useSelector((state) => state.devices.items || {});
   const selectedStoreDeviceId = useSelector((state) => state.devices.selectedId);
+  const livePositions = useSelector((state) => state.session.positions || {});
 
   const [selectedDeviceId, setSelectedDeviceId] = useState(null);
   const [deviceOverrides, setDeviceOverrides] = useState({});
@@ -152,7 +155,24 @@ const VehicleMaintenancePage = () => {
   );
 
   const oilConfig = useMemo(() => getOilConfig(selectedDevice), [selectedDevice]);
-  const oilStatus = useMemo(() => computeOilStatus(oilConfig), [oilConfig]);
+  const selectedLivePosition = useMemo(
+    () => (selectedDevice ? livePositions[selectedDevice.id] || null : null),
+    [livePositions, selectedDevice],
+  );
+  const effectiveCurrentKm = useMemo(
+    () => deriveCurrentOdometerKm(oilConfig, selectedLivePosition),
+    [oilConfig, selectedLivePosition],
+  );
+  const effectiveOilConfig = useMemo(() => {
+    if (!oilConfig) {
+      return oilConfig;
+    }
+    return {
+      ...oilConfig,
+      odometerCurrent: effectiveCurrentKm ?? oilConfig.odometerCurrent,
+    };
+  }, [effectiveCurrentKm, oilConfig]);
+  const oilStatus = useMemo(() => computeOilStatus(effectiveOilConfig), [effectiveOilConfig]);
 
   const showError = useCallback((message, retryHandler = null) => {
     retryActionRef.current = retryHandler;
@@ -193,7 +213,7 @@ const VehicleMaintenancePage = () => {
       },
     });
 
-    const nextDevice = buildDeviceWithOil(selectedDevice, nextOilConfig);
+    const nextDevice = buildDeviceWithOil(selectedDevice, normalizedOilConfig);
 
     setLoading(true);
     setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: nextDevice }));
@@ -203,7 +223,7 @@ const VehicleMaintenancePage = () => {
       // CRITICAL: Always merge our oil config into the resolved device.
       // The API response may not preserve nested attributes, or may return
       // stale data from before the save propagated.
-      const resolvedDevice = buildDeviceWithOil(persisted || nextDevice, nextOilConfig);
+      const resolvedDevice = buildDeviceWithOil(persisted || nextDevice, normalizedOilConfig);
       setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: resolvedDevice }));
       dispatch(devicesActions.update([resolvedDevice]));
       showSuccess(successMessage);
@@ -214,7 +234,7 @@ const VehicleMaintenancePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDevice, dispatch, showSuccess, t]);
+  }, [selectedDevice, dispatch, selectedLivePosition, showSuccess, t]);
 
   const handleWizardSave = useCallback(async (nextOilConfig) => {
     try {
@@ -225,13 +245,13 @@ const VehicleMaintenancePage = () => {
   }, [saveOilConfig, t]);
 
   const handleToggleEnabled = useCallback(async () => {
-    if (!oilConfig) {
+    if (!effectiveOilConfig) {
       return;
     }
 
-    const nextEnabled = !(oilConfig.enabled !== false);
+    const nextEnabled = !(effectiveOilConfig?.enabled !== false);
     const nextOilConfig = {
-      ...oilConfig,
+      ...effectiveOilConfig,
       enabled: nextEnabled,
       updatedAt: new Date().toISOString(),
     };
@@ -244,14 +264,14 @@ const VehicleMaintenancePage = () => {
     } catch {
       showError(t('maintenanceSaveError'), handleToggleEnabled);
     }
-  }, [oilConfig, saveOilConfig, showError, t]);
+  }, [effectiveOilConfig, saveOilConfig, showError, t]);
 
   const handleConfirmMarkDone = useCallback(async () => {
-    if (!oilConfig) {
+    if (!effectiveOilConfig) {
       return;
     }
 
-    const odometerCurrent = Number(oilConfig.odometerCurrent);
+    const odometerCurrent = Number(effectiveOilConfig.odometerCurrent);
     if (!Number.isFinite(odometerCurrent)) {
       showError(t('maintenanceCurrentKmRequired'));
       return;
@@ -259,7 +279,7 @@ const VehicleMaintenancePage = () => {
 
     const now = new Date();
     const nextOilConfig = {
-      ...oilConfig,
+      ...effectiveOilConfig,
       enabled: true,
       lastServiceOdometer: odometerCurrent,
       lastServiceDate: now.toISOString(),
@@ -277,7 +297,7 @@ const VehicleMaintenancePage = () => {
     } catch {
       showError(t('maintenanceSaveError'), handleConfirmMarkDone);
     }
-  }, [oilConfig, saveOilConfig, showError, t]);
+  }, [effectiveOilConfig, saveOilConfig, showError, t]);
 
   return (
     <PageLayout menu={<SettingsMenu />} breadcrumbs={['settingsTitle', 'maintenanceMenuTitle']}>
@@ -305,7 +325,7 @@ const VehicleMaintenancePage = () => {
           {selectedDevice && (
             <>
               <OilChangeCard
-                oilConfig={oilConfig}
+                oilConfig={effectiveOilConfig}
                 onConfigure={() => setWizardOpen(true)}
                 onEdit={() => setWizardOpen(true)}
                 onMarkDone={() => setConfirmOpen(true)}
@@ -335,7 +355,7 @@ const VehicleMaintenancePage = () => {
         <DialogContent>
           <Typography variant="body2">
             {t('maintenanceConfirmText')
-              .replace('{{km}}', formatOdometer(oilConfig?.odometerCurrent))
+              .replace('{{km}}', formatOdometer(effectiveOilConfig?.odometerCurrent))
               .replace('{{date}}', formatDateLabel(new Date()))}
           </Typography>
         </DialogContent>
@@ -379,3 +399,18 @@ const VehicleMaintenancePage = () => {
 };
 
 export default VehicleMaintenancePage;
+    const attachBaseline = (oilData) => {
+      const distanceKm = getPositionDistanceKm(selectedLivePosition);
+      const currentKm = deriveCurrentOdometerKm(oilData, selectedLivePosition);
+      if (distanceKm == null || currentKm == null) {
+        return oilData;
+      }
+      return {
+        ...oilData,
+        odometerCurrent: currentKm,
+        baselineDistanceKm: distanceKm,
+        baselineOdometerKm: currentKm,
+      };
+    };
+
+    const normalizedOilConfig = attachBaseline(nextOilConfig);

@@ -95,6 +95,56 @@ export const diffInDays = (fromDate, toDate) => {
 
 export const getOilConfig = (device) => device?.attributes?.maintenance?.oil || null;
 
+const toKmFromMeters = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.round(parsed / 1000);
+};
+
+export const getPositionDistanceKm = (position) => {
+  const odometerKm = toKmFromMeters(position?.attributes?.odometer);
+  const totalDistanceKm = toKmFromMeters(position?.attributes?.totalDistance);
+  if (odometerKm == null) {
+    return totalDistanceKm;
+  }
+  if (totalDistanceKm == null) {
+    return odometerKm;
+  }
+  return Math.max(odometerKm, totalDistanceKm);
+};
+
+export const deriveCurrentOdometerKm = (oilConfig, position) => {
+  const configuredKm = toInteger(oilConfig?.odometerCurrent);
+  const positionKm = getPositionDistanceKm(position);
+  const baselineDistanceKm = toInteger(oilConfig?.baselineDistanceKm);
+  const baselineOdometerKm = toInteger(oilConfig?.baselineOdometerKm);
+  const baselineKm = (
+    positionKm != null
+    && baselineDistanceKm != null
+    && baselineOdometerKm != null
+  )
+    ? baselineOdometerKm + Math.max(0, positionKm - baselineDistanceKm)
+    : null;
+
+  if (configuredKm == null) {
+    if (baselineKm == null) {
+      return positionKm;
+    }
+    return positionKm == null ? baselineKm : Math.max(positionKm, baselineKm);
+  }
+
+  let result = configuredKm;
+  if (positionKm != null) {
+    result = Math.max(result, positionKm);
+  }
+  if (baselineKm != null) {
+    result = Math.max(result, baselineKm);
+  }
+  return result;
+};
+
 export const computeOilStatus = (oilConfig, todayInput = new Date()) => {
   const today = normalizeDate(todayInput) || new Date();
   const enabled = oilConfig?.enabled !== false;
@@ -184,4 +234,3 @@ export const getPlanLabel = (oilConfig) => {
   }
   return '-';
 };
-
