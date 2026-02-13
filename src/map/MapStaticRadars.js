@@ -17,25 +17,6 @@ import speed40IconUrl from '../resources/images/icon/speed-limit-40-sign-icon.sv
 import speed50IconUrl from '../resources/images/icon/speed-limit-50-sign-icon.svg';
 import speed60IconUrl from '../resources/images/icon/speed-limit-60-sign-icon.svg';
 import speed70IconUrl from '../resources/images/icon/speed-limit-70-sign-icon.svg';
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import circle from '@turf/circle';
-import maplibregl from 'maplibre-gl';
-import { useSelector } from 'react-redux';
-import { map } from './core/MapView';
-import radarIconUrl from '../resources/images/icon/community-radar.svg';
-import speed20IconUrl from '../resources/images/icon/speed-limit-20-sign-icon.svg';
-import speed30IconUrl from '../resources/images/icon/speed-limit-30-sign-icon.svg';
-import speed40IconUrl from '../resources/images/icon/speed-limit-40-sign-icon.svg';
-import speed50IconUrl from '../resources/images/icon/speed-limit-50-sign-icon.svg';
-import speed60IconUrl from '../resources/images/icon/speed-limit-60-sign-icon.svg';
-import speed70IconUrl from '../resources/images/icon/speed-limit-70-sign-icon.svg';
 import speed80IconUrl from '../resources/images/icon/speed-limit-80-sign-icon.svg';
 import speed90IconUrl from '../resources/images/icon/speed-limit-90-sign-icon.svg';
 import speed100IconUrl from '../resources/images/icon/speed-limit-100-sign-icon.svg';
