@@ -3,7 +3,7 @@ import {
 } from 'react';
 import { useDispatch, useSelector, connect } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Snackbar } from '@mui/material';
+import { Button, Snackbar } from '@mui/material';
 import { devicesActions, sessionActions } from './store';
 import { useCatchCallback, useEffectAsync } from './reactHelper';
 import { snackBarDurationLongMs } from './common/util/duration';
@@ -44,6 +44,7 @@ const SocketController = () => {
   const navigate = useNavigate();
 
   const authenticated = useSelector((state) => Boolean(state.session.user));
+  const devicesMap = useSelector((state) => state.devices.items || {});
   const userId = useSelector((state) => state.session.user?.id);
   const includeLogs = useSelector((state) => state.session.includeLogs);
 
@@ -88,12 +89,59 @@ const SocketController = () => {
         || (e.type === 'alarm' && soundAlarms.includes(e.attributes?.alarm)))) {
       new Audio(alarm).play();
     }
-    setNotifications(events.map((event) => ({
-      id: event.id,
-      message: event.attributes?.message,
-      show: true,
-    })));
-  }, [features, dispatch, soundEvents, soundAlarms, userId]);
+
+    const genericNotifications = events
+      .filter((event) => event.attributes?.message)
+      .map((event) => ({
+        id: event.id ?? `evt-${Date.now()}`,
+        message: event.attributes.message,
+        show: true,
+      }));
+
+    const oilEvents = events.filter((e) => e.type === 'oilChangeSoon' || e.type === 'oilChangeDue');
+    const built = oilEvents.map((event) => {
+      const notificationId = `oil-${event.id ?? `${event.deviceId}-${Date.now()}`}`;
+      const device = devicesMap[event.deviceId] || {};
+      const name = device.name || device.uniqueId || `Veículo ${event.deviceId}`;
+      const kmRemaining = event.attributes?.oilKmRemaining;
+      const daysRemaining = event.attributes?.oilDaysRemaining;
+      const dueKm = event.attributes?.oilDueKm;
+      const dueDate = event.attributes?.oilDueDate;
+
+      let message = '';
+      if (event.type === 'oilChangeDue') {
+        message = `${name}: troca de óleo necessária`;
+      } else {
+        const parts = [];
+        if (kmRemaining != null) parts.push(`faltam ${kmRemaining} km`);
+        if (daysRemaining != null) parts.push(`faltam ${daysRemaining} dias`);
+        const suffix = parts.length ? parts.join(' · ') : 'troca de óleo em breve';
+        message = `${name}: ${suffix}`;
+      }
+      if (dueKm != null) {
+        message += ` • alvo ${dueKm} km`;
+      } else if (dueDate) {
+        message += ` • alvo ${dueDate}`;
+      }
+
+      return {
+        id: notificationId,
+        message,
+        show: true,
+        action: () => {
+          navigate(`/settings/maintenance-center?deviceId=${event.deviceId}`);
+          setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+        },
+      };
+    });
+
+    if (genericNotifications.length || built.length) {
+      if (built.length) {
+        console.debug('[OilChange] snackbar events', built);
+      }
+      setNotifications((prev) => [...built, ...genericNotifications, ...prev]);
+    }
+  }, [features, dispatch, soundEvents, soundAlarms, userId, devicesMap, navigate]);
 
   const scheduleReconnect = useCallback(() => {
     clearReconnectTimeout();
@@ -245,6 +293,11 @@ const SocketController = () => {
           open={notification.show}
           message={notification.message}
           autoHideDuration={snackBarDurationLongMs}
+          action={notification.action ? (
+            <Button color="secondary" size="small" onClick={notification.action}>
+              Ver
+            </Button>
+          ) : null}
           onClose={() => setNotifications(notifications.filter((e) => e.id !== notification.id))}
         />
       ))}

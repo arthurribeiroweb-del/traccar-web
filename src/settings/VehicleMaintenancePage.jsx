@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useLocation } from 'react-router-dom';
 import {
   Alert,
   Button,
@@ -102,6 +103,7 @@ const VehicleMaintenancePage = () => {
   const { classes } = useSettingsStyles();
   const t = useTranslation();
   const dispatch = useDispatch();
+  const location = useLocation();
   const devicesMap = useSelector((state) => state.devices.items || {});
   const livePositions = useSelector((state) => state.session.positions || {});
 
@@ -127,6 +129,15 @@ const VehicleMaintenancePage = () => {
     () => baseDevices.map((device) => deviceOverrides[device.id] || device),
     [baseDevices, deviceOverrides],
   );
+
+  // Preselect by query param deviceId, otherwise follow existing rules
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const requestedId = params.get('deviceId');
+    if (requestedId && devices.some((d) => String(d.id) === String(requestedId))) {
+      setSelectedDeviceId(requestedId);
+    }
+  }, [location.search, devices]);
 
   useEffect(() => {
     if (!devices.length) {
