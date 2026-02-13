@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   Alert,
   Button,
@@ -36,6 +36,7 @@ import {
 import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import OilChangeCard from './maintenance/OilChangeCard';
 import OilChangeWizard from './maintenance/OilChangeWizard';
+import { devicesActions } from '../store';
 
 const wait = (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
 
@@ -98,6 +99,7 @@ const putDeviceWithRetry = async (device) => {
 const VehicleMaintenancePage = () => {
   const { classes } = useSettingsStyles();
   const t = useTranslation();
+  const dispatch = useDispatch();
   const devicesMap = useSelector((state) => state.devices.items || {});
   const selectedStoreDeviceId = useSelector((state) => state.devices.selectedId);
 
@@ -196,6 +198,7 @@ const VehicleMaintenancePage = () => {
       const persisted = await putDeviceWithRetry(nextDevice);
       const resolvedDevice = persisted || nextDevice;
       setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: resolvedDevice }));
+      dispatch(devicesActions.update([resolvedDevice]));
       showSuccess(successMessage);
       return resolvedDevice;
     } catch (error) {
