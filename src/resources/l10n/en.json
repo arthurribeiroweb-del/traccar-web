@@ -570,6 +570,7 @@
     "eventIgnitionOn": "Ignition on",
     "eventIgnitionOff": "Ignition off",
     "eventMaintenance": "Maintenance required",
+    "eventOilChangeDue": "Oil change required",
     "eventTextMessage": "Text message received",
     "eventDriverChanged": "Driver changed",
     "eventMedia": "Media",

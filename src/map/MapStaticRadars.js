@@ -17,6 +17,25 @@ import speed40IconUrl from '../resources/images/icon/speed-limit-40-sign-icon.sv
 import speed50IconUrl from '../resources/images/icon/speed-limit-50-sign-icon.svg';
 import speed60IconUrl from '../resources/images/icon/speed-limit-60-sign-icon.svg';
 import speed70IconUrl from '../resources/images/icon/speed-limit-70-sign-icon.svg';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import circle from '@turf/circle';
+import maplibregl from 'maplibre-gl';
+import { useSelector } from 'react-redux';
+import { map } from './core/MapView';
+import radarIconUrl from '../resources/images/icon/community-radar.svg';
+import speed20IconUrl from '../resources/images/icon/speed-limit-20-sign-icon.svg';
+import speed30IconUrl from '../resources/images/icon/speed-limit-30-sign-icon.svg';
+import speed40IconUrl from '../resources/images/icon/speed-limit-40-sign-icon.svg';
+import speed50IconUrl from '../resources/images/icon/speed-limit-50-sign-icon.svg';
+import speed60IconUrl from '../resources/images/icon/speed-limit-60-sign-icon.svg';
+import speed70IconUrl from '../resources/images/icon/speed-limit-70-sign-icon.svg';
 import speed80IconUrl from '../resources/images/icon/speed-limit-80-sign-icon.svg';
 import speed90IconUrl from '../resources/images/icon/speed-limit-90-sign-icon.svg';
 import speed100IconUrl from '../resources/images/icon/speed-limit-100-sign-icon.svg';
@@ -25,6 +44,12 @@ import speed120IconUrl from '../resources/images/icon/speed-limit-120-sign-icon.
 import beepSoundUrl from '../resources/bipe.mp3';
 import { useAdministrator } from '../common/util/permissions';
 import fetchOrThrow from '../common/util/fetchOrThrow';
+import {
+  getRadarSpeedLimitKph,
+  getRadarRadiusMeters,
+  isRadarActive,
+  parseCircleArea,
+} from '../common/util/radar';
 
 const STATIC_RADARS_MIN_ZOOM = 10;
 const RADAR_ICON_BASE_SIZE = 64;
@@ -381,8 +406,8 @@ const normalizeStaticRadarsData = (data, radiusOverrides = {}) => {
         const radiusMeters = Number.isFinite(overrideRadius) && overrideRadius > 0
           ? overrideRadius
           : Number.isFinite(rawRadius) && rawRadius > 0
-          ? rawRadius
-          : STATIC_RADARS_DEFAULT_RADIUS_METERS;
+            ? rawRadius
+            : STATIC_RADARS_DEFAULT_RADIUS_METERS;
 
         return {
           ...feature,
@@ -405,6 +430,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
   const id = useId();
   const isAdmin = useAdministrator();
   const selectedId = useSelector((state) => state.devices.selectedId);
+  const geofences = useSelector((state) => state.geofences.items);
   const positionsByDeviceId = useSelector((state) => state.session.positions || {});
   const trackedSelectedPosition = selectedId != null ? positionsByDeviceId[selectedId] : null;
   const selectedPosition = useMemo(() => (
@@ -418,6 +444,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
   const popupRef = useRef(null);
   const sourceDataRef = useRef(EMPTY_FEATURE_COLLECTION);
   const proximityIndexRef = useRef({ cells: new Map(), maxRadiusMeters: STATIC_RADARS_DEFAULT_RADIUS_METERS });
+  const dynamicProximityIndexRef = useRef({ cells: new Map(), maxRadiusMeters: STATIC_RADARS_DEFAULT_RADIUS_METERS });
   const dataLoadedRef = useRef(false);
   const dataLoadingRef = useRef(false);
   const deferredLoadTimerRef = useRef(null);
@@ -442,7 +469,6 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
     SPEED_110: `${id}-static-radars-110`,
     SPEED_120: `${id}-static-radars-120`,
   }), [id]);
-
   const clearAlertSequence = useCallback(() => {
     alertSequenceTimersRef.current.forEach((timerId) => {
       window.clearTimeout(timerId);
@@ -462,7 +488,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       }
       alertAudioRef.current.pause();
       alertAudioRef.current.currentTime = 0;
-      alertAudioRef.current.play().catch(() => {});
+      alertAudioRef.current.play().catch(() => { });
     };
 
     playOnce();
@@ -471,6 +497,44 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
       alertSequenceTimersRef.current.push(timerId);
     }
   }, [clearAlertSequence]);
+
+  const activeGeofenceRadars = useMemo(() => {
+    return Object.values(geofences)
+      .filter((geofence) => isRadarActive(geofence))
+      .map((geofence) => {
+        const circleArea = parseCircleArea(geofence.area);
+        let coordinates;
+        if (circleArea) {
+          coordinates = [circleArea.longitude, circleArea.latitude];
+        } else {
+          return null;
+        }
+
+        if (!coordinates || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) {
+          return null;
+        }
+
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates,
+          },
+          properties: {
+            externalId: `geofence-${geofence.id}`,
+            speedKph: getRadarSpeedLimitKph(geofence) || 0,
+            radiusMeters: getRadarRadiusMeters(geofence),
+            isDynamic: true,
+          },
+        };
+      })
+      .filter(Boolean);
+  }, [geofences]);
+
+  useEffect(() => {
+    dynamicProximityIndexRef.current = buildProximityIndex(activeGeofenceRadars);
+    setDataVersion((current) => current + 1);
+  }, [activeGeofenceRadars]);
 
   useEffect(() => {
     const onVisibilityChange = () => {
@@ -528,12 +592,34 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
     const courseDegrees = Number(selectedPosition.course);
     const warningDistanceMeters = computeWarningDistanceMeters(speedKnots);
     const queryRadiusMeters = warningDistanceMeters + PROXIMITY_QUERY_BUFFER_METERS;
-    const features = getProximityCandidates(
+
+    // Static features
+    const staticFeatures = getProximityCandidates(
       proximityIndexRef.current,
       latitude,
       longitude,
       queryRadiusMeters,
     );
+    // Dynamic features
+    const dynamicFeatures = getProximityCandidates(
+      dynamicProximityIndexRef.current,
+      latitude,
+      longitude,
+      queryRadiusMeters,
+    );
+
+    const features = [...staticFeatures, ...dynamicFeatures];
+
+    if (import.meta.env.DEV && (staticFeatures.length > 0 || dynamicFeatures.length > 0)) {
+      console.log('[RadarDebug] Candidates found:', {
+        lat: latitude.toFixed(5),
+        lng: longitude.toFixed(5),
+        speed: speedKnots.toFixed(1),
+        staticCount: staticFeatures.length,
+        dynamicCount: dynamicFeatures.length
+      });
+    }
+
     if (!features.length) {
       insideRadarKeysRef.current = new Set();
       return;
@@ -663,7 +749,7 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
           map.removeImage(imgId);
         }
       });
-      return () => {};
+      return () => { };
     }
 
     const iconEntries = [
@@ -918,8 +1004,8 @@ const MapStaticRadars = ({ enabled, selectedPositionOverride = null }) => {
           }
           const nextRadiusMeters = Number(radiusInput.value);
           if (!Number.isFinite(nextRadiusMeters)
-              || nextRadiusMeters < STATIC_RADARS_EDIT_MIN_RADIUS_METERS
-              || nextRadiusMeters > STATIC_RADARS_EDIT_MAX_RADIUS_METERS) {
+            || nextRadiusMeters < STATIC_RADARS_EDIT_MIN_RADIUS_METERS
+            || nextRadiusMeters > STATIC_RADARS_EDIT_MAX_RADIUS_METERS) {
             statusLine.style.color = '#B91C1C';
             statusLine.textContent = `Informe entre ${STATIC_RADARS_EDIT_MIN_RADIUS_METERS} e ${STATIC_RADARS_EDIT_MAX_RADIUS_METERS} metros.`;
             return;

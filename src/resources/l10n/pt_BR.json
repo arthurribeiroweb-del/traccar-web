@@ -568,6 +568,7 @@
     "eventIgnitionOn": "Ignição ligada",
     "eventIgnitionOff": "Ignição desligada",
     "eventMaintenance": "Manutenção necessária",
+    "eventOilChangeDue": "Troca de óleo necessária",
     "eventTextMessage": "Mensagem de texto recebida",
     "eventDriverChanged": "Condutor alterado",
     "eventMedia": "Media",
