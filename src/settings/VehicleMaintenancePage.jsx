@@ -213,6 +213,21 @@ const VehicleMaintenancePage = () => {
       },
     });
 
+    const attachBaseline = (oilData) => {
+      const distanceKm = getPositionDistanceKm(selectedLivePosition);
+      const currentKm = deriveCurrentOdometerKm(oilData, selectedLivePosition);
+      if (distanceKm == null || currentKm == null) {
+        return oilData;
+      }
+      return {
+        ...oilData,
+        odometerCurrent: currentKm,
+        baselineDistanceKm: distanceKm,
+        baselineOdometerKm: currentKm,
+      };
+    };
+
+    const normalizedOilConfig = attachBaseline(nextOilConfig);
     const nextDevice = buildDeviceWithOil(selectedDevice, normalizedOilConfig);
 
     setLoading(true);
@@ -399,18 +414,3 @@ const VehicleMaintenancePage = () => {
 };
 
 export default VehicleMaintenancePage;
-    const attachBaseline = (oilData) => {
-      const distanceKm = getPositionDistanceKm(selectedLivePosition);
-      const currentKm = deriveCurrentOdometerKm(oilData, selectedLivePosition);
-      if (distanceKm == null || currentKm == null) {
-        return oilData;
-      }
-      return {
-        ...oilData,
-        odometerCurrent: currentKm,
-        baselineDistanceKm: distanceKm,
-        baselineOdometerKm: currentKm,
-      };
-    };
-
-    const normalizedOilConfig = attachBaseline(nextOilConfig);
