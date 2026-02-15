@@ -10,6 +10,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Alert,
   Button,
+  Chip,
   Container,
   Dialog,
   DialogActions,
@@ -40,6 +41,7 @@ import { getDeviceDisplayName } from '../common/util/deviceUtils';
 import OilChangeCard from './maintenance/OilChangeCard';
 import OilChangeWizard from './maintenance/OilChangeWizard';
 import { devicesActions } from '../store';
+import { computeTireRotationSchedule, DEFAULT_INTERVAL_KM, ALT_INTERVAL_KM } from '../common/util/tireRotation';
 
 const wait = (ms) => new Promise((resolve) => { window.setTimeout(resolve, ms); });
 
@@ -183,6 +185,32 @@ const VehicleMaintenancePage = () => {
   }, [effectiveCurrentKm, oilConfig]);
   const oilStatus = useMemo(() => computeOilStatus(effectiveOilConfig), [effectiveOilConfig]);
 
+  // Tire rotation config
+  const tireConfig = useMemo(() => selectedDevice?.attributes?.maintenance?.tireRotation || {}, [selectedDevice]);
+  const [tireIntervalKm, setTireIntervalKm] = useState(DEFAULT_INTERVAL_KM);
+  const [tireReminderKm] = useState(1000);
+  const [tireLastKm, setTireLastKm] = useState('');
+  const [tireLastDate, setTireLastDate] = useState('');
+
+  useEffect(() => {
+    setTireIntervalKm(Number(tireConfig?.intervalKm) || DEFAULT_INTERVAL_KM);
+    setTireLastKm(tireConfig?.lastRotationOdometerKm != null ? String(tireConfig.lastRotationOdometerKm) : '');
+    setTireLastDate(tireConfig?.lastRotationDate ? tireConfig.lastRotationDate.slice(0, 10) : '');
+  }, [tireConfig]);
+
+  const tireSchedule = useMemo(() => {
+    if (!selectedDevice) return null;
+    const schedule = computeTireRotationSchedule(
+      {
+        intervalKm: tireIntervalKm,
+        reminderThresholdKm: tireReminderKm,
+        lastRotationOdometerKm: Number(tireLastKm),
+      },
+      effectiveCurrentKm,
+    );
+    return schedule;
+  }, [selectedDevice, tireIntervalKm, tireReminderKm, tireLastKm, effectiveCurrentKm]);
+
   const showError = useCallback((message, retryHandler = null) => {
     retryActionRef.current = retryHandler;
     setToast({
@@ -294,6 +322,54 @@ const VehicleMaintenancePage = () => {
     }
   }, [effectiveOilConfig, saveOilConfig, showError, t]);
 
+  const saveTireRotation = useCallback(async () => {
+    if (!selectedDevice) {
+      showError(t('maintenanceVehicleRequired'));
+      return;
+    }
+    const lastKm = Number(tireLastKm);
+    if (!Number.isFinite(lastKm) || lastKm <= 0) {
+      showError('Informe o km do último rodízio.');
+      return;
+    }
+    const updated = {
+      ...(selectedDevice.attributes || {}),
+      maintenance: {
+        ...(selectedDevice.attributes?.maintenance || {}),
+        tireRotation: {
+          intervalKm: Number(tireIntervalKm) || DEFAULT_INTERVAL_KM,
+          reminderThresholdKm: Number(tireReminderKm) || 1000,
+          lastRotationOdometerKm: lastKm,
+          lastRotationDate: tireLastDate || null,
+        },
+      },
+    };
+    const nextDevice = { ...selectedDevice, attributes: updated };
+    setLoading(true);
+    setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: nextDevice }));
+    try {
+      const persisted = await putDeviceWithRetry(nextDevice);
+      const resolved = { ...(persisted || nextDevice) };
+      setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: resolved }));
+      dispatch(devicesActions.update([resolved]));
+      showSuccess('Rodízio salvo.');
+    } catch (error) {
+      setDeviceOverrides((prev) => ({ ...prev, [selectedDevice.id]: selectedDevice }));
+      showError(t('maintenanceSaveError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    selectedDevice,
+    tireIntervalKm,
+    tireReminderKm,
+    tireLastKm,
+    tireLastDate,
+    dispatch,
+    showError,
+    showSuccess,
+  ]);
+
   const handleConfirmMarkDone = useCallback(async () => {
     if (!effectiveOilConfig) {
       return;
@@ -369,6 +445,112 @@ const VehicleMaintenancePage = () => {
                 onToggleEnabled={handleToggleEnabled}
                 loading={loading}
               />
+
+              {/* Tire rotation module */}
+              <Stack spacing={2} sx={{ border: '1px solid #333', borderRadius: 2, p: 2 }}>
+                <Typography variant="h6">Rodízio de pneus</Typography>
+
+                <Typography variant="subtitle2">Configuração</Typography>
+                <Stack direction="row" spacing={2}>
+                  {[DEFAULT_INTERVAL_KM, ALT_INTERVAL_KM].map((value) => (
+                    <Button
+                      key={value}
+                      variant={tireIntervalKm === value ? 'contained' : 'outlined'}
+                      size="small"
+                      onClick={() => setTireIntervalKm(value)}
+                    >
+                      {value.toLocaleString('pt-BR')} km
+                    </Button>
+                  ))}
+                </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  Lembrete antes: {tireReminderKm.toLocaleString('pt-BR')} km
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={saveTireRotation}
+                  disabled={loading}
+                >
+                  Salvar
+                </Button>
+
+                <Typography variant="subtitle2" sx={{ mt: 1 }}>Último rodízio</Typography>
+                <TextField
+                  label="KM no último rodízio"
+                  value={tireLastKm}
+                  onChange={(e) => setTireLastKm(e.target.value.replace(/\D/g, ''))}
+                  inputProps={{ inputMode: 'numeric', min: 1 }}
+                  fullWidth
+                />
+                <TextField
+                  type="date"
+                  label="Data (opcional)"
+                  value={tireLastDate}
+                  onChange={(e) => setTireLastDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                />
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={saveTireRotation}
+                  disabled={loading}
+                >
+                  Salvar base
+                </Button>
+
+                <Typography variant="subtitle2" sx={{ mt: 1 }}>Próxima previsão</Typography>
+                {tireSchedule ? (
+                  <Stack spacing={1}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="body1">
+                        Próximo rodízio em: {tireSchedule.nextDueOdometerKm.toLocaleString('pt-BR')} km
+                      </Typography>
+                      <Chip
+                        label={
+                          tireSchedule.status === 'OVERDUE'
+                            ? 'ATRASADO'
+                            : tireSchedule.status === 'DUE_SOON'
+                              ? 'EM BREVE'
+                              : 'OK'
+                        }
+                        color={
+                          tireSchedule.status === 'OVERDUE'
+                            ? 'error'
+                            : tireSchedule.status === 'DUE_SOON'
+                              ? 'warning'
+                              : 'success'
+                        }
+                        size="small"
+                      />
+                    </Stack>
+                    {tireSchedule.status === 'OVERDUE' && (
+                      <Typography variant="body2" color="error">
+                        Atrasado {Math.abs(tireSchedule.kmRemaining).toLocaleString('pt-BR')} km
+                      </Typography>
+                    )}
+                    {tireSchedule.status === 'DUE_SOON' && (
+                      <Typography variant="body2" color="warning.main">
+                        Faltam {tireSchedule.kmRemaining.toLocaleString('pt-BR')} km (em breve)
+                      </Typography>
+                    )}
+                    {tireSchedule.status === 'OK' && (
+                      <Typography variant="body2" color="text.secondary">
+                        Faltam {tireSchedule.kmRemaining.toLocaleString('pt-BR')} km
+                      </Typography>
+                    )}
+                  </Stack>
+                ) : (
+                  <Alert severity="info">Informe o km do último rodízio para calcular.</Alert>
+                )}
+
+                <Typography variant="subtitle2" sx={{ mt: 1 }}>Como fazer</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Faça o rodízio cruzando os pneus (diagonal). Se sua borracharia preferir, pode trocar frente ↔ trás.
+                  O importante é manter o desgaste uniforme.
+                </Typography>
+              </Stack>
 
               {oilStatus.state === 'incomplete' && (
                 <Alert severity="warning">
