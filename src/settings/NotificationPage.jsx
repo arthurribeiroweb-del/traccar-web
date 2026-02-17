@@ -47,6 +47,19 @@ const parseSpeedLimitValue = (value) => {
   return Number(value);
 };
 
+const normalizeNotificators = (input) => {
+  const raw = Array.isArray(input)
+    ? input
+    : String(input || '').split(/[, ]+/);
+  const cleaned = raw
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return [...new Set(cleaned)];
+};
+
+const normalizeNotificatorsString = (input) => normalizeNotificators(input).join(',');
+
 async function fetchDevices() {
   const res = await fetchOrThrow('/api/devices');
   return res.json();
@@ -221,8 +234,9 @@ const NotificationPage = () => {
   const limitValid = Number.isFinite(limitNum) && limitNum > 0;
 
   const validate = useCallback(() => {
-    if (!item || !item.type || !item.notificators) return false;
-    if (item.notificators?.includes('command') && !item.commandId) return false;
+    const safeNotificators = normalizeNotificators(item?.notificators);
+    if (!item || !item.type || safeNotificators.length === 0) return false;
+    if (safeNotificators.includes('command') && !item.commandId) return false;
     if (isOverspeed) {
       if (!limitValid) return false;
       if (item.always) return true;
@@ -239,7 +253,7 @@ const NotificationPage = () => {
   }, [item, isOverspeed, isGeofenceNotification, limitValid, selectedDeviceIds, selectedGeofenceIds]);
 
   const testNotificators = useCatch(async () => {
-    await Promise.all(item.notificators.split(/[, ]+/).map(async (notificator) => {
+    await Promise.all(normalizeNotificators(item.notificators).map(async (notificator) => {
       await fetchOrThrow(`/api/notifications/test/${notificator}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,6 +319,7 @@ const NotificationPage = () => {
       }
 
       payload = { ...payload, type: normalizedType };
+      payload = { ...payload, notificators: normalizeNotificatorsString(payload.notificators) };
 
       if (isOverspeed && limitValid) {
         const speedLimitKnots = Number(kphToKnots(limitNum).toFixed(6));
@@ -548,7 +563,7 @@ const NotificationPage = () => {
                   <SelectField
                     multiple
                     value={(() => {
-                      const sel = item.notificators?.split(/[, ]+/) || [];
+                      const sel = normalizeNotificators(item.notificators);
                       const hasWeb = sel.includes('web');
                       const hasTraccar = sel.includes('traccar');
                       const hasFirebase = sel.includes('firebase');
@@ -562,8 +577,7 @@ const NotificationPage = () => {
                     })()}
                     onChange={(e) => {
                       const val = e.target.value || [];
-                      const expanded = val.flatMap((v) => (v.includes(',') ? v.split(',') : [v]));
-                      setItem({ ...item, notificators: expanded.join(',') });
+                      setItem({ ...item, notificators: normalizeNotificatorsString(val) });
                       setApplyStatus('editing');
                     }}
                     data={notificators ? (() => {
