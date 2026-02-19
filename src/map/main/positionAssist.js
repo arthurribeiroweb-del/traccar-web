@@ -1,14 +1,14 @@
-import { isVehicleOff } from '../../common/util/deviceUtils';
+import { shouldEnablePhoneAssistForDevice } from '../../common/util/deviceUtils';
 
 export const calculateAssistedPosition = (
     device,
     trackerPosition,
     phonePosition,
     phoneAssistActive,
-    isDev = false
+    isDev = false,
 ) => {
-    const off = isVehicleOff(device, trackerPosition);
-    const shouldUsePhone = phoneAssistActive && trackerPosition && phonePosition && !off;
+    const shouldEnable = shouldEnablePhoneAssistForDevice(device, trackerPosition);
+    const shouldUsePhone = phoneAssistActive && trackerPosition && phonePosition && shouldEnable;
 
     if (isDev && trackerPosition) {
         // eslint-disable-next-line no-console
@@ -16,12 +16,12 @@ export const calculateAssistedPosition = (
             deviceId: device?.id,
             status: device?.status,
             ignition: trackerPosition?.attributes?.ignition,
-            isVehicleOff: off,
+            acc: trackerPosition?.attributes?.acc,
+            shouldEnablePhoneAssist: shouldEnable,
             phoneAssistActive,
             chosenSource: shouldUsePhone ? 'phone' : 'tracker',
-            trackerPosition: { lat: trackerPosition.latitude, lng: trackerPosition.longitude },
-            phonePosition: phonePosition ? { lat: phonePosition.latitude, lng: phonePosition.longitude } : null,
-            phoneAccuracy: phonePosition?.accuracy,
+            trackerPos: { lat: trackerPosition.latitude, lng: trackerPosition.longitude },
+            phonePos: phonePosition ? { lat: phonePosition.latitude, lng: phonePosition.longitude } : null,
         });
     }
 

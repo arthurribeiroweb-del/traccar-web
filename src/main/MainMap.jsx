@@ -23,7 +23,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
-import { isVehicleOff } from '../common/util/deviceUtils';
+import { shouldEnablePhoneAssistForDevice, isIgnitionOff, isDeviceOffline } from '../common/util/deviceUtils';
 import { calculateAssistedPosition } from '../map/main/positionAssist';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import SpeedIcon from '@mui/icons-material/Speed';
@@ -775,10 +775,27 @@ const MainMap = ({
     });
   }, [phoneAssistDiagnostics, phoneAssistEnabled]);
 
+  const selectedDevice = devices[selectedId];
+
   const phoneAssistActive = phoneAssistEnabled
     && phoneAssistLocked
     && phoneAssistDiagnostics.ready
-    && phoneAssistDiagnostics.withinReleaseDistance;
+    && phoneAssistDiagnostics.withinReleaseDistance
+    && shouldEnablePhoneAssistForDevice(selectedDevice, selectedPosition);
+
+  if (import.meta.env.DEV && selectedId != null) {
+    // eslint-disable-next-line no-console
+    console.debug('[PhoneAssist Gate]', {
+      deviceId: selectedId,
+      deviceStatus: selectedDevice?.status,
+      ignition: selectedPosition?.attributes?.ignition,
+      acc: selectedPosition?.attributes?.acc,
+      isIgnitionOff: isIgnitionOff(selectedPosition),
+      isDeviceOffline: isDeviceOffline(selectedDevice),
+      shouldEnable: shouldEnablePhoneAssistForDevice(selectedDevice, selectedPosition),
+      phoneAssistActive,
+    });
+  }
 
   useEffect(() => {
     if (!phoneAssistSupported) {
