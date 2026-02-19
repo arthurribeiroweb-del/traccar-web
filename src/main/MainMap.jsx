@@ -23,6 +23,8 @@ import {
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useDispatch, useSelector } from 'react-redux';
+import { isVehicleOff } from '../common/util/deviceUtils';
+import { calculateAssistedPosition } from '../map/main/positionAssist';
 import DangerousIcon from '@mui/icons-material/Dangerous';
 import SpeedIcon from '@mui/icons-material/Speed';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
@@ -182,7 +184,7 @@ const projectCoordinate = (latitude, longitude, courseDegrees, distanceMeters) =
 
   const projectedLatitudeRad = Math.asin(
     (Math.sin(latRad) * Math.cos(angularDistance))
-      + (Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)),
+    + (Math.cos(latRad) * Math.sin(angularDistance) * Math.cos(bearing)),
   );
   const projectedLongitudeRad = lngRad + Math.atan2(
     Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(latRad),
@@ -316,6 +318,7 @@ const MainMap = ({
   const followDeviceId = useSelector((state) => state.devices.followDeviceId);
   const headingByDeviceId = useSelector((state) => state.devices.headingByDeviceId || {});
   const positionsByDeviceId = useSelector((state) => state.session.positions);
+  const devices = useSelector((state) => state.devices.items);
   const followRotateMapPreference = useAttributePreference('web.followRotateMap', true);
   const administrator = useAdministrator();
 
@@ -805,23 +808,14 @@ const MainMap = ({
   ]);
 
   const selectedAssistedLivePosition = useMemo(() => {
-    if (!phoneAssistActive || !selectedLivePosition || !phoneSample) {
-      return selectedLivePosition;
-    }
-    return {
-      ...selectedLivePosition,
-      latitude: phoneSample.latitude,
-      longitude: phoneSample.longitude,
-      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
-      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
-      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedLivePosition.accuracy,
-      fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
-      attributes: {
-        ...(selectedLivePosition.attributes || {}),
-        phoneAssist: true,
-      },
-    };
-  }, [phoneAssistActive, phoneSample, selectedLivePosition]);
+    const device = devices[selectedId];
+    return calculateAssistedPosition(
+      device,
+      selectedLivePosition,
+      phoneSample,
+      phoneAssistActive
+    );
+  }, [phoneAssistActive, phoneSample, selectedLivePosition, devices, selectedId]);
 
   const selectedRadarAlertPosition = useMemo(() => {
     if (isValidCoordinate(
@@ -835,61 +829,34 @@ const MainMap = ({
       return selectedLivePosition;
     }
 
-    const phoneLatitude = Number(phoneSample.latitude);
-    const phoneLongitude = Number(phoneSample.longitude);
-    if (!isValidCoordinate(phoneLatitude, phoneLongitude)) {
-      return selectedLivePosition;
-    }
-
-    const phoneAgeMs = assistNowMs - Number(phoneSample.timestampMs || 0);
-    const phoneAccuracy = Number(phoneSample.accuracy);
-    if (!Number.isFinite(phoneAgeMs) || phoneAgeMs > PHONE_ASSIST_MAX_SAMPLE_AGE_MS) {
-      return selectedLivePosition;
-    }
-    if (!Number.isFinite(phoneAccuracy) || phoneAccuracy > PHONE_ASSIST_MAX_ACCURACY_METERS) {
-      return selectedLivePosition;
-    }
-
-    return {
-      ...selectedLivePosition,
-      latitude: phoneLatitude,
-      longitude: phoneLongitude,
-      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedLivePosition.speed,
-      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedLivePosition.course,
-      accuracy: phoneAccuracy,
-      fixTime: phoneSample.fixTime || selectedLivePosition.fixTime,
-      attributes: {
-        ...(selectedLivePosition.attributes || {}),
-        phoneAssist: true,
-        phoneAssistRadar: true,
-      },
-    };
+    const device = devices[selectedId];
+    return calculateAssistedPosition(
+      device,
+      selectedLivePosition,
+      phoneSample,
+      false, // phoneAssistActive is false here because we're in the fallback logic
+      import.meta.env.DEV
+    );
   }, [
     assistNowMs,
     phoneAssistEnabled,
     phoneSample,
     selectedAssistedLivePosition,
     selectedLivePosition,
+    devices,
+    selectedId,
   ]);
 
   const selectedAssistedMapPosition = useMemo(() => {
-    if (!phoneAssistActive || !selectedPosition || !phoneSample) {
-      return selectedPosition;
-    }
-    return {
-      ...selectedPosition,
-      latitude: phoneSample.latitude,
-      longitude: phoneSample.longitude,
-      speed: Number.isFinite(phoneSample.speedKnots) ? phoneSample.speedKnots : selectedPosition.speed,
-      course: Number.isFinite(phoneSample.course) ? phoneSample.course : selectedPosition.course,
-      accuracy: Number.isFinite(phoneSample.accuracy) ? phoneSample.accuracy : selectedPosition.accuracy,
-      fixTime: phoneSample.fixTime || selectedPosition.fixTime,
-      attributes: {
-        ...(selectedPosition.attributes || {}),
-        phoneAssist: true,
-      },
-    };
-  }, [phoneAssistActive, phoneSample, selectedPosition]);
+    const device = devices[selectedId];
+    return calculateAssistedPosition(
+      device,
+      selectedPosition,
+      phoneSample,
+      phoneAssistActive,
+      import.meta.env.DEV
+    );
+  }, [phoneAssistActive, phoneSample, selectedPosition, devices, selectedId]);
 
   const displayPositions = useMemo(() => {
     if (!phoneAssistActive || selectedId == null || !selectedAssistedMapPosition) {
@@ -973,7 +940,7 @@ const MainMap = ({
       const queuedBoundsParam = state.queuedBoundsParam;
       state.queuedBoundsParam = null;
       if (queuedBoundsParam && queuedBoundsParam !== boundsParam) {
-        executePublicReportsLoad(queuedBoundsParam).catch(() => {});
+        executePublicReportsLoad(queuedBoundsParam).catch(() => { });
       }
     }
   }, []);
@@ -1196,7 +1163,7 @@ const MainMap = ({
     }
 
     followDrivenReloadRef.current = { signature, lastAt: now };
-    loadPublicReports().catch(() => {});
+    loadPublicReports().catch(() => { });
   }, [followEnabled, loadPublicReports, selectedAssistedLivePosition]);
 
   useEffect(() => {
@@ -1265,7 +1232,7 @@ const MainMap = ({
         window.clearTimeout(reportMoveTimerRef.current);
       }
       reportMoveTimerRef.current = window.setTimeout(() => {
-        loadPublicReports().catch(() => {});
+        loadPublicReports().catch(() => { });
       }, REPORT_MOVE_DEBOUNCE_MS);
     };
 
@@ -1273,7 +1240,7 @@ const MainMap = ({
     map.on('zoomend', scheduleReload);
 
     const onMapLoaded = () => {
-      refreshCommunityReports().catch(() => {});
+      refreshCommunityReports().catch(() => { });
     };
 
     if (map.loaded()) {
@@ -1297,14 +1264,14 @@ const MainMap = ({
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        refreshCommunityReports().catch(() => {});
+        refreshCommunityReports().catch(() => { });
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        refreshCommunityReports().catch(() => {});
+        refreshCommunityReports().catch(() => { });
       }
     }, COMMUNITY_REFRESH_INTERVAL_MS);
     return () => {
@@ -1335,14 +1302,14 @@ const MainMap = ({
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        loadAdminPendingCount().catch(() => {});
+        loadAdminPendingCount().catch(() => { });
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadAdminPendingCount().catch(() => {});
+        loadAdminPendingCount().catch(() => { });
       }
     }, 30000);
     return () => {
@@ -1437,7 +1404,7 @@ const MainMap = ({
         ...items,
       ]);
       showFollowMessage('Enviado para aprovação.', 'success');
-      loadAdminPendingCount().catch(() => {});
+      loadAdminPendingCount().catch(() => { });
     } catch (error) {
       setOptimisticReports((items) => items.filter((item) => item.id !== tempId));
       showFollowMessage(mapReportErrorToMessage(error), 'error');
@@ -1463,7 +1430,7 @@ const MainMap = ({
     setPendingReports((items) => items.filter((item) => String(item.id) !== String(reportId)));
     setOptimisticReports((items) => items.filter((item) => String(item.id) !== String(reportId)));
     showFollowMessage('Envio cancelado.', 'info');
-    loadAdminPendingCount().catch(() => {});
+    loadAdminPendingCount().catch(() => { });
   }, [loadAdminPendingCount, showFollowMessage]);
 
   const handleCancelPendingWrapper = useCallback(async (reportId) => {

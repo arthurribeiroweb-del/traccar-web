@@ -8,3 +8,10 @@ export const getDeviceDisplayName = (device) => {
   const dn = device.attributes?.displayName?.trim();
   return device.name || dn || '';
 };
+
+export const isVehicleOff = (device, position) => {
+  if (!device) return false;
+  if (device.status !== 'online') return true;
+  if (position?.attributes?.ignition === false) return true;
+  return false;
+};
